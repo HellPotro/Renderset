@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Renderset.Core.Reports;
 using Renderset.Infrastructure.Persistence;
 using Renderset.Infrastructure.Persistence.Entities;
@@ -157,6 +157,121 @@ public sealed class EfReportRepository : IReportRepository
 
             entity.UpdatedAtUtc =
                 DateTime.UtcNow;
+        }
+
+        await context.SaveChangesAsync(
+            cancellationToken);
+    }
+
+    public async Task DeleteAsync(
+    string tenantId,
+    string reportId,
+    CancellationToken cancellationToken = default)
+    {
+        await using var context =
+            await _contextFactory.CreateDbContextAsync(
+                cancellationToken);
+
+        var now =
+            DateTime.UtcNow;
+
+        var report =
+            await context.Reports
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.TenantId == tenantId &&
+                        x.ReportId == reportId &&
+                        x.Active,
+                    cancellationToken);
+
+        if (report is null)
+            return;
+
+        report.Active =
+            false;
+
+        report.UpdatedAtUtc =
+            now;
+
+        var presets =
+            await context.ReportPresets
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.ReportId == reportId &&
+                    x.Active)
+                .ToListAsync(cancellationToken);
+
+        foreach (var preset in presets)
+        {
+            preset.Active =
+                false;
+
+            preset.UpdatedAtUtc =
+                now;
+        }
+
+        var presetIds =
+            presets
+                .Select(x => x.PresetId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var assignments =
+            await context.ReportPresetAssignments
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.ReportId == reportId &&
+                    x.Active)
+                .ToListAsync(cancellationToken);
+
+        foreach (var assignment in assignments)
+        {
+            assignment.Active =
+                false;
+
+            assignment.UpdatedAtUtc =
+                now;
+        }
+
+        var reportResources =
+            await context.ReportResources
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.Scope == reportId &&
+                    x.Active)
+                .ToListAsync(cancellationToken);
+
+        foreach (var resource in reportResources)
+        {
+            resource.Active =
+                false;
+
+            resource.UpdatedAtUtc =
+                now;
+        }
+
+        if (presetIds.Count > 0)
+        {
+            var presetScopes =
+                presetIds
+                    .Select(x => $"preset:{x}")
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var presetResources =
+                await context.ReportResources
+                    .Where(x =>
+                        x.TenantId == tenantId &&
+                        x.Active)
+                    .ToListAsync(cancellationToken);
+
+            foreach (var resource in presetResources
+                         .Where(x => presetScopes.Contains(x.Scope)))
+            {
+                resource.Active =
+                    false;
+
+                resource.UpdatedAtUtc =
+                    now;
+            }
         }
 
         await context.SaveChangesAsync(

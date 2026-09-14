@@ -1,8 +1,14 @@
 @page "/presets"
 
+@using System.Globalization
+@using System.Text
+@using System.Text.Json
 @using Renderset.Core.Configurations
+@using Renderset.Core.Localization
 @using Renderset.Core.Persistence
+@using Renderset.Core.Presets
 @using Renderset.Core.Reports
+@using Renderset.Core.Themes
 
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
@@ -23,7 +29,146 @@
             </p>
         </div>
 
+        <button type="button"
+                class="primary-button"
+                @onclick="() => OpenCreator(null)">
+            <i class="fa-solid fa-plus"></i>
+            Nuevo preset
+        </button>
+
     </header>
+
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="preset-error">
+            @_error
+        </div>
+    }
+
+
+    @if (_creating)
+    {
+        <section class="preset-creator">
+
+            <header>
+                <h2>Nuevo preset</h2>
+                <p>
+                    Se crea con la configuración por defecto del report y se
+                    abre el designer para ajustarlo.
+                </p>
+            </header>
+
+            <div class="preset-creator-grid">
+
+                <div class="form-group">
+                    <label>Report</label>
+
+                    <select value="@_newReportId"
+                            @onchange="NewReportChanged">
+
+                        <option value="">
+                            Selecciona un report
+                        </option>
+
+                        @foreach (var report in _reports)
+                        {
+                            <option value="@report.Id">
+                                @report.Name
+                            </option>
+                        }
+
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Nombre</label>
+
+                    <input value="@_newName"
+                           @oninput="NewNameChanged"
+                           placeholder="Factura Talleres Peláez" />
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        Id
+                        <small>no se puede cambiar después</small>
+                    </label>
+
+                    <input value="@_newId"
+                           @oninput="e => _newId = Slug(e.Value?.ToString())"
+                           placeholder="invoice-talleres-pelaez" />
+                </div>
+
+                <div class="form-group">
+                    <label>Partir de</label>
+
+                    <select value="@_copyFromPresetId"
+                            @onchange="e => _copyFromPresetId = e.Value?.ToString()">
+
+                        <option value="">
+                            Configuración por defecto del report
+                        </option>
+
+                        @foreach (var preset in PresetsOfSelectedReport)
+                        {
+                            <option value="@preset.Id">
+                                Duplicar @preset.Configuration.Name
+                            </option>
+                        }
+
+                    </select>
+                </div>
+
+                <div class="form-group preset-creator-full">
+
+                    <label class="preset-check">
+
+                        <input type="checkbox"
+                               checked="@_makeDefault"
+                               disabled="@(!HasDefaultForNewReport ? true : false)"
+                               @onchange="e => _makeDefault = e.Value is bool v && v" />
+
+                        <span>
+                            Marcar como preset por defecto del report
+                        </span>
+
+                    </label>
+
+                    @if (!HasDefaultForNewReport &&
+                         !string.IsNullOrWhiteSpace(_newReportId))
+                    {
+                        <small>
+                            Este report todavía no tiene preset por defecto,
+                            así que este lo será obligatoriamente. Sin él, el
+                            designer no puede abrirlo.
+                        </small>
+                    }
+
+                </div>
+
+            </div>
+
+            <div class="preset-creator-actions">
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="CancelCreate">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        class="primary-button"
+                        disabled="@(!CanCreate || _saving)"
+                        @onclick="CreatePresetAsync">
+                    <i class="fa-solid fa-check"></i>
+                    Crear y abrir designer
+                </button>
+
+            </div>
+
+        </section>
+    }
 
 
     @if (_loading)
@@ -61,19 +206,18 @@
         </div>
 
 
-        @if (!FilteredGroups.Any())
+        @if (!_reports.Any())
         {
             <div class="empty-state">
 
                 <div class="empty-state-icon">
-                    <i class="fa-solid fa-sliders"></i>
+                    <i class="fa-solid fa-file-lines"></i>
                 </div>
 
-                <h2>No hay presets</h2>
+                <h2>No hay reports</h2>
 
                 <p>
-                    Los presets aparecerán aquí cuando crees configuraciones
-                    para tus reports.
+                    Crea un report antes de configurar presets.
                 </p>
 
             </div>
@@ -100,74 +244,111 @@
 
                             </div>
 
-                            <button type="button"
-                                    class="secondary-button"
-                                    @onclick="() => OpenReport(group.Report)">
-                                <i class="fa-solid fa-pen-ruler"></i>
-                                Abrir designer
-                            </button>
+                            <div class="preset-group-actions">
+
+                                <button type="button"
+                                        class="secondary-button"
+                                        @onclick="() => OpenCreator(group.Report.Id)">
+                                    <i class="fa-solid fa-plus"></i>
+                                    Nuevo preset
+                                </button>
+
+                                @if (group.Presets.Count > 0)
+                                {
+                                    <button type="button"
+                                            class="secondary-button"
+                                            @onclick="() => OpenReport(group.Report)">
+                                        <i class="fa-solid fa-pen-ruler"></i>
+                                        Abrir designer
+                                    </button>
+                                }
+
+                            </div>
 
                         </header>
 
 
-                        <div class="preset-list">
+                        @if (group.Presets.Count == 0)
+                        {
+                            <div class="preset-empty">
+                                Este report no tiene ningún preset todavía.
+                                El designer necesita al menos uno para poder
+                                abrirse.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="preset-list">
 
-                            @foreach (var preset in group.Presets)
-                            {
-                                <article class="preset-row">
+                                @foreach (var preset in group.Presets)
+                                {
+                                    <article class="preset-row">
 
-                                    <div class="preset-icon">
-                                        <i class="fa-solid fa-sliders"></i>
-                                    </div>
+                                        <div class="preset-icon">
+                                            <i class="fa-solid fa-sliders"></i>
+                                        </div>
 
-                                    <div class="preset-info">
+                                        <div class="preset-info">
 
-                                        <div class="preset-title">
+                                            <div class="preset-title">
 
-                                            <strong>
-                                                @preset.Configuration.Name
-                                            </strong>
+                                                <strong>
+                                                    @preset.Configuration.Name
+                                                </strong>
 
-                                            @if (IsDefaultPreset(
-                                                group.Report.Id,
-                                                preset.Id))
-                                            {
-                                                <span class="default-badge">
-                                                    Default
-                                                </span>
-                                            }
+                                                @if (IsDefaultPreset(
+                                                    group.Report.Id,
+                                                    preset.Id))
+                                                {
+                                                    <span class="default-badge">
+                                                        Default
+                                                    </span>
+                                                }
+
+                                            </div>
+
+                                            <code>
+                                                @preset.Id
+                                            </code>
 
                                         </div>
 
-                                        <code>
-                                            @preset.Id
-                                        </code>
 
-                                    </div>
-
-
-                                    <div class="preset-version">
-                                        v@(preset.Version)
-                                    </div>
+                                        <div class="preset-version">
+                                            v@(preset.Version)
+                                        </div>
 
 
-                                    <div class="preset-actions">
+                                        <div class="preset-actions">
 
-                                        <button type="button"
-                                                class="icon-button"
-                                                title="Editar preset"
-                                                @onclick="() => EditPreset(
-                                                                                                    group.Report,
-                                                                                                    preset)">
-<i class="fa-solid fa-pen"></i>
-</button>
+                                            <button type="button"
+                                                    class="icon-button"
+                                                    title="Abrir en el designer"
+                                                    @onclick="() => OpenDesigner(group.Report.Id, preset.Id)">
+                                                <i class="fa-solid fa-pen-ruler"></i>
+                                            </button>
 
-                                    </div>
+                                            <button type="button"
+                                                    class="icon-button"
+                                                    title="Duplicar preset"
+                                                    @onclick="() => DuplicatePreset(group.Report.Id, preset)">
+                                                <i class="fa-regular fa-copy"></i>
+                                            </button>
 
-                                </article>
-                            }
+                                            <button type="button"
+                                                    class="icon-button"
+                                                    title="Editar preset"
+                                                    @onclick="() => EditPreset(group.Report, preset)">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </button>
 
-                        </div>
+                                        </div>
+
+                                    </article>
+                                }
+
+                            </div>
+                        }
 
                     </section>
                 }
@@ -181,6 +362,9 @@
 
 @code {
 
+    private static readonly JsonSerializerOptions JsonOptions =
+        new(JsonSerializerDefaults.Web);
+
     private IReadOnlyCollection<Report> _reports = [];
 
     private IReadOnlyCollection<ReportPreset> _presets = [];
@@ -191,8 +375,22 @@
     private string? _selectedReportId;
 
     private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+
+    private bool _creating;
+    private string? _newReportId;
+    private string _newName = string.Empty;
+    private string _newId = string.Empty;
+    private string? _copyFromPresetId;
+    private bool _makeDefault;
 
 
+    /// <summary>
+    /// Ahora se listan también los reports sin presets. Antes se saltaban, y
+    /// como el designer exige un preset existente, un report recién creado no
+    /// tenía ningún punto de entrada.
+    /// </summary>
     private IEnumerable<PresetGroup> FilteredGroups
     {
         get
@@ -219,9 +417,6 @@
                             x.Configuration.Name)
                         .ToList();
 
-                if (presets.Count == 0)
-                    continue;
-
                 yield return new PresetGroup(
                     report,
                     presets);
@@ -230,8 +425,40 @@
     }
 
 
+    private IEnumerable<ReportPreset> PresetsOfSelectedReport =>
+        string.IsNullOrWhiteSpace(_newReportId)
+            ? []
+            : _presets
+                .Where(x =>
+                    string.Equals(
+                        x.Configuration.ReportId,
+                        _newReportId,
+                        StringComparison.OrdinalIgnoreCase))
+                .OrderBy(x => x.Configuration.Name);
+
+
+    private bool HasDefaultForNewReport =>
+        !string.IsNullOrWhiteSpace(_newReportId) &&
+        _defaultPresets.TryGetValue(_newReportId, out var presetId) &&
+        !string.IsNullOrWhiteSpace(presetId);
+
+
+    private bool CanCreate =>
+        !string.IsNullOrWhiteSpace(_newReportId) &&
+        !string.IsNullOrWhiteSpace(_newName) &&
+        !string.IsNullOrWhiteSpace(_newId);
+
+
     protected override async Task OnInitializedAsync()
     {
+        await LoadAsync();
+    }
+
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
         try
         {
             _reports =
@@ -270,11 +497,243 @@
         }
         catch
         {
+            // El endpoint devuelve 404 cuando no hay asignación por defecto,
+            // que es un caso normal, no un error.
             _defaultPresets[reportId] =
                 null;
         }
     }
 
+
+    // ------------------------------------------------------------ creación
+
+    private void OpenCreator(
+        string? reportId)
+    {
+        _error = null;
+        _creating = true;
+
+        _newReportId =
+            reportId
+            ?? _selectedReportId
+            ?? _reports.FirstOrDefault()?.Id;
+
+        _newName = string.Empty;
+        _newId = string.Empty;
+        _copyFromPresetId = null;
+
+        // Si el report no tiene default, el nuevo preset tiene que serlo:
+        // de lo contrario se crea algo que el designer no sabe resolver.
+        _makeDefault = !HasDefaultForNewReport;
+    }
+
+
+    private void CancelCreate()
+    {
+        _creating = false;
+        _error = null;
+    }
+
+
+    private void NewReportChanged(
+        ChangeEventArgs e)
+    {
+        _newReportId = e.Value?.ToString();
+        _copyFromPresetId = null;
+        _makeDefault = !HasDefaultForNewReport;
+
+        RegenerateId();
+    }
+
+
+    private void NewNameChanged(
+        ChangeEventArgs e)
+    {
+        _newName = e.Value?.ToString() ?? string.Empty;
+
+        RegenerateId();
+    }
+
+
+    /// <summary>
+    /// El id se propone a partir del report y del nombre, pero queda
+    /// editable: una vez creado no se puede cambiar, porque es la clave del
+    /// preset y el ámbito de su diccionario.
+    /// </summary>
+    private void RegenerateId()
+    {
+        if (string.IsNullOrWhiteSpace(_newName))
+        {
+            _newId = string.Empty;
+            return;
+        }
+
+        var prefix =
+            string.IsNullOrWhiteSpace(_newReportId)
+                ? string.Empty
+                : Slug(_newReportId) + "-";
+
+        _newId = prefix + Slug(_newName);
+    }
+
+
+    private async Task CreatePresetAsync()
+    {
+        if (!CanCreate)
+            return;
+
+        _saving = true;
+        _error = null;
+
+        try
+        {
+            var presetId = _newId.Trim();
+
+            if (_presets.Any(x =>
+                    string.Equals(
+                        x.Id,
+                        presetId,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                _error = $"Ya existe un preset con el id '{presetId}'.";
+                return;
+            }
+
+            var source =
+                string.IsNullOrWhiteSpace(_copyFromPresetId)
+                    ? null
+                    : _presets.FirstOrDefault(x =>
+                        string.Equals(
+                            x.Id,
+                            _copyFromPresetId,
+                            StringComparison.OrdinalIgnoreCase));
+
+            var configuration =
+                source is null
+                    ? new ReportConfiguration
+                    {
+                        Id = presetId,
+                        ReportId = _newReportId!,
+                        Name = _newName.Trim(),
+                        Version = 1
+                    }
+                    : Clone(source.Configuration);
+
+            if (source is not null)
+            {
+                configuration.Id = presetId;
+                configuration.ReportId = _newReportId!;
+                configuration.Name = _newName.Trim();
+                configuration.Version = 1;
+            }
+
+            var preset =
+                new ReportPreset
+                {
+                    Id = presetId,
+                    Version = 1,
+                    Configuration = configuration,
+
+                    Theme = source is null
+                        ? new ReportTheme()
+                        : Clone(source.Theme)
+                };
+
+            await RenderSetApi.SavePresetAsync(
+                CurrentTenant.Id,
+                presetId,
+                preset);
+
+            if (source is not null)
+            {
+                await CopyPresetResourcesAsync(
+                    source.Id,
+                    presetId);
+            }
+
+            if (_makeDefault || !HasDefaultForNewReport)
+            {
+                await RenderSetApi.SaveAssignmentAsync(
+                    CurrentTenant.Id,
+                    new ReportPresetAssignment
+                    {
+                        ReportId = _newReportId!,
+                        ContextType = null,
+                        ContextKey = null,
+                        PresetId = presetId
+                    });
+            }
+
+            var reportId = _newReportId!;
+
+            _creating = false;
+
+            OpenDesigner(
+                reportId,
+                presetId);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+
+    /// <summary>
+    /// Al duplicar hay que llevarse también las etiquetas propias del preset
+    /// original. Si no, la copia pierde en silencio los textos que el cliente
+    /// tenía personalizados.
+    /// </summary>
+    private async Task CopyPresetResourcesAsync(
+        string sourcePresetId,
+        string targetPresetId)
+    {
+        var resources =
+            await RenderSetApi.GetResourcesAsync(
+                CurrentTenant.Id,
+                ReportResourceScope.ForPreset(sourcePresetId));
+
+        if (resources.Count == 0)
+            return;
+
+        var targetScope =
+            ReportResourceScope.ForPreset(targetPresetId);
+
+        await RenderSetApi.SaveResourcesAsync(
+            CurrentTenant.Id,
+            resources
+                .Select(x => new ReportResource
+                {
+                    Scope = targetScope,
+                    Key = x.Key,
+                    Culture = x.Culture,
+                    Value = x.Value,
+                    Source = x.Source,
+                    Description = x.Description
+                })
+                .ToList());
+    }
+
+
+    private void DuplicatePreset(
+        string reportId,
+        ReportPreset preset)
+    {
+        OpenCreator(reportId);
+
+        _copyFromPresetId = preset.Id;
+        _newName = $"{preset.Configuration.Name} (copia)";
+        _makeDefault = false;
+
+        RegenerateId();
+    }
+
+
+    // ----------------------------------------------------------- navegación
 
     private bool IsDefaultPreset(
         string reportId,
@@ -307,6 +766,15 @@
     }
 
 
+    private void OpenDesigner(
+        string reportId,
+        string presetId)
+    {
+        Navigation.NavigateTo(
+            $"/reports/{Uri.EscapeDataString(reportId)}/designer/{Uri.EscapeDataString(presetId)}");
+    }
+
+
     private void EditPreset(
         Report report,
         ReportPreset preset)
@@ -316,8 +784,66 @@
     }
 
 
+    // --------------------------------------------------------------- utils
+
+    private static T Clone<T>(
+        T value)
+    {
+        return JsonSerializer.Deserialize<T>(
+            JsonSerializer.Serialize(value, JsonOptions),
+            JsonOptions)!;
+    }
+
+
+    /// <summary>
+    /// Id legible y estable: sin acentos, sin espacios y en minúsculas.
+    /// </summary>
+    private static string Slug(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized =
+            value
+                .Trim()
+                .ToLowerInvariant()
+                .Normalize(NormalizationForm.FormD);
+
+        var builder = new StringBuilder();
+
+        var lastWasSeparator = false;
+
+        foreach (var character in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) ==
+                UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(character);
+                lastWasSeparator = false;
+
+                continue;
+            }
+
+            if (lastWasSeparator || builder.Length == 0)
+                continue;
+
+            builder.Append('-');
+            lastWasSeparator = true;
+        }
+
+        return builder
+            .ToString()
+            .Trim('-');
+    }
+
+
     private sealed record PresetGroup(
         Report Report,
         IReadOnlyCollection<ReportPreset> Presets);
-
 }

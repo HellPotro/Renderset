@@ -1,0 +1,363 @@
+/* =========================================================
+   RENDERSET APP
+   Global reset, tokens, shared page layout, buttons and forms
+   ========================================================= */
+
+:root {
+    --rs-bg: #f6f8f9;
+    --rs-surface: #ffffff;
+    --rs-surface-muted: #f8fafb;
+    --rs-text: #172b35;
+    --rs-text-soft: #455b65;
+    --rs-muted: #74858d;
+    --rs-muted-2: #98a6ad;
+    --rs-border: #d8e1e5;
+    --rs-border-soft: #edf1f3;
+    --rs-primary: #173d4f;
+    --rs-primary-hover: #224f63;
+    --rs-danger: #b42318;
+    --rs-danger-bg: #fff4f2;
+    --rs-success: #217346;
+    --rs-success-bg: #edf8f2;
+    --rs-radius: 10px;
+    --rs-radius-sm: 7px;
+    --rs-shadow-sm: 0 1px 2px rgba(37, 49, 58, .04);
+    --rs-shadow-md: 0 10px 28px rgba(37, 49, 58, .16);
+    --rs-font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --rs-mono: "Cascadia Code", Consolas, monospace;
+}
+
+html,
+body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--rs-bg);
+    color: var(--rs-text);
+    font-family: var(--rs-font);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+a,
+.btn-link {
+    color: #006bb7;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+.content {
+    padding-top: 1.1rem;
+}
+
+h1:focus {
+    outline: none;
+}
+
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #26b050;
+}
+
+.invalid {
+    outline: 1px solid #e50730;
+}
+
+.validation-message {
+    color: #e50730;
+}
+
+.blazor-error-boundary {
+    padding: 1rem 1rem 1rem 3.7rem;
+    color: white;
+    background: #b32121;
+}
+
+.blazor-error-boundary::after {
+    content: "An error has occurred.";
+}
+
+.form-floating > .form-control-plaintext::placeholder,
+.form-floating > .form-control::placeholder {
+    color: var(--bs-secondary-color);
+    text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder,
+.form-floating > .form-control:focus::placeholder {
+    text-align: start;
+}
+
+/* ---------- Shared pages ---------- */
+
+.page,
+.resources-page {
+    max-width: 1150px;
+    margin: 0 auto;
+    padding: 36px 40px 60px;
+}
+
+.resources-page,
+.page.page-wide {
+    max-width: 1180px;
+}
+
+.page-header,
+.resources-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 26px;
+}
+
+.page-header h1,
+.resources-header h1 {
+    margin: 0;
+    color: var(--rs-text);
+    font-size: 26px;
+    font-weight: 700;
+}
+
+.page-header p,
+.resources-header p {
+    margin: 7px 0 0;
+    color: var(--rs-muted);
+    font-size: 13px;
+}
+
+.page-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* ---------- Buttons ---------- */
+
+.primary-button,
+.secondary-button,
+.danger-button,
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 36px;
+    padding: 8px 13px;
+    border-radius: var(--rs-radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease, transform .05s ease;
+}
+
+.primary-button,
+.btn-primary {
+    border: 1px solid var(--rs-primary);
+    background: var(--rs-primary);
+    color: #ffffff;
+}
+
+.primary-button:hover,
+.btn-primary:hover {
+    background: var(--rs-primary-hover);
+    border-color: var(--rs-primary-hover);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.danger-button:disabled {
+    opacity: .55;
+    cursor: default;
+}
+
+.secondary-button {
+    border: 1px solid var(--rs-border);
+    background: #ffffff;
+    color: var(--rs-text-soft);
+}
+
+.secondary-button:hover {
+    background: #f4f7f8;
+}
+
+.danger-button {
+    border: 1px solid #f1c7c2;
+    background: var(--rs-danger-bg);
+    color: var(--rs-danger);
+}
+
+.danger-button:hover {
+    background: #ffe9e5;
+}
+
+.back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #71838b;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.back-button:hover {
+    color: var(--rs-primary);
+}
+
+/* ---------- Cards, forms and editor shell ---------- */
+
+.card,
+.editor-card,
+.resources-filter-card,
+.resources-editor-card,
+.resources-card,
+.coverage-card {
+    border: 1px solid #dde5e8;
+    border-radius: var(--rs-radius);
+    background: #ffffff;
+}
+
+.card,
+.editor-card {
+    overflow: hidden;
+}
+
+.card-header,
+.editor-card > header,
+.editor-card-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--rs-border-soft);
+}
+
+.card-header h2,
+.editor-card > header h2,
+.editor-card-header h2 {
+    margin: 0;
+    color: #273e48;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.card-header p {
+    margin: 4px 0 0;
+    color: #89989f;
+    font-size: 10px;
+}
+
+.card-body,
+.editor-card-body {
+    padding: 18px;
+}
+
+.editor-layout {
+    display: grid;
+    gap: 16px;
+}
+
+.editor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+    gap: 14px;
+    padding: 18px;
+}
+
+.editor-full {
+    grid-column: 1 / -1;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    margin-bottom: 16px;
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-group label {
+    color: #536970;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.form-group small {
+    color: #93a0a5;
+    font-size: 10px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid var(--rs-border);
+    border-radius: var(--rs-radius-sm);
+    outline: none;
+    background: #fafcfc;
+    color: #263b44;
+    font: inherit;
+    font-size: 12px;
+    transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #91a8b3;
+    background: #ffffff;
+    box-shadow: 0 0 0 2px rgba(23, 61, 79, .08);
+}
+
+.form-group input:disabled,
+.form-group select:disabled {
+    background: #f1f4f5;
+    color: #89979d;
+    cursor: default;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+    color: #9eaaaf;
+}
+
+.form-group textarea {
+    resize: vertical;
+}
+
+/* ---------- Messages ---------- */
+
+.resources-message,
+.inline-message {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.resources-message.success,
+.inline-message.success {
+    border: 1px solid #bfe3cd;
+    background: var(--rs-success-bg);
+    color: var(--rs-success);
+}
+
+.resources-message.error,
+.inline-message.error {
+    border: 1px solid #f0c1c1;
+    background: #fff2f2;
+    color: #9f1d1d;
+}

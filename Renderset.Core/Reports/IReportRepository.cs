@@ -1,4 +1,4 @@
-﻿namespace Renderset.Core.Reports;
+namespace Renderset.Core.Reports;
 
 public interface IReportRepository
 {
@@ -14,5 +14,10 @@ public interface IReportRepository
     Task SaveAsync(
         string tenantId,
         Report report,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(
+        string tenantId,
+        string reportId,
         CancellationToken cancellationToken = default);
 }

@@ -1,3 +1,5 @@
+using Renderset.Core.Resources;
+
 namespace Renderset.Core.Localization;
 
 public interface IReportResourceRepository
@@ -43,5 +45,10 @@ public interface IReportResourceRepository
         string tenantId,
         string scope,
         string key,
+        CancellationToken cancellationToken = default);
+
+    Task<CopyMissingReportResourcesResult> CopyMissingAsync(
+        string tenantId,
+        CopyMissingReportResourcesRequest request,
         CancellationToken cancellationToken = default);
 }

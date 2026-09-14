@@ -8,27 +8,58 @@
 
 <PageTitle>Reports - RenderSet</PageTitle>
 
+<div class="container py-4">
 
-<div class="page">
-
-    <header class="page-header">
+    <div class="d-flex justify-content-between align-items-center mb-4">
 
         <div>
-            <h1>Reports</h1>
-
-            <p>
+            <h1 class="h3 mb-1">Reports</h1>
+            <div class="text-muted">
                 Gestiona tus informes y configuraciones.
-            </p>
+            </div>
         </div>
 
-        <button type="button"
-                class="primary-button"
+        <button class="btn btn-primary"
                 @onclick="CreateReport">
-            <i class="fa-solid fa-plus"></i>
-            Nuevo report
+            + Nuevo report
         </button>
 
-    </header>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">
+            @_error
+        </div>
+    }
+
+    @if (_reportToDelete is not null)
+    {
+        <div class="alert alert-warning d-flex justify-content-between align-items-start gap-3">
+            <div>
+                <strong>¿Borrar report @_reportToDelete.Name?</strong>
+                <div class="small mt-1">
+                    Se desactivará el report y también sus presets,
+                    assignments y traducciones asociadas al report/presets.
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        @onclick="CancelDelete">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        class="btn btn-sm btn-danger"
+                        disabled="@_deleting"
+                        @onclick="ConfirmDeleteAsync">
+                    Borrar
+                </button>
+            </div>
+        </div>
+    }
 
     @if (_loading)
     {
@@ -73,10 +104,17 @@
                             </td>
 
                             <td class="text-end">
-                                <button class="btn btn-sm btn-outline-primary"
-                                        @onclick="() => OpenDesigner(report.Id)">
-                                    Diseñar
-                                </button>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary"
+                                            @onclick="() => OpenDesigner(report.Id)">
+                                        Diseñar
+                                    </button>
+
+                                    <button class="btn btn-outline-danger"
+                                            @onclick="() => AskDelete(report)">
+                                        Borrar
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     }
@@ -93,17 +131,36 @@
 @code {
 
     private bool _loading = true;
+    private bool _deleting;
+    private string? _error;
+    private Report? _reportToDelete;
 
-    private IReadOnlyCollection<Report> _reports =
-        [];
+    private IReadOnlyCollection<Report> _reports = [];
 
     protected override async Task OnInitializedAsync()
     {
-        _reports =
-            await RenderSetApi.GetReportsAsync(
-                CurrentTenant.Id);
+        await ReloadAsync();
+    }
 
-        _loading = false;
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _reports =
+                await RenderSetApi.GetReportsAsync(
+                    CurrentTenant.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void CreateReport()
@@ -116,6 +173,46 @@
         string reportId)
     {
         Navigation.NavigateTo(
-            $"/reports/{reportId}/designer");
+            $"/reports/{Uri.EscapeDataString(reportId)}/designer");
+    }
+
+    private void AskDelete(
+        Report report)
+    {
+        _reportToDelete = report;
+        _error = null;
+    }
+
+    private void CancelDelete()
+    {
+        _reportToDelete = null;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_reportToDelete is null)
+            return;
+
+        _deleting = true;
+        _error = null;
+
+        try
+        {
+            await RenderSetApi.DeleteReportAsync(
+                CurrentTenant.Id,
+                _reportToDelete.Id);
+
+            _reportToDelete = null;
+
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _deleting = false;
+        }
     }
 }

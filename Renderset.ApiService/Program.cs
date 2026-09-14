@@ -6,9 +6,11 @@ using Renderset.Core.Localization;
 using Renderset.Core.Presets;
 using Renderset.Core.Reports;
 using Renderset.Core.Services;
+using Renderset.Core.Translations;
 using Renderset.Core.Variables;
 using Renderset.Infrastructure.Persistence;
 using Renderset.Infrastructure.Repositories;
+using Renderset.Infrastructure.Translations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +40,20 @@ builder.Services.AddScoped<IReportVariableResolver, ReportVariableResolver>();
 builder.Services.AddScoped<IReportResourceRepository, EfReportResourceRepository>();
 builder.Services.AddScoped<ITenantCultureRepository, EfTenantCultureRepository>();
 builder.Services.AddScoped<IReportTextCatalogFactory, ReportTextCatalogFactory>();
+
+builder.Services.Configure<AzureTranslatorOptions>(
+    builder.Configuration.GetSection(AzureTranslatorOptions.SectionName));
+
+builder.Services.AddHttpClient<ITranslationService, AzureTranslationService>((serviceProvider, client) =>
+{
+    var options =
+        serviceProvider
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<AzureTranslatorOptions>>()
+            .Value;
+
+    client.BaseAddress =
+        new Uri(options.Endpoint.TrimEnd('/'));
+});
 
 builder.Services.AddSingleton<IReportConfigurationComposer, ReportConfigurationComposer>();
 

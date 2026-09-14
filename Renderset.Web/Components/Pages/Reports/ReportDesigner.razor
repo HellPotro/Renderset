@@ -1,4 +1,5 @@
 @page "/reports/{ReportId}/designer"
+@page "/reports/{ReportId}/designer/{PresetId}"
 
 @using System.Text.Json
 @using Renderset.Blazor.Components.Editor
@@ -30,24 +31,56 @@ else if (_report is null)
             No se ha encontrado el report.
         </div>
 
+        <button type="button"
+                class="btn btn-outline-secondary"
+                @onclick="GoBack">
+            Volver
+        </button>
+
     </div>
 }
 else if (_configuration is not null &&
          _theme is not null)
 {
-    <div class="report-designer-page">
+    <div class="designer-shell">
 
-        <ReportEditor Definition="_report.Definition"
-                      @bind-Configuration="_configuration"
-                      @bind-Theme="_theme"
-                      Data="_data"
-                      HeaderBlocks="_headerBlocks"
-                      FooterBlocks="_footerBlocks"
-                      BodyBlocks="_bodyBlocks"
-                      Texts="_texts"
-                      Cultures="_cultures"
-                      CultureChanged="ChangeCultureAsync"
-                      SaveRequested="SaveAsync" />
+        <header class="designer-topbar">
+
+            <button type="button"
+                    class="designer-back-button"
+                    @onclick="GoBack">
+                <i class="fa-solid fa-arrow-left"></i>
+                Volver
+            </button>
+
+            <div class="designer-title">
+                <strong>@_report.Name</strong>
+                <span>
+                    @_configuration.Name
+                    @if (!string.IsNullOrWhiteSpace(_presetId))
+                    {
+                        <code>@_presetId</code>
+                    }
+                </span>
+            </div>
+
+        </header>
+
+        <div class="report-designer-page">
+
+            <ReportEditor Definition="_report.Definition"
+                          @bind-Configuration="_configuration"
+                          @bind-Theme="_theme"
+                          Data="_data"
+                          HeaderBlocks="_headerBlocks"
+                          FooterBlocks="_footerBlocks"
+                          BodyBlocks="_bodyBlocks"
+                          Texts="_texts"
+                          Cultures="_cultures"
+                          CultureChanged="ChangeCultureAsync"
+                          SaveRequested="SaveAsync" />
+
+        </div>
 
     </div>
 }
@@ -57,6 +90,9 @@ else if (_configuration is not null &&
     [Parameter]
     public string ReportId { get; set; } =
         default!;
+
+    [Parameter]
+    public string? PresetId { get; set; }
 
     private bool _loading =
         true;
@@ -80,8 +116,10 @@ else if (_configuration is not null &&
     private ReportTextWorkspace _texts =
         ReportTextWorkspace.Detached();
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        _loading = true;
+
         try
         {
             _report =
@@ -102,16 +140,32 @@ else if (_configuration is not null &&
                     ReportBlockType.Text);
 
             var preset =
-                await RenderSetApi.ResolvePresetAsync(
-                    tenantId: CurrentTenant.Id,
-                    reportId: ReportId,
-                    contextType: null,
-                    contextKey: null);
+                string.IsNullOrWhiteSpace(PresetId)
+                    ? await RenderSetApi.ResolvePresetAsync(
+                        tenantId: CurrentTenant.Id,
+                        reportId: ReportId,
+                        contextType: null,
+                        contextKey: null)
+                    : await RenderSetApi.GetPresetAsync(
+                        CurrentTenant.Id,
+                        PresetId);
 
             if (preset is null)
             {
                 throw new InvalidOperationException(
-                    $"No existe preset default para '{ReportId}'.");
+                    string.IsNullOrWhiteSpace(PresetId)
+                        ? $"No existe preset default para '{ReportId}'."
+                        : $"No existe el preset '{PresetId}'.");
+            }
+
+            if (!string.Equals(
+                    preset.Configuration.ReportId,
+                    ReportId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"El preset '{preset.Id}' pertenece al report " +
+                    $"'{preset.Configuration.ReportId}' y no a '{ReportId}'.");
             }
 
             _presetId =
@@ -148,11 +202,6 @@ else if (_configuration is not null &&
         }
     }
 
-    /// <summary>
-    /// Construye el área de trabajo del diseñador: lo heredado (global y
-    /// report) llega ya aplanado desde la API, y los valores propios del
-    /// preset se cargan aparte porque son los que se van a editar.
-    /// </summary>
     private async Task<ReportTextWorkspace> LoadTextsAsync(
         string? culture)
     {
@@ -187,8 +236,6 @@ else if (_configuration is not null &&
     private async Task ChangeCultureAsync(
         string culture)
     {
-        // Los cambios sin guardar se pierden al cambiar de idioma: se avisa
-        // guardando antes, que es lo menos sorprendente.
         if (_texts.HasPendingChanges)
             await SaveTextsAsync();
 
@@ -239,7 +286,7 @@ else if (_configuration is not null &&
     }
 
     private async Task<IReadOnlyCollection<ReportBlock>> LoadResolvedBlocksAsync(
-    ReportBlockType type)
+        ReportBlockType type)
     {
         var blocks =
             await RenderSetApi.GetBlocksByTypeAsync(
@@ -254,6 +301,19 @@ else if (_configuration is not null &&
                         block.Id)));
 
         return resolvedBlocks;
+    }
+
+    private void GoBack()
+    {
+        if (!string.IsNullOrWhiteSpace(_presetId))
+        {
+            Navigation.NavigateTo(
+                $"/presets/{Uri.EscapeDataString(ReportId)}/{Uri.EscapeDataString(_presetId)}");
+
+            return;
+        }
+
+        Navigation.NavigateTo("/reports");
     }
 
     private static T Clone<T>(

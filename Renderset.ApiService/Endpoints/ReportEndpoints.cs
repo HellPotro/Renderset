@@ -1,4 +1,4 @@
-﻿using Renderset.Core.Reports;
+using Renderset.Core.Reports;
 
 namespace Renderset.Api.Endpoints;
 
@@ -22,6 +22,10 @@ public static class ReportEndpoints
         group.MapPut(
             "/{tenantId}/{reportId}",
             SaveAsync);
+
+        group.MapDelete(
+            "/{tenantId}/{reportId}",
+            DeleteAsync);
 
         return app;
     }
@@ -84,6 +88,20 @@ public static class ReportEndpoints
         await repository.SaveAsync(
             tenantId,
             report,
+            cancellationToken);
+
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> DeleteAsync(
+        string tenantId,
+        string reportId,
+        IReportRepository repository,
+        CancellationToken cancellationToken)
+    {
+        await repository.DeleteAsync(
+            tenantId,
+            reportId,
             cancellationToken);
 
         return Results.NoContent();

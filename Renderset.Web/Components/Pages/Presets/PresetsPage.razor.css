@@ -1,209 +1,116 @@
-﻿.toolbar {
-    display: flex;
-    align-items: center;
+/* Estilos propios de la página de presets. El resto de clases
+   (.page, .toolbar, .preset-group, .preset-row...) siguen viniendo
+   de pages.css. */
+
+.preset-error {
+    margin-bottom: 16px;
+    padding: 11px 14px;
+    border: 1px solid #e6c3c3;
+    border-radius: 7px;
+    background: #fdf4f4;
+    color: #8c3a3a;
+    font-size: 12.5px;
+}
+
+.preset-creator {
     margin-bottom: 22px;
-    padding: 12px;
-    border: 1px solid #e0e7ea;
-    border-radius: 9px;
-    background: #fff;
-}
-
-.toolbar-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-    .toolbar-group label {
-        color: #6b7c84;
-        font-size: 11px;
-        font-weight: 600;
-    }
-
-    .toolbar-group select {
-        min-width: 220px;
-        padding: 7px 9px;
-        border: 1px solid #d8e1e5;
-        border-radius: 6px;
-        background: #fafcfc;
-        color: #344b55;
-        font-size: 11px;
-    }
-
-.preset-groups {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-}
-
-.preset-group {
-    overflow: hidden;
-    border: 1px solid #dde5e8;
-    border-radius: 10px;
-    background: #fff;
-}
-
-.preset-group-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    padding: 16px 18px;
-    border-bottom: 1px solid #e9eef0;
-}
-
-    .preset-group-header h2 {
-        margin: 0 0 3px;
-        color: #203740;
-        font-size: 14px;
-        font-weight: 700;
-    }
-
-    .preset-group-header code {
-        color: #89979d;
-        font-size: 10px;
-    }
-
-.preset-list {
-    display: flex;
-    flex-direction: column;
-}
-
-.preset-row {
-    display: grid;
-    grid-template-columns: 36px minmax(0, 1fr) auto auto;
-    align-items: center;
-    gap: 12px;
-    min-height: 64px;
-    padding: 11px 18px;
-    border-bottom: 1px solid #edf1f3;
-}
-
-    .preset-row:last-child {
-        border-bottom: 0;
-    }
-
-    .preset-row:hover {
-        background: #fafcfc;
-    }
-
-.preset-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    border-radius: 7px;
-    background: #edf3f5;
-    color: #54717d;
-    font-size: 12px;
-}
-
-.preset-info {
-    min-width: 0;
-}
-
-.preset-title {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    margin-bottom: 3px;
-}
-
-    .preset-title strong {
-        color: #2c424b;
-        font-size: 12px;
-    }
-
-.preset-info code {
-    color: #929fa5;
-    font-size: 9px;
-}
-
-.default-badge {
-    padding: 3px 6px;
-    border-radius: 5px;
-    background: #e6f2eb;
-    color: #347352;
-    font-size: 8px;
-    font-weight: 700;
-    text-transform: uppercase;
-}
-
-.preset-version {
-    color: #87969c;
-    font-size: 10px;
-}
-
-.preset-actions {
-    display: flex;
-    gap: 5px;
-}
-
-.icon-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 31px;
-    height: 31px;
-    border: 1px solid #dbe3e7;
-    border-radius: 6px;
-    background: #fff;
-    color: #61757e;
-    cursor: pointer;
-}
-
-    .icon-button:hover {
-        background: #f1f5f6;
-        color: #173d4f;
-    }
-
-.secondary-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    min-height: 34px;
-    padding: 7px 11px;
+    padding: 20px 22px;
     border: 1px solid #d8e1e5;
-    border-radius: 7px;
+    border-radius: 10px;
     background: #fff;
-    color: #455b65;
-    font-size: 11px;
-    font-weight: 600;
+    box-shadow: 0 4px 16px rgba(23, 43, 53, .06);
+}
+
+    .preset-creator > header {
+        margin-bottom: 18px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #eef3f5;
+    }
+
+        .preset-creator > header h2 {
+            margin: 0;
+            color: #172b35;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .preset-creator > header p {
+            margin: 5px 0 0;
+            color: #74858d;
+            font-size: 12.5px;
+        }
+
+.preset-creator-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.preset-creator-full {
+    grid-column: 1 / -1;
+}
+
+.preset-creator .form-group label small {
+    margin-left: 6px;
+    color: #9aa9b1;
+    font-size: 10.5px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.preset-creator .form-group > small {
+    margin-top: 6px;
+    color: #8a6d2e;
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.preset-check {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 9px;
+    color: #3d4f58;
+    font-size: 13px;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
     cursor: pointer;
 }
 
-    .secondary-button:hover {
-        background: #f5f8f9;
+    .preset-check input {
+        width: auto;
+        margin: 0;
     }
 
-.page-state,
-.empty-state {
-    padding: 60px 30px;
+.preset-creator-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+    margin-top: 20px;
+}
+
+.preset-group-actions {
+    display: flex;
+    gap: 9px;
+}
+
+.preset-empty {
+    padding: 22px 20px;
+    border: 1px dashed #dfe7ea;
+    border-radius: 8px;
+    background: #fbfdfd;
+    color: #7c8b93;
+    font-size: 12.5px;
     text-align: center;
-    color: #778990;
 }
 
-.empty-state {
-    border: 1px dashed #d8e1e5;
-    border-radius: 10px;
-    background: #fafcfc;
-}
+@media (max-width: 760px) {
 
-.empty-state-icon {
-    margin-bottom: 14px;
-    color: #82979f;
-    font-size: 26px;
-}
+    .preset-creator-grid {
+        grid-template-columns: 1fr;
+    }
 
-.empty-state h2 {
-    margin: 0 0 6px;
-    color: #334d58;
-    font-size: 16px;
-}
-
-.empty-state p {
-    margin: 0;
-    font-size: 12px;
+    .preset-group-actions {
+        flex-direction: column;
+    }
 }

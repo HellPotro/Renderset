@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Renderset.Core.Localization;
+using Renderset.Core.Resources;
 using Renderset.Infrastructure.Persistence;
 using Renderset.Infrastructure.Persistence.Entities;
 
@@ -283,6 +284,106 @@ public sealed class EfReportResourceRepository
                 x.ResourceKey,
                 x.Culture),
             StringComparer.OrdinalIgnoreCase);
+    }
+
+    public async Task<CopyMissingReportResourcesResult> CopyMissingAsync(
+    string tenantId,
+    CopyMissingReportResourcesRequest request,
+    CancellationToken cancellationToken = default)
+    {
+        await using var context =
+            await _contextFactory.CreateDbContextAsync(cancellationToken);
+
+        var sourceCulture =
+            request.SourceCulture.Trim();
+
+        var targetCulture =
+            request.TargetCulture.Trim();
+
+        var scope =
+            request.Scope.Trim();
+
+        if (string.Equals(sourceCulture, targetCulture, StringComparison.OrdinalIgnoreCase))
+        {
+            return new CopyMissingReportResourcesResult
+            {
+                Scope = scope,
+                SourceCulture = sourceCulture,
+                TargetCulture = targetCulture,
+                Created = 0,
+                Skipped = 0
+            };
+        }
+
+        var sourceResources =
+            await context.ReportResources
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.Scope == scope &&
+                    x.Culture == sourceCulture &&
+                    x.Active)
+                .ToListAsync(cancellationToken);
+
+        var targetKeys =
+            await context.ReportResources
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.Scope == scope &&
+                    x.Culture == targetCulture &&
+                    x.Active)
+                .Select(x => x.ResourceKey)
+                .ToListAsync(cancellationToken);
+
+        var existingTargetKeys =
+            targetKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var now =
+            DateTime.UtcNow;
+
+        var created =
+            0;
+
+        var skipped =
+            0;
+
+        foreach (var source in sourceResources)
+        {
+            if (existingTargetKeys.Contains(source.ResourceKey))
+            {
+                skipped++;
+                continue;
+            }
+
+            context.ReportResources.Add(
+                new ReportResourceEntity
+                {
+                    TenantId = tenantId,
+                    Scope = scope,
+                    Culture = targetCulture,
+                    ResourceKey = source.ResourceKey,
+                    Value = request.CopyValue
+                        ? source.Value
+                        : "",
+                    Description = source.Description,
+                    Source = ReportResourceSource.Manual,
+                    Active = true,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now
+                });
+
+            created++;
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+
+        return new CopyMissingReportResourcesResult
+        {
+            Scope = scope,
+            SourceCulture = sourceCulture,
+            TargetCulture = targetCulture,
+            Created = created,
+            Skipped = skipped
+        };
     }
 
     private static string BuildKey(

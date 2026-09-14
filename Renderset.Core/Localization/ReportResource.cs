@@ -21,8 +21,13 @@ public sealed class ReportResource
     /// </summary>
     public string? Value { get; set; }
 
-    public ReportResourceSource Source { get; set; } =
-        ReportResourceSource.Manual;
+    public ReportResourceSource Source { get; set; } = ReportResourceSource.Manual;
 
     public string? Description { get; set; }
+
+    public string? TranslationProvider { get; set; }
+
+    public DateTime? MachineTranslatedAtUtc { get; set; }
+
+    public bool NeedsReview { get; set; }
 }

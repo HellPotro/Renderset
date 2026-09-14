@@ -54,6 +54,35 @@
     </header>
 
 
+    @if (!_loading && _cultures.Count > 0)
+    {
+        <section class="editor-card language-card">
+
+            <div class="editor-card-body language-card-body">
+
+                <div>
+                    <strong>Idioma de edición</strong>
+                    <span>Los textos del bloque se guardan como resources traducibles.</span>
+                </div>
+
+                <select value="@_selectedCulture"
+                        @onchange="ChangeCultureAsync">
+
+                    @foreach (var culture in _cultures)
+                    {
+                        <option value="@culture.Culture">
+                            @culture.DisplayName (@culture.Culture)
+                        </option>
+                    }
+
+                </select>
+
+            </div>
+
+        </section>
+    }
+
+
     @if (_loading)
     {
         <div class="page-state">
@@ -213,6 +242,10 @@
                                       value="@BlockText(ReportTextKeys.BlockText(_id))"
                                       @onchange="FooterTextChanged"
                                       placeholder="Texto legal, dirección, contacto..."></textarea>
+
+                                      
+                            <VariablePicker Variables="_variables"
+                                            Selected="InsertFooterTextVariableAsync" />
                         </div>
 
                         <label class="toggle-row">
@@ -256,7 +289,7 @@
 
                             <div class="variable-input-row">
                                 <input type="text"
-                                       value="@_text.Title"
+                                       value="@TextBlockTitleValue"
                                        @oninput="TextTitleChanged"
                                        placeholder="Directrices de seguridad" />
 
@@ -274,7 +307,7 @@
                             </div>
 
                             <textarea rows="8"
-                                      value="@_text.Text"
+                                      value="@TextBlockTextValue"
                                       @oninput="TextContentChanged"
                                       placeholder="Escribe las directrices, avisos, condiciones o cualquier texto reutilizable..."></textarea>
 
@@ -296,12 +329,12 @@
                         </div>
 
                         <div class="text-block-preview @GetTextPreviewClass()">
-                            @if (!string.IsNullOrWhiteSpace(_text.Title))
+                            @if (!string.IsNullOrWhiteSpace(TextBlockTitleValue))
                             {
-                                <strong>@_text.Title</strong>
+                                <strong>@TextBlockTitleValue</strong>
                             }
 
-                            <div>@(_text.Text.Length == 0 ? "Vista previa del bloque de texto" : _text.Text)</div>
+                            <div>@(TextBlockTextValue.Length == 0 ? "Vista previa del bloque de texto" : TextBlockTextValue)</div>
                         </div>
 
                     </div>
@@ -360,6 +393,10 @@
 
     private IReadOnlyCollection<ReportVariable> _variables = [];
 
+    private IReadOnlyCollection<TenantCulture> _cultures = [];
+
+    private string? _selectedCulture;
+
     private ReportTextWorkspace _texts =
         ReportTextWorkspace.Detached();
 
@@ -410,7 +447,7 @@
         if (!IsEditMode)
         {
             ResetNewBlock();
-            _variables = await RenderSetApi.GetVariablesAsync(CurrentTenant.Id);
+            await LoadEditorContextAsync();
             return;
         }
 
@@ -458,8 +495,7 @@
                     ?? new ReportTextBlockConfiguration();
             }
 
-            _variables = await RenderSetApi.GetVariablesAsync(CurrentTenant.Id);
-            _texts = await LoadTextsAsync();
+            await LoadEditorContextAsync();
         }
         finally
         {
@@ -468,17 +504,30 @@
     }
 
 
-    private async Task<ReportTextWorkspace> LoadTextsAsync()
+    private async Task LoadEditorContextAsync()
     {
-        var cultures =
+        _variables =
+            await RenderSetApi.GetVariablesAsync(
+                CurrentTenant.Id);
+
+        _cultures =
             await RenderSetApi.GetCulturesAsync(
                 CurrentTenant.Id);
 
-        var culture =
-            cultures.FirstOrDefault(x => x.IsDefault)
-            ?? cultures.FirstOrDefault();
+        _selectedCulture ??=
+            _cultures.FirstOrDefault(x => x.IsDefault)?.Culture
+            ?? _cultures.FirstOrDefault()?.Culture;
 
-        if (culture is null)
+        _texts =
+            await LoadTextsAsync(
+                _selectedCulture);
+    }
+
+
+    private async Task<ReportTextWorkspace> LoadTextsAsync(
+        string? culture)
+    {
+        if (string.IsNullOrWhiteSpace(culture))
             return ReportTextWorkspace.Detached();
 
         var resources =
@@ -488,8 +537,23 @@
 
         return new ReportTextWorkspace(
             ReportResourceScope.Global,
-            culture.Culture,
+            culture,
             resources);
+    }
+
+
+    private async Task ChangeCultureAsync(
+        ChangeEventArgs e)
+    {
+        if (_texts.HasPendingChanges)
+            await SaveTextsAsync();
+
+        _selectedCulture =
+            e.Value?.ToString();
+
+        _texts =
+            await LoadTextsAsync(
+                _selectedCulture);
     }
 
 
@@ -536,10 +600,15 @@
 
         try
         {
+            var blockId =
+                _id.Trim();
+
+            PrepareConfigurationForSave(blockId);
+
             var block =
                 new ReportBlock
                 {
-                    Id = _id.Trim(),
+                    Id = blockId,
                     Name = _name.Trim(),
                     Type = _type,
                     ConfigurationJson =
@@ -551,14 +620,7 @@
                 block.Id,
                 block);
 
-            if (_texts.HasPendingChanges)
-            {
-                await RenderSetApi.SaveResourcesAsync(
-                    CurrentTenant.Id,
-                    _texts.GetPendingChanges());
-
-                _texts.AcceptPendingChanges();
-            }
+            await SaveTextsAsync();
 
             Navigation.NavigateTo(
                 "/blocks");
@@ -582,17 +644,23 @@
     /// diccionario. La configuración del bloque sólo guarda la clave.
     /// </summary>
     private string BlockText(
-        string key) =>
-        _texts.GetText(
-            key,
-            string.Empty);
+        string? key,
+        string fallback = "") =>
+        string.IsNullOrWhiteSpace(key)
+            ? fallback
+            : _texts.GetText(
+                key,
+                fallback);
 
 
     private void HeaderTitleChanged(
         ChangeEventArgs e)
     {
+        if (string.IsNullOrWhiteSpace(_id))
+            return;
+
         _header.TitleKey =
-            ReportTextKeys.BlockTitle(_id);
+            ReportTextKeys.BlockTitle(_id.Trim());
 
         _texts.SetText(
             _header.TitleKey,
@@ -603,8 +671,11 @@
     private void HeaderSubtitleChanged(
         ChangeEventArgs e)
     {
+        if (string.IsNullOrWhiteSpace(_id))
+            return;
+
         _header.SubtitleKey =
-            ReportTextKeys.BlockSubtitle(_id);
+            ReportTextKeys.BlockSubtitle(_id.Trim());
 
         _texts.SetText(
             _header.SubtitleKey,
@@ -633,8 +704,11 @@
     private void FooterTextChanged(
         ChangeEventArgs e)
     {
+        if (string.IsNullOrWhiteSpace(_id))
+            return;
+
         _footer.TextKey =
-            ReportTextKeys.BlockText(_id);
+            ReportTextKeys.BlockText(_id.Trim());
 
         _texts.SetText(
             _footer.TextKey,
@@ -660,10 +734,13 @@
     }
 
     private Task InsertSubtitleVariableAsync(
-    ReportVariable variable)
+        ReportVariable variable)
     {
+        if (string.IsNullOrWhiteSpace(_id))
+            return Task.CompletedTask;
+
         _header.SubtitleKey =
-            ReportTextKeys.BlockSubtitle(_id);
+            ReportTextKeys.BlockSubtitle(_id.Trim());
 
         _texts.SetText(
             _header.SubtitleKey,
@@ -681,15 +758,73 @@
         return Task.CompletedTask;
     }
 
+    private Task InsertFooterTextVariableAsync(
+        ReportVariable variable)
+    {
+        if (string.IsNullOrWhiteSpace(_id))
+            return Task.CompletedTask;
+
+        _footer.TextKey =
+            ReportTextKeys.BlockText(_id.Trim());
+
+        _texts.SetText(
+            _footer.TextKey,
+            $"{{{{{variable.Key}}}}}");
+
+        return Task.CompletedTask;
+    }
+
+    private string? TextBlockTitleKey =>
+        string.IsNullOrWhiteSpace(_id)
+            ? null
+            : ReportTextKeys.BlockTitle(_id.Trim());
+
+    private string? TextBlockTextKey =>
+        string.IsNullOrWhiteSpace(_id)
+            ? null
+            : ReportTextKeys.BlockText(_id.Trim());
+
+    private string TextBlockTitleValue =>
+        BlockText(
+            TextBlockTitleKey,
+            _text.Title ?? string.Empty);
+
+    private string TextBlockTextValue =>
+        BlockText(
+            TextBlockTextKey,
+            _text.Text);
+
 
     private void TextTitleChanged(ChangeEventArgs e)
     {
-        _text.Title = Normalize(e.Value?.ToString());
+        var value = Normalize(e.Value?.ToString());
+
+        _text.Title = value;
+
+        if (TextBlockTitleKey is null)
+            return;
+
+        _text.TitleKey = TextBlockTitleKey;
+
+        _texts.SetText(
+            _text.TitleKey,
+            value);
     }
 
     private void TextContentChanged(ChangeEventArgs e)
     {
-        _text.Text = e.Value?.ToString() ?? string.Empty;
+        var value = e.Value?.ToString() ?? string.Empty;
+
+        _text.Text = value;
+
+        if (TextBlockTextKey is null)
+            return;
+
+        _text.TextKey = TextBlockTextKey;
+
+        _texts.SetText(
+            _text.TextKey,
+            value);
     }
 
     private void TextStyleChanged(ChangeEventArgs e)
@@ -704,13 +839,31 @@
 
     private Task InsertTextTitleVariableAsync(ReportVariable variable)
     {
-        _text.Title = AppendVariable(_text.Title, variable.Key);
+        var value = AppendVariable(TextBlockTitleValue, variable.Key);
+
+        _text.Title = value;
+
+        if (TextBlockTitleKey is not null)
+        {
+            _text.TitleKey = TextBlockTitleKey;
+            _texts.SetText(_text.TitleKey, value);
+        }
+
         return Task.CompletedTask;
     }
 
     private Task InsertTextVariableAsync(ReportVariable variable)
     {
-        _text.Text = AppendVariable(_text.Text, variable.Key);
+        var value = AppendVariable(TextBlockTextValue, variable.Key);
+
+        _text.Text = value;
+
+        if (TextBlockTextKey is not null)
+        {
+            _text.TextKey = TextBlockTextKey;
+            _texts.SetText(_text.TextKey, value);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -733,6 +886,57 @@
         return current.EndsWith(' ')
             ? current + token
             : current + " " + token;
+    }
+
+
+    private void PrepareConfigurationForSave(
+        string blockId)
+    {
+        if (_type == ReportBlockType.Header)
+        {
+            _header.TitleKey ??= ReportTextKeys.BlockTitle(blockId);
+            _header.SubtitleKey ??= ReportTextKeys.BlockSubtitle(blockId);
+            return;
+        }
+
+        if (_type == ReportBlockType.Footer)
+        {
+            _footer.TextKey ??= ReportTextKeys.BlockText(blockId);
+            return;
+        }
+
+        if (_type != ReportBlockType.Text)
+            return;
+
+        var title = TextBlockTitleValue;
+        var text = TextBlockTextValue;
+
+        _text.TitleKey = ReportTextKeys.BlockTitle(blockId);
+        _text.TextKey = ReportTextKeys.BlockText(blockId);
+
+        _text.Title = title;
+        _text.Text = text;
+
+        _texts.SetText(
+            _text.TitleKey,
+            title);
+
+        _texts.SetText(
+            _text.TextKey,
+            text);
+    }
+
+
+    private async Task SaveTextsAsync()
+    {
+        if (!_texts.HasPendingChanges)
+            return;
+
+        await RenderSetApi.SaveResourcesAsync(
+            CurrentTenant.Id,
+            _texts.GetPendingChanges());
+
+        _texts.AcceptPendingChanges();
     }
 
 

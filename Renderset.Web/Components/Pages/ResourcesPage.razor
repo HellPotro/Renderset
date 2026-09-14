@@ -1,0 +1,1061 @@
+@page "/resources"
+
+@using Renderset.Core.Localization
+@using Renderset.Core.Reports
+@using Renderset.Core.Resources
+@using Renderset.Core.Translations
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject IJSRuntime JS
+
+<PageTitle>Diccionario - RenderSet</PageTitle>
+
+<div class="dict">
+
+    <header class="dict-header">
+
+        <div>
+            <h1>Diccionario</h1>
+            <p>
+                Una fila por clave, una columna por idioma.
+            </p>
+        </div>
+
+        <div class="dict-header-actions">
+
+            <select class="dict-scope"
+                    value="@_scope"
+                    @onchange="ScopeChangedAsync">
+
+                <optgroup label="Comunes">
+                    <option value="@ReportResourceScope.Global">
+                        Diccionario común del tenant
+                    </option>
+                </optgroup>
+
+                <optgroup label="Reports">
+                    @foreach (var report in _reports)
+                    {
+                        <option value="@report.Id">
+                            @report.Name
+                        </option>
+                    }
+                </optgroup>
+
+                @if (PresetScopes.Any())
+                {
+                    <optgroup label="Presets">
+                        @foreach (var scope in PresetScopes)
+                        {
+                            <option value="@scope">
+                                @scope[("preset:".Length)..]
+                            </option>
+                        }
+                    </optgroup>
+                }
+
+            </select>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="ToggleNewKey">
+                <i class="fa-solid fa-plus"></i>
+                Nueva clave
+            </button>
+
+        </div>
+
+    </header>
+
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="dict-error">
+            @_error
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_notice))
+    {
+        <div class="dict-notice">
+            @_notice
+        </div>
+    }
+
+
+    @if (_showNewKey)
+    {
+        <section class="dict-newkey">
+
+            <div class="form-group">
+                <label>Clave</label>
+                <input value="@_newKey"
+                       @oninput="e => _newKey = e.Value?.ToString() ?? string.Empty"
+                       placeholder="field.customer.name" />
+            </div>
+
+            <div class="form-group">
+                <label>Descripción</label>
+                <input value="@_newKeyDescription"
+                       @oninput="e => _newKeyDescription = e.Value?.ToString() ?? string.Empty"
+                       placeholder="Ayuda interna para quien traduce" />
+            </div>
+
+            <div class="dict-newkey-actions">
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="ToggleNewKey">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        class="primary-button"
+                        disabled="@string.IsNullOrWhiteSpace(_newKey)"
+                        @onclick="AddKey">
+                    Añadir
+                </button>
+
+            </div>
+
+        </section>
+    }
+
+
+    <div class="dict-toolbar">
+
+        <div class="dict-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input value="@_search"
+                   @oninput="e => _search = e.Value?.ToString() ?? string.Empty"
+                   placeholder="Filtrar por clave o por texto" />
+        </div>
+
+        <label class="dict-toggle">
+            <input type="checkbox"
+                   checked="@_onlyPending"
+                   @onchange="e => _onlyPending = e.Value is bool v && v" />
+            <span>Sólo con huecos</span>
+        </label>
+
+        <span class="dict-count">
+            @Rows.Count() de @_matrix.Count claves
+        </span>
+
+    </div>
+
+
+    @if (_cultures.Count > 0)
+    {
+        <div class="dict-langs">
+
+            @foreach (var culture in _cultures)
+            {
+                var visible = IsVisible(culture);
+
+                <button type="button"
+                        class="@ChipClass(culture, visible)"
+                        title="@ChipTitle(culture, visible)"
+                        disabled="@culture.IsDefault"
+                        @onclick="() => ToggleCulture(culture)">
+
+                    <span class="dict-chip-check">
+                        @if (culture.IsDefault)
+                        {
+                            <i class="fa-solid fa-lock"></i>
+                        }
+                        else if (visible)
+                        {
+                            <i class="fa-solid fa-check"></i>
+                        }
+                    </span>
+
+                    <span class="dict-chip-body">
+
+                        <span class="dict-chip-name">
+                            @culture.DisplayName
+                            <code>@culture.Culture</code>
+                        </span>
+
+                        <span class="dict-chip-bar">
+                            <span style="width:@(Coverage(culture.Culture))%"></span>
+                        </span>
+
+                    </span>
+
+                    <span class="dict-chip-pct">
+                        @Coverage(culture.Culture)%
+                    </span>
+
+                </button>
+            }
+
+        </div>
+    }
+
+
+    @if (_loading)
+    {
+        <div class="dict-state">
+            Cargando diccionario...
+        </div>
+    }
+    else if (_cultures.Count == 0)
+    {
+        <div class="dict-state">
+            No hay idiomas configurados.
+            <a href="/idiomas">Añade al menos uno</a>
+            antes de traducir nada.
+        </div>
+    }
+    else if (_matrix.Count == 0)
+    {
+        <div class="dict-state">
+            Este ámbito no tiene ninguna clave todavía.
+        </div>
+    }
+    else
+    {
+        <div class="dict-scroll">
+
+            <table class="dict-table">
+
+                <thead>
+                    <tr>
+                        <th class="dict-col-key">
+                            Clave
+                        </th>
+
+                        @foreach (var culture in _visibleCultures)
+                        {
+                            <th class="@(culture.IsDefault ? "dict-col-lang is-base" : "dict-col-lang")">
+
+                                <div class="dict-lang-head">
+
+                                    <div class="dict-lang-name">
+                                        <strong>@culture.DisplayName</strong>
+                                        <code>@culture.Culture</code>
+                                    </div>
+
+                                    @if (!culture.IsDefault)
+                                    {
+                                        <details class="dict-lang-menu">
+
+                                            <summary title="Rellenar huecos">
+                                                <i class="fa-solid fa-ellipsis"></i>
+                                            </summary>
+
+                                            <div class="dict-lang-panel">
+
+                                                <span class="dict-lang-panel-title">
+                                                    Rellenar huecos desde
+                                                </span>
+
+                                                @foreach (var source in _cultures.Where(x => x.Culture != culture.Culture))
+                                                {
+                                                    <div class="dict-lang-panel-row">
+
+                                                        <span>@source.DisplayName</span>
+
+                                                        <button type="button"
+                                                                title="Copiar el texto original tal cual"
+                                                                disabled="@_isBusy"
+                                                                @onclick="() => CopyMissingAsync(source.Culture, culture.Culture)">
+                                                            <i class="fa-regular fa-copy"></i>
+                                                        </button>
+
+                                                        <button type="button"
+                                                                title="Traducir con Azure"
+                                                                disabled="@_isBusy"
+                                                                @onclick="() => TranslateMissingAsync(source.Culture, culture.Culture)">
+                                                            <i class="fa-solid fa-language"></i>
+                                                        </button>
+
+                                                    </div>
+                                                }
+
+                                            </div>
+
+                                        </details>
+                                    }
+
+                                </div>
+
+                                @if (culture.IsDefault)
+                                {
+                                    <div class="dict-lang-base">
+                                        Idioma base
+                                    </div>
+                                }
+
+                            </th>
+                        }
+
+                        <th class="dict-col-actions"></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (var group in Rows.GroupBy(GroupOf))
+                    {
+                        <tr class="dict-group">
+                            <td colspan="@(_visibleCultures.Count + 2)">
+                                @group.Key
+                            </td>
+                        </tr>
+
+                        @foreach (var row in group)
+                        {
+                            <tr @key="row.Key">
+
+                                <td class="dict-col-key">
+                                    <code>@row.Key</code>
+                                    @if (!string.IsNullOrWhiteSpace(row.Description))
+                                    {
+                                        <small>@row.Description</small>
+                                    }
+                                </td>
+
+                                @foreach (var culture in _visibleCultures)
+                                {
+                                    var value = CellValue(row.Key, culture.Culture);
+                                    var dirty = IsDirty(row.Key, culture.Culture);
+                                    var machine = IsMachine(row.Key, culture.Culture);
+
+                                    <td class="dict-cell">
+
+                                        <input class="@CellClass(value, dirty, machine)"
+                                               value="@value"
+                                               placeholder="@Placeholder(row.Key, culture)"
+                                               @onchange="e => CellChanged(row.Key, culture.Culture, e)" />
+
+                                        @if (machine && !dirty)
+                                        {
+                                            <span class="dict-machine"
+                                                  title="Traducción automática sin revisar">
+                                                <i class="fa-solid fa-robot"></i>
+                                            </span>
+                                        }
+
+                                    </td>
+                                }
+
+                                <td class="dict-col-actions">
+                                    <button type="button"
+                                            title="Eliminar la clave en todos los idiomas"
+                                            @onclick="() => DeleteKeyAsync(row.Key)">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </td>
+
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+    }
+
+
+    @if (_dirty.Count > 0)
+    {
+        <div class="dict-savebar">
+
+            <span>
+                @_dirty.Count @(_dirty.Count == 1 ? "cambio" : "cambios") sin guardar
+            </span>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="DiscardChanges">
+                Descartar
+            </button>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@_isBusy"
+                    @onclick="SaveChangesAsync">
+                <i class="fa-solid fa-check"></i>
+                Guardar
+            </button>
+
+        </div>
+    }
+
+</div>
+
+
+@code {
+
+    private bool _loading = true;
+    private bool _isBusy;
+    private string? _error;
+    private string? _notice;
+
+    private string _scope = ReportResourceScope.Global;
+    private string _search = string.Empty;
+    private bool _onlyPending;
+
+    private bool _showNewKey;
+    private string _newKey = string.Empty;
+    private string _newKeyDescription = string.Empty;
+
+    private IReadOnlyCollection<Report> _reports = [];
+    private IReadOnlyCollection<TenantCulture> _cultures = [];
+    private IReadOnlyCollection<string> _presetScopes = [];
+
+    /// <summary>
+    /// Idiomas ocultos en la matriz. Con cinco idiomas la tabla se va de
+    /// ancho y casi siempre estás trabajando sobre uno o dos.
+    /// </summary>
+    private readonly HashSet<string> _hiddenCultures =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Se recalcula al cargar y al togglear, no en cada render: se consulta
+    /// una vez por fila.
+    /// </summary>
+    private List<TenantCulture> _visibleCultures = [];
+
+    /// <summary>
+    /// Matriz en memoria: una entrada por clave, con el valor de cada cultura.
+    /// La API sigue devolviendo filas sueltas (clave × cultura); pivotarlas
+    /// aquí es lo que permite ver y editar un idioma al lado del otro.
+    /// </summary>
+    private List<KeyRow> _matrix = [];
+
+    /// <summary>
+    /// Ediciones pendientes, indexadas por clave|cultura. Se guardan todas
+    /// juntas en un único PUT.
+    /// </summary>
+    private readonly Dictionary<string, string?> _dirty = new(StringComparer.OrdinalIgnoreCase);
+
+
+    private IEnumerable<string> PresetScopes => _presetScopes;
+
+
+    private bool IsVisible(
+        TenantCulture culture) =>
+        culture.IsDefault ||
+        !_hiddenCultures.Contains(culture.Culture);
+
+
+    /// <summary>
+    /// El idioma base nunca se oculta: es la referencia desde la que se
+    /// traduce y el placeholder de las demás columnas.
+    /// </summary>
+    private void ToggleCulture(
+        TenantCulture culture)
+    {
+        if (culture.IsDefault)
+            return;
+
+        if (!_hiddenCultures.Remove(culture.Culture))
+            _hiddenCultures.Add(culture.Culture);
+
+        RefreshVisibleCultures();
+    }
+
+
+    private void RefreshVisibleCultures()
+    {
+        _visibleCultures =
+            _cultures
+                .Where(IsVisible)
+                .ToList();
+    }
+
+
+    private static string ChipClass(
+        TenantCulture culture,
+        bool visible)
+    {
+        var classes = new List<string> { "dict-chip" };
+
+        if (visible)
+            classes.Add("is-on");
+
+        if (culture.IsDefault)
+            classes.Add("is-base");
+
+        return string.Join(' ', classes);
+    }
+
+
+    private static string ChipTitle(
+        TenantCulture culture,
+        bool visible)
+    {
+        if (culture.IsDefault)
+            return "El idioma base siempre se muestra";
+
+        return visible
+            ? $"Ocultar la columna {culture.DisplayName}"
+            : $"Mostrar la columna {culture.DisplayName}";
+    }
+
+    private IEnumerable<KeyRow> Rows =>
+        _matrix
+            .Where(MatchesSearch)
+            .Where(row => !_onlyPending || HasGaps(row))
+            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase);
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _reports =
+                await RenderSetApi.GetReportsAsync(
+                    CurrentTenant.Id);
+
+            _cultures =
+                await RenderSetApi.GetCulturesAsync(
+                    CurrentTenant.Id);
+
+            RefreshVisibleCultures();
+
+            // La cobertura sólo se usa para descubrir qué ámbitos de preset
+            // existen. Los porcentajes se calculan en cliente para que
+            // reflejen también lo que estás editando sin guardar.
+            var coverage =
+                await RenderSetApi.GetResourceCoverageAsync(
+                    CurrentTenant.Id);
+
+            _presetScopes =
+                coverage
+                    .Select(x => x.Scope)
+                    .Where(ReportResourceScope.IsPreset)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x)
+                    .ToList();
+
+            await LoadScopeAsync();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+    private async Task LoadScopeAsync()
+    {
+        _dirty.Clear();
+
+        var resources =
+            await RenderSetApi.GetResourcesAsync(
+                CurrentTenant.Id,
+                _scope);
+
+        _matrix =
+            resources
+                .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new KeyRow
+                {
+                    Key = group.Key,
+
+                    Description =
+                        group
+                            .Select(x => x.Description)
+                            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)),
+
+                    Values =
+                        group.ToDictionary(
+                            x => x.Culture,
+                            x => x,
+                            StringComparer.OrdinalIgnoreCase)
+                })
+                .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+    }
+
+
+    private async Task ScopeChangedAsync(
+        ChangeEventArgs e)
+    {
+        if (!await ConfirmDiscardAsync())
+            return;
+
+        _scope = e.Value?.ToString() ?? ReportResourceScope.Global;
+        _notice = null;
+
+        await LoadScopeAsync();
+    }
+
+
+    // ---------------------------------------------------------------- celdas
+
+    private string CellValue(
+        string key,
+        string culture)
+    {
+        if (_dirty.TryGetValue(DirtyKey(key, culture), out var pending))
+            return pending ?? string.Empty;
+
+        var row = _matrix.FirstOrDefault(x =>
+            string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
+
+        return row is not null &&
+               row.Values.TryGetValue(culture, out var resource)
+            ? resource.Value ?? string.Empty
+            : string.Empty;
+    }
+
+
+    private void CellChanged(
+        string key,
+        string culture,
+        ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        var normalized = string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+
+        var original = OriginalValue(key, culture);
+
+        var dirtyKey = DirtyKey(key, culture);
+
+        // Si vuelve al valor original deja de estar sucia: así el contador de
+        // la barra de guardado no miente.
+        if (string.Equals(original, normalized, StringComparison.Ordinal))
+        {
+            _dirty.Remove(dirtyKey);
+            return;
+        }
+
+        _dirty[dirtyKey] = normalized;
+    }
+
+
+    private string? OriginalValue(
+        string key,
+        string culture)
+    {
+        var row = _matrix.FirstOrDefault(x =>
+            string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
+
+        if (row is null ||
+            !row.Values.TryGetValue(culture, out var resource))
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(resource.Value)
+            ? null
+            : resource.Value;
+    }
+
+
+    private bool IsDirty(
+        string key,
+        string culture) =>
+        _dirty.ContainsKey(DirtyKey(key, culture));
+
+
+    private bool IsMachine(
+        string key,
+        string culture)
+    {
+        var row = _matrix.FirstOrDefault(x =>
+            string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
+
+        return row is not null &&
+               row.Values.TryGetValue(culture, out var resource) &&
+               resource.Source == ReportResourceSource.Machine &&
+               !string.IsNullOrWhiteSpace(resource.Value);
+    }
+
+
+    private static string CellClass(
+        string value,
+        bool dirty,
+        bool machine)
+    {
+        var classes = new List<string> { "dict-input" };
+
+        if (string.IsNullOrWhiteSpace(value))
+            classes.Add("is-empty");
+
+        if (dirty)
+            classes.Add("is-dirty");
+
+        if (machine)
+            classes.Add("is-machine");
+
+        return string.Join(' ', classes);
+    }
+
+
+    /// <summary>
+    /// En las culturas no base se muestra el texto del idioma base como
+    /// marca de agua: traducir sin ver el original no se puede.
+    /// </summary>
+    private string Placeholder(
+        string key,
+        TenantCulture culture)
+    {
+        if (culture.IsDefault)
+            return "Sin texto";
+
+        var baseCulture =
+            _cultures.FirstOrDefault(x => x.IsDefault);
+
+        if (baseCulture is null)
+            return "Sin traducir";
+
+        var original =
+            CellValue(key, baseCulture.Culture);
+
+        return string.IsNullOrWhiteSpace(original)
+            ? "Sin traducir"
+            : original;
+    }
+
+
+    // --------------------------------------------------------------- filtros
+
+    private bool MatchesSearch(
+        KeyRow row)
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+            return true;
+
+        if (Contains(row.Key) || Contains(row.Description))
+            return true;
+
+        return _visibleCultures.Any(culture =>
+            Contains(CellValue(row.Key, culture.Culture)));
+    }
+
+
+    private bool Contains(
+        string? value) =>
+        value?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true;
+
+
+    private bool HasGaps(
+        KeyRow row) =>
+        _visibleCultures.Any(culture =>
+            string.IsNullOrWhiteSpace(
+                CellValue(row.Key, culture.Culture)));
+
+
+    /// <summary>
+    /// Agrupa por el prefijo de la clave. Con cuarenta claves seguidas se
+    /// pierde el hilo; separadas por campos, columnas y secciones, no.
+    /// </summary>
+    private static string GroupOf(
+        KeyRow row)
+    {
+        var key = row.Key;
+
+        if (key.StartsWith("section.", StringComparison.OrdinalIgnoreCase))
+            return "Secciones";
+
+        if (key.StartsWith("field.", StringComparison.OrdinalIgnoreCase))
+            return "Campos";
+
+        if (key.StartsWith("column.", StringComparison.OrdinalIgnoreCase))
+            return "Columnas de tabla";
+
+        if (key.StartsWith("header.", StringComparison.OrdinalIgnoreCase) ||
+            key.StartsWith("footer.", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Cabecera y pie";
+        }
+
+        if (key.StartsWith("block.", StringComparison.OrdinalIgnoreCase))
+            return "Bloques";
+
+        return "Otras";
+    }
+
+
+    private int Coverage(
+        string culture)
+    {
+        if (_matrix.Count == 0)
+            return 0;
+
+        var translated =
+            _matrix.Count(row =>
+                !string.IsNullOrWhiteSpace(
+                    CellValue(row.Key, culture)));
+
+        return (int)Math.Round(
+            translated * 100d / _matrix.Count);
+    }
+
+
+    // -------------------------------------------------------------- guardado
+
+    private async Task SaveChangesAsync()
+    {
+        if (_dirty.Count == 0)
+            return;
+
+        _isBusy = true;
+        _error = null;
+
+        try
+        {
+            var resources =
+                _dirty
+                    .Select(entry =>
+                    {
+                        var parts = SplitDirtyKey(entry.Key);
+
+                        return new ReportResource
+                        {
+                            Scope = _scope,
+                            Key = parts.Key,
+                            Culture = parts.Culture,
+                            Value = entry.Value,
+
+                            // Todo lo tocado a mano deja de ser automático.
+                            Source = ReportResourceSource.Manual,
+
+                            Description =
+                                _matrix
+                                    .FirstOrDefault(x =>
+                                        string.Equals(
+                                            x.Key,
+                                            parts.Key,
+                                            StringComparison.OrdinalIgnoreCase))
+                                    ?.Description
+                        };
+                    })
+                    .ToList();
+
+            await RenderSetApi.SaveResourcesAsync(
+                CurrentTenant.Id,
+                resources);
+
+            _notice = $"{resources.Count} entradas guardadas.";
+
+            await LoadScopeAsync();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+
+    private void DiscardChanges()
+    {
+        _dirty.Clear();
+        _notice = null;
+    }
+
+
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        if (_dirty.Count == 0)
+            return true;
+
+        return await JS.InvokeAsync<bool>(
+            "confirm",
+            "Hay cambios sin guardar que se van a perder. ¿Continuar?");
+    }
+
+
+    // ----------------------------------------------------------- claves y IA
+
+    private void ToggleNewKey()
+    {
+        _showNewKey = !_showNewKey;
+        _newKey = string.Empty;
+        _newKeyDescription = string.Empty;
+    }
+
+
+    private void AddKey()
+    {
+        var key = _newKey.Trim();
+
+        if (string.IsNullOrWhiteSpace(key))
+            return;
+
+        if (_matrix.Any(x =>
+                string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase)))
+        {
+            _error = $"La clave '{key}' ya existe en este ámbito.";
+            return;
+        }
+
+        // La fila se añade en local y sólo viaja al servidor cuando se
+        // escribe algún valor y se pulsa Guardar.
+        _matrix.Add(
+            new KeyRow
+            {
+                Key = key,
+
+                Description = string.IsNullOrWhiteSpace(_newKeyDescription)
+                    ? null
+                    : _newKeyDescription.Trim(),
+
+                Values = new Dictionary<string, ReportResource>(
+                    StringComparer.OrdinalIgnoreCase)
+            });
+
+        _error = null;
+        ToggleNewKey();
+    }
+
+
+    private async Task DeleteKeyAsync(
+        string key)
+    {
+        var confirmed =
+            await JS.InvokeAsync<bool>(
+                "confirm",
+                $"Se eliminará '{key}' en todos los idiomas. ¿Continuar?");
+
+        if (!confirmed)
+            return;
+
+        await RenderSetApi.DeleteResourceAsync(
+            CurrentTenant.Id,
+            _scope,
+            key);
+
+        await LoadScopeAsync();
+    }
+
+
+    private async Task CopyMissingAsync(
+        string sourceCulture,
+        string targetCulture)
+    {
+        if (!await ConfirmDiscardAsync())
+            return;
+
+        _isBusy = true;
+
+        try
+        {
+            var result =
+                await RenderSetApi.CopyMissingResourcesAsync(
+                    CurrentTenant.Id,
+                    new CopyMissingReportResourcesRequest
+                    {
+                        Scope = _scope,
+                        SourceCulture = sourceCulture,
+                        TargetCulture = targetCulture,
+                        CopyValue = true
+                    });
+
+            _notice =
+                $"Copiadas {result.Created} claves de {sourceCulture} " +
+                $"a {targetCulture} ({result.Skipped} ya tenían texto).";
+
+            await LoadScopeAsync();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+
+    private async Task TranslateMissingAsync(
+        string sourceCulture,
+        string targetCulture)
+    {
+        if (!await ConfirmDiscardAsync())
+            return;
+
+        _isBusy = true;
+
+        try
+        {
+            var result =
+                await RenderSetApi.TranslateMissingResourcesAsync(
+                    CurrentTenant.Id,
+                    new TranslateMissingReportResourcesRequest
+                    {
+                        Scope = _scope,
+                        SourceCulture = sourceCulture,
+                        TargetCulture = targetCulture,
+                        IncludeEmptyValues = true,
+                        OverwriteExistingValues = false
+                    });
+
+            _notice =
+                $"Traducidas {result.Translated} claves con {result.Provider}. " +
+                $"Revisa las marcadas como automáticas.";
+
+            if (result.Failed > 0)
+                _notice += $" {result.Failed} fallaron.";
+
+            await LoadScopeAsync();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+
+    // ---------------------------------------------------------------- tipos
+
+    private static string DirtyKey(
+        string key,
+        string culture) =>
+        $"{key}|{culture}";
+
+
+    private static (string Key, string Culture) SplitDirtyKey(
+        string dirtyKey)
+    {
+        var separator = dirtyKey.LastIndexOf('|');
+
+        return (
+            dirtyKey[..separator],
+            dirtyKey[(separator + 1)..]);
+    }
+
+
+    private sealed class KeyRow
+    {
+        public required string Key { get; init; }
+
+        public string? Description { get; init; }
+
+        public required Dictionary<string, ReportResource> Values { get; init; }
+    }
+}

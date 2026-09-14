@@ -1,4 +1,6 @@
 using Renderset.Core.Localization;
+using Renderset.Core.Resources;
+using Renderset.Core.Translations;
 
 namespace Renderset.Api.Endpoints;
 
@@ -26,6 +28,27 @@ public static class ReportResourceEndpoints
         group.MapPut(
             "/{tenantId}",
             SaveManyAsync);
+
+        group.MapPost(
+            "/{tenantId}/copy-missing",
+            async (
+                string tenantId,
+                CopyMissingReportResourcesRequest request,
+                IReportResourceRepository repository,
+                CancellationToken cancellationToken) =>
+            {
+                var result =
+                await repository.CopyMissingAsync(
+                    tenantId,
+                    request,
+                    cancellationToken);
+
+                return Results.Ok(result);
+            });
+
+        group.MapPost(
+            "/{tenantId}/translate-missing",
+            TranslateMissingAsync);
 
         group.MapDelete(
             "/{tenantId}/{scope}/{key}",
@@ -111,6 +134,165 @@ public static class ReportResourceEndpoints
             cancellationToken);
 
         return Results.NoContent();
+    }
+
+
+    private static async Task<IResult> TranslateMissingAsync(
+        string tenantId,
+        TranslateMissingReportResourcesRequest request,
+        IReportResourceRepository repository,
+        ITranslationService translationService,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Scope) ||
+            string.IsNullOrWhiteSpace(request.SourceCulture) ||
+            string.IsNullOrWhiteSpace(request.TargetCulture))
+        {
+            return Results.BadRequest(
+                "Scope, SourceCulture y TargetCulture son obligatorios.");
+        }
+
+        if (string.Equals(
+                request.SourceCulture,
+                request.TargetCulture,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.BadRequest(
+                "La cultura origen y la cultura destino no pueden ser iguales.");
+        }
+
+        var resources =
+            await repository.GetByScopeAsync(
+                tenantId,
+                request.Scope,
+                cancellationToken);
+
+        var sourceResources =
+            resources
+                .Where(x =>
+                    string.Equals(
+                        x.Culture,
+                        request.SourceCulture,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(x.Value))
+                .OrderBy(x => x.Key)
+                .ToList();
+
+        var targetByKey =
+            resources
+                .Where(x =>
+                    string.Equals(
+                        x.Culture,
+                        request.TargetCulture,
+                        StringComparison.OrdinalIgnoreCase))
+                .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    x => x.Key,
+                    x => x.First(),
+                    StringComparer.OrdinalIgnoreCase);
+
+        var itemsToTranslate =
+            new List<TranslationItem>();
+
+        var skipped =
+            0;
+
+        foreach (var source in sourceResources)
+        {
+            if (targetByKey.TryGetValue(source.Key, out var target))
+            {
+                var hasValue =
+                    !string.IsNullOrWhiteSpace(target.Value);
+
+                if (hasValue && !request.OverwriteExistingValues)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                if (!hasValue && !request.IncludeEmptyValues)
+                {
+                    skipped++;
+                    continue;
+                }
+            }
+
+            itemsToTranslate.Add(
+                new TranslationItem
+                {
+                    Key = source.Key,
+                    Text = source.Value!,
+                    Description = source.Description,
+                    Context = request.Scope
+                });
+        }
+
+        if (itemsToTranslate.Count == 0)
+        {
+            return Results.Ok(
+                new TranslateMissingReportResourcesResult
+                {
+                    Scope = request.Scope,
+                    SourceCulture = request.SourceCulture,
+                    TargetCulture = request.TargetCulture,
+                    Provider = "AzureTranslator",
+                    Translated = 0,
+                    Skipped = skipped,
+                    Failed = 0
+                });
+        }
+
+        var translated =
+            await translationService.TranslateAsync(
+                new TranslationRequest
+                {
+                    SourceCulture = request.SourceCulture,
+                    TargetCulture = request.TargetCulture,
+                    Items = itemsToTranslate
+                },
+                cancellationToken);
+
+        var sourceByKey =
+            sourceResources.ToDictionary(
+                x => x.Key,
+                StringComparer.OrdinalIgnoreCase);
+
+        var resourcesToSave =
+            translated
+                .Select(result =>
+                {
+                    sourceByKey.TryGetValue(
+                        result.Key,
+                        out var source);
+
+                    return new ReportResource
+                    {
+                        Scope = request.Scope,
+                        Key = result.Key,
+                        Culture = request.TargetCulture,
+                        Value = result.TranslatedText,
+                        Source = ReportResourceSource.Machine,
+                        Description = source?.Description
+                    };
+                })
+                .ToList();
+
+        await repository.SaveManyAsync(
+            tenantId,
+            resourcesToSave,
+            cancellationToken);
+
+        return Results.Ok(
+            new TranslateMissingReportResourcesResult
+            {
+                Scope = request.Scope,
+                SourceCulture = request.SourceCulture,
+                TargetCulture = request.TargetCulture,
+                Provider = translated.FirstOrDefault()?.Provider ?? "AzureTranslator",
+                Translated = resourcesToSave.Count,
+                Skipped = skipped,
+                Failed = itemsToTranslate.Count - resourcesToSave.Count
+            });
     }
 
     private static async Task<IResult> DeleteAsync(

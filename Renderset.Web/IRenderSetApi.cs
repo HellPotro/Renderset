@@ -4,6 +4,8 @@ using Renderset.Core.Localization;
 using Renderset.Core.Persistence;
 using Renderset.Core.Presets;
 using Renderset.Core.Reports;
+using Renderset.Core.Resources;
+using Renderset.Core.Translations;
 using Renderset.Core.Variables;
 
 namespace Renderset.Web;
@@ -52,11 +54,30 @@ public interface IRenderSetApi
         [Body] IReadOnlyCollection<ReportResource> resources,
         CancellationToken cancellationToken = default);
 
+
+    [Post("/api/resources/{tenantId}/translate-missing")]
+    Task<TranslateMissingReportResourcesResult> TranslateMissingResourcesAsync(
+        string tenantId,
+        [Body] TranslateMissingReportResourcesRequest request,
+        CancellationToken cancellationToken = default);
+
     [Delete("/api/resources/{tenantId}/{scope}/{key}")]
     Task DeleteResourceAsync(
         string tenantId,
         string scope,
         string key,
+        CancellationToken cancellationToken = default);
+
+    [Get("/api/resources/{tenantId}/coverage")]
+    Task<IReadOnlyCollection<ReportResourceCoverageDto>> GetResourceCoverageAsync(
+        string tenantId,
+        string? scope = null,
+        CancellationToken cancellationToken = default);
+
+    [Post("/api/resources/{tenantId}/copy-missing")]
+    Task<CopyMissingReportResourcesResult> CopyMissingResourcesAsync(
+        string tenantId,
+        [Body] CopyMissingReportResourcesRequest request,
         CancellationToken cancellationToken = default);
 
     #endregion
@@ -173,6 +194,12 @@ public interface IRenderSetApi
         string tenantId,
         string reportId,
         [Body] Report report,
+        CancellationToken cancellationToken = default);
+
+    [Delete("/api/reports/{tenantId}/{reportId}")]
+    Task<IApiResponse> DeleteReportAsync(
+        string tenantId,
+        string reportId,
         CancellationToken cancellationToken = default);
 
     #endregion

@@ -502,7 +502,7 @@
     private void OpenDesigner()
     {
         Navigation.NavigateTo(
-            $"/reports/{Uri.EscapeDataString(ReportId)}/designer");
+            $"/reports/{Uri.EscapeDataString(ReportId)}/designer/{Uri.EscapeDataString(PresetId)}");
     }
 
 
