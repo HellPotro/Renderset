@@ -1,0 +1,478 @@
+@page "/idiomas"
+
+@using System.Globalization
+@using Renderset.Core.Localization
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+
+<PageTitle>Idiomas - RenderSet</PageTitle>
+
+<div class="page">
+
+    <header class="page-header">
+
+        <div>
+            <h1>Idiomas</h1>
+
+            <p>
+                Culturas en las que este tenant puede emitir documentos.
+            </p>
+        </div>
+
+        <button type="button"
+                class="primary-button"
+                @onclick="NewCulture">
+
+            <i class="fa-solid fa-plus"></i>
+            Nuevo idioma
+
+        </button>
+
+    </header>
+
+
+    <p class="culture-hint">
+        La cultura se guarda completa (<code>es-ES</code>, <code>en-GB</code>)
+        porque no sólo elige el diccionario: también decide el formato de
+        fechas, números y divisa. El idioma por defecto es el último recurso
+        cuando falta una traducción, así que siempre debe estar traducido al
+        100%.
+    </p>
+
+
+    @if (_editing is not null)
+    {
+        <section class="editor-card">
+
+            <header>
+                <h2>
+                    @(_isNew
+                        ? "Nuevo idioma"
+                        : "Editar idioma")
+                </h2>
+            </header>
+
+
+            <div class="editor-grid">
+
+                <div class="form-group">
+                    <label>Cultura</label>
+
+                    <input value="@_editing.Culture"
+                           disabled="@(!_isNew)"
+                           list="culture-suggestions"
+                           @onchange="CultureCodeChanged"
+                           placeholder="en-GB" />
+
+                    <datalist id="culture-suggestions">
+                        @foreach (var suggestion in Suggestions)
+                        {
+                            <option value="@suggestion.Name">
+                                @suggestion.DisplayName
+                            </option>
+                        }
+                    </datalist>
+                </div>
+
+
+                <div class="form-group">
+                    <label>Nombre</label>
+
+                    <input value="@_editing.DisplayName"
+                           @oninput="DisplayNameChanged"
+                           placeholder="English (UK)" />
+                </div>
+
+
+                <div class="form-group editor-full">
+
+                    <label class="toggle-row">
+
+                        <input type="checkbox"
+                               checked="@_editing.IsDefault"
+                               disabled="@IsCurrentDefault"
+                               @onchange="IsDefaultChanged" />
+
+                        <span>
+                            Idioma por defecto del tenant
+                        </span>
+
+                    </label>
+
+                    @if (IsCurrentDefault)
+                    {
+                        <small>
+                            Ya es el idioma por defecto. Para cambiarlo, marca
+                            otro: sólo puede haber uno.
+                        </small>
+                    }
+
+                </div>
+
+            </div>
+
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div class="page-state">
+                    @_error
+                </div>
+            }
+
+
+            <div class="editor-actions">
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="CancelEdit">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        class="primary-button"
+                        disabled="@(!CanSave)"
+                        @onclick="SaveAsync">
+                    Guardar
+                </button>
+
+            </div>
+
+        </section>
+    }
+
+
+    @if (_loading)
+    {
+        <div class="page-state">
+            Cargando idiomas...
+        </div>
+    }
+    else if (_cultures.Count == 0)
+    {
+        <div class="page-state">
+            Todavía no hay idiomas configurados. Añade al menos uno y márcalo
+            como idioma por defecto: sin él, el diseñador no puede guardar
+            textos en el diccionario.
+        </div>
+    }
+    else
+    {
+        <div class="cultures-card">
+
+            <div class="cultures-table-header">
+
+                <span>Cultura</span>
+                <span>Nombre</span>
+                <span></span>
+                <span></span>
+
+            </div>
+
+
+            @foreach (var culture in _cultures)
+            {
+                <div class="culture-row">
+
+                    <div class="culture-name">
+
+                        <code>
+                            @culture.Culture
+                        </code>
+
+                        <small>
+                            @FormatSample(culture.Culture)
+                        </small>
+
+                    </div>
+
+
+                    <div class="culture-value">
+                        @culture.DisplayName
+                    </div>
+
+
+                    <div>
+                        @if (culture.IsDefault)
+                        {
+                            <span class="default-badge">
+                                <i class="fa-solid fa-star"></i>
+                                Por defecto
+                            </span>
+                        }
+                    </div>
+
+
+                    <div class="culture-actions">
+
+                        <button type="button"
+                                title="Editar"
+                                @onclick="() => Edit(culture)">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+
+                        @if (!culture.IsDefault)
+                        {
+                            <button type="button"
+                                    title="Marcar como idioma por defecto"
+                                    @onclick="() => SetDefaultAsync(culture)">
+                                <i class="fa-solid fa-star"></i>
+                            </button>
+                        }
+
+                    </div>
+
+                </div>
+            }
+
+        </div>
+    }
+
+</div>
+
+
+@code {
+
+    private IReadOnlyCollection<TenantCulture> _cultures = [];
+
+    private TenantCulture? _editing;
+
+    private bool _isNew;
+
+    private bool _loading = true;
+
+    private string? _error;
+
+
+    private bool CanSave =>
+        _editing is not null &&
+        !string.IsNullOrWhiteSpace(_editing.Culture) &&
+        !string.IsNullOrWhiteSpace(_editing.DisplayName);
+
+    /// <summary>
+    /// True si el idioma que se está editando ya es el que está por defecto.
+    /// En ese caso no tiene sentido poder desmarcarlo: el tenant se quedaría
+    /// sin fallback.
+    /// </summary>
+    private bool IsCurrentDefault =>
+        _editing is not null &&
+        !_isNew &&
+        _cultures.Any(x =>
+            x.IsDefault &&
+            string.Equals(
+                x.Culture,
+                _editing.Culture,
+                StringComparison.OrdinalIgnoreCase));
+
+    private static IReadOnlyCollection<CultureInfo> Suggestions =>
+        CultureInfo
+            .GetCultures(CultureTypes.SpecificCultures)
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _cultures =
+                await RenderSetApi.GetCulturesAsync(
+                    CurrentTenant.Id);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+    private void NewCulture()
+    {
+        _error = null;
+        _isNew = true;
+
+        _editing =
+            new TenantCulture
+            {
+                Culture = string.Empty,
+                DisplayName = string.Empty,
+
+                // El primero que se crea pasa a ser el de por defecto: un
+                // tenant sin idioma base no puede resolver nada.
+                IsDefault = _cultures.Count == 0
+            };
+    }
+
+
+    private void Edit(
+        TenantCulture culture)
+    {
+        _error = null;
+        _isNew = false;
+
+        _editing =
+            new TenantCulture
+            {
+                Culture = culture.Culture,
+                DisplayName = culture.DisplayName,
+                IsDefault = culture.IsDefault
+            };
+    }
+
+
+    private void CancelEdit()
+    {
+        _editing = null;
+        _error = null;
+    }
+
+
+    private void CultureCodeChanged(
+        ChangeEventArgs e)
+    {
+        if (_editing is null)
+            return;
+
+        var value =
+            e.Value?.ToString()?.Trim()
+            ?? string.Empty;
+
+        _editing.Culture = value;
+
+        // Rellenar el nombre a partir de la cultura si el usuario no ha
+        // escrito uno: ahorra un campo en el 90% de los casos.
+        if (!string.IsNullOrWhiteSpace(_editing.DisplayName))
+            return;
+
+        try
+        {
+            _editing.DisplayName =
+                CultureInfo
+                    .GetCultureInfo(value)
+                    .NativeName;
+        }
+        catch (CultureNotFoundException)
+        {
+            // Cultura inventada o a medio escribir: no pasa nada, el usuario
+            // pondrá el nombre a mano.
+        }
+    }
+
+
+    private void DisplayNameChanged(
+        ChangeEventArgs e)
+    {
+        if (_editing is null)
+            return;
+
+        _editing.DisplayName =
+            e.Value?.ToString() ?? string.Empty;
+    }
+
+
+    private void IsDefaultChanged(
+        ChangeEventArgs e)
+    {
+        if (_editing is null)
+            return;
+
+        _editing.IsDefault =
+            e.Value is bool value &&
+            value;
+    }
+
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null || !CanSave)
+            return;
+
+        _error = null;
+
+        if (!IsKnownCulture(_editing.Culture))
+        {
+            _error =
+                $"'{_editing.Culture}' no es una cultura reconocida por .NET. " +
+                "Usa el formato idioma-región, por ejemplo en-GB.";
+
+            return;
+        }
+
+        await RenderSetApi.SaveCultureAsync(
+            CurrentTenant.Id,
+            _editing.Culture,
+            _editing);
+
+        _editing = null;
+
+        await ReloadAsync();
+    }
+
+
+    private async Task SetDefaultAsync(
+        TenantCulture culture)
+    {
+        await RenderSetApi.SaveCultureAsync(
+            CurrentTenant.Id,
+            culture.Culture,
+            new TenantCulture
+            {
+                Culture = culture.Culture,
+                DisplayName = culture.DisplayName,
+                IsDefault = true
+            });
+
+        await ReloadAsync();
+    }
+
+
+    private static bool IsKnownCulture(
+        string culture)
+    {
+        try
+        {
+            CultureInfo.GetCultureInfo(culture);
+            return true;
+        }
+        catch (CultureNotFoundException)
+        {
+            return false;
+        }
+    }
+
+
+    /// <summary>
+    /// Muestra cómo queda una fecha y un importe en esa cultura. Es la forma
+    /// más rápida de ver que en-GB y en-US no son lo mismo.
+    /// </summary>
+    private static string FormatSample(
+        string culture)
+    {
+        try
+        {
+            var info =
+                CultureInfo.GetCultureInfo(culture);
+
+            var date =
+                new DateTime(2026, 9, 14)
+                    .ToString("d", info);
+
+            var amount =
+                1234.5m.ToString("N2", info);
+
+            return $"{date} · {amount}";
+        }
+        catch (CultureNotFoundException)
+        {
+            return "Cultura no reconocida";
+        }
+    }
+}

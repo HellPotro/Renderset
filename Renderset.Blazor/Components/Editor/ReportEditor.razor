@@ -29,6 +29,27 @@
 
             <h2>@Configuration.Name</h2>
 
+            @if (Cultures.Count > 1)
+            {
+                <div class="report-editor-culture">
+
+                    <i class="fa-solid fa-language"></i>
+
+                    <select value="@Texts.Culture"
+                            @onchange="CultureSelectedAsync">
+
+                        @foreach (var culture in Cultures)
+                        {
+                            <option value="@culture.Culture">
+                                @culture.DisplayName
+                            </option>
+                        }
+
+                    </select>
+
+                </div>
+            }
+
             <div class="report-editor-actions">
 
                 @if (ShowSaveButton)
@@ -199,6 +220,7 @@
                                                  CanMoveDown="canMoveDown"
                                                  MoveUp="() => MoveBodyItemAsync(item.Id, -1)"
                                                  MoveDown="() => MoveBodyItemAsync(item.Id, 1)"
+                                                 Texts="Texts"
                                                  Changed="ConfigurationUpdated" />
                         }
                         else
@@ -277,7 +299,7 @@
                                             <label>Nombre</label>
 
                                             <input type="text"
-                                                   value="@sectionConfiguration.NameKey"
+                                                   value="@GetSectionName(sectionConfiguration)"
                                                    @onchange="e => SetCustomSectionNameAsync(
                                                                               sectionConfiguration,
                                                                               e.Value?.ToString())"
@@ -443,6 +465,7 @@
                                         Resolved="_resolved?.Header"
                                         Configuration="Configuration"
                                         Blocks="HeaderBlocks"
+                                        Texts="Texts"
                                         Changed="ConfigurationUpdated" />
                 }
 
@@ -452,6 +475,7 @@
                                         Resolved="_resolved?.Footer"
                                         Configuration="Configuration"
                                         Blocks="FooterBlocks"
+                                        Texts="Texts"
                                         Changed="ConfigurationUpdated" />
                 }
 
@@ -550,6 +574,28 @@
     [Parameter]
     public EventCallback SaveRequested { get; set; }
 
+    /// <summary>
+    /// Diccionario en edición para el ámbito del preset. El editor escribe
+    /// aquí los textos y la página anfitriona los persiste al guardar.
+    /// </summary>
+    [Parameter]
+    public ReportTextWorkspace Texts { get; set; } =
+        ReportTextWorkspace.Detached();
+
+    /// <summary>
+    /// Culturas disponibles para previsualizar. Con menos de dos, el selector
+    /// no se pinta.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyCollection<TenantCulture> Cultures { get; set; } = [];
+
+    /// <summary>
+    /// Cambio de cultura de edición. La página recarga el diccionario y
+    /// reconstruye el workspace.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> CultureChanged { get; set; }
+
     private readonly ReportConfigurationResolver _resolver = new();
 
     private bool _showComposer;
@@ -587,11 +633,14 @@
                 headerBlock,
                 footerBlock);
 
+        // El catálogo sale del workspace, no de base de datos: así el preview
+        // refleja al instante lo que se está escribiendo.
         _resolved =
             _resolver.Resolve(
                 Definition,
                 effectiveConfiguration,
-                BodyBlocks);
+                BodyBlocks,
+                Texts.ToCatalog());
     }
 
     private static ReportBlock? FindSelectedBlock(
@@ -695,10 +744,13 @@
             {
                 SectionId = sectionId,
                 SourceSectionId = null,
-                NameKey = "Nueva sección",
                 Visible = true,
                 Layout = ReportSectionLayout.List
             });
+
+        Texts.SetText(
+            ReportTextKeys.Section(sectionId),
+            "Nueva sección");
 
         Configuration.Body.Add(
             new ReportBodyItemConfiguration
@@ -842,11 +894,30 @@
         ReportSectionConfiguration section,
         string? name)
     {
-        section.NameKey = string.IsNullOrWhiteSpace(name)
-            ? "Nueva sección"
-            : name.Trim();
+        Texts.SetText(
+            ReportTextKeys.Section(section.SectionId),
+            string.IsNullOrWhiteSpace(name)
+                ? "Nueva sección"
+                : name);
 
         await ConfigurationUpdated();
+    }
+
+    private string GetSectionName(
+        ReportSectionConfiguration section) =>
+        Texts.GetText(
+            ReportTextKeys.Section(section.SectionId),
+            section.SectionId);
+
+    private async Task CultureSelectedAsync(
+        ChangeEventArgs e)
+    {
+        var culture = e.Value?.ToString();
+
+        if (string.IsNullOrWhiteSpace(culture))
+            return;
+
+        await CultureChanged.InvokeAsync(culture);
     }
 
     private async Task SetCustomSectionLayoutAsync(
@@ -1044,8 +1115,7 @@
             new SectionCompositionRequest
             {
                 SectionId = sectionId,
-                Name = sectionConfiguration.NameKey
-                    ?? sectionConfiguration.SectionId,
+                Name = GetSectionName(sectionConfiguration),
                 Layout = sectionConfiguration.Layout
                     ?? ReportSectionLayout.List,
                 SelectedFieldIds = selectedFieldIds
@@ -1096,8 +1166,9 @@
             Configuration.Sections.Add(section);
         }
 
-        section.NameKey =
-            request.Name.Trim();
+        Texts.SetText(
+            ReportTextKeys.Section(sectionId),
+            request.Name);
 
         section.Layout =
             request.Layout;

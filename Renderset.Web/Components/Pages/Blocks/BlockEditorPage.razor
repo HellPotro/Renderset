@@ -5,6 +5,7 @@
 @using System.Text.Json.Serialization
 @using Renderset.Core.Blocks
 @using Renderset.Core.Configurations 
+@using Renderset.Core.Localization
 @using Renderset.Core.Variables
 
 @inject IRenderSetApi RenderSetApi
@@ -135,8 +136,8 @@
                             <label>Título</label>
 
                             <input type="text"
-                                   value="@_header.TitleKey"
-                                   @oninput="HeaderTitleChanged"
+                                   value="@BlockText(ReportTextKeys.BlockTitle(_id))"
+                                   @onchange="HeaderTitleChanged"
                                    placeholder="Opcional" />
                         </div>
 
@@ -147,8 +148,8 @@
                             <div class="variable-input-row">
 
                                 <input type="text"
-                                       value="@_header.SubtitleKey"
-                                       @oninput="HeaderSubtitleChanged"
+                                       value="@BlockText(ReportTextKeys.BlockSubtitle(_id))"
+                                       @onchange="HeaderSubtitleChanged"
                                        placeholder="Talleres ORAN S.L.U." />
 
                                 <VariablePicker Variables="_variables"
@@ -209,8 +210,8 @@
                             <label>Texto</label>
 
                             <textarea rows="4"
-                                      value="@_footer.TextKey"
-                                      @oninput="FooterTextChanged"
+                                      value="@BlockText(ReportTextKeys.BlockText(_id))"
+                                      @onchange="FooterTextChanged"
                                       placeholder="Texto legal, dirección, contacto..."></textarea>
                         </div>
 
@@ -359,6 +360,9 @@
 
     private IReadOnlyCollection<ReportVariable> _variables = [];
 
+    private ReportTextWorkspace _texts =
+        ReportTextWorkspace.Detached();
+
     private string? _activeVariableTarget;
 
     private bool _loading;
@@ -455,11 +459,37 @@
             }
 
             _variables = await RenderSetApi.GetVariablesAsync(CurrentTenant.Id);
+            _texts = await LoadTextsAsync();
         }
         finally
         {
             _loading = false;
         }
+    }
+
+
+    private async Task<ReportTextWorkspace> LoadTextsAsync()
+    {
+        var cultures =
+            await RenderSetApi.GetCulturesAsync(
+                CurrentTenant.Id);
+
+        var culture =
+            cultures.FirstOrDefault(x => x.IsDefault)
+            ?? cultures.FirstOrDefault();
+
+        if (culture is null)
+            return ReportTextWorkspace.Detached();
+
+        var resources =
+            await RenderSetApi.GetResourcesAsync(
+                CurrentTenant.Id,
+                ReportResourceScope.Global);
+
+        return new ReportTextWorkspace(
+            ReportResourceScope.Global,
+            culture.Culture,
+            resources);
     }
 
 
@@ -521,6 +551,15 @@
                 block.Id,
                 block);
 
+            if (_texts.HasPendingChanges)
+            {
+                await RenderSetApi.SaveResourcesAsync(
+                    CurrentTenant.Id,
+                    _texts.GetPendingChanges());
+
+                _texts.AcceptPendingChanges();
+            }
+
             Navigation.NavigateTo(
                 "/blocks");
         }
@@ -538,12 +577,26 @@
     }
 
 
+    /// <summary>
+    /// Los bloques son de tenant, así que sus textos van al ámbito global del
+    /// diccionario. La configuración del bloque sólo guarda la clave.
+    /// </summary>
+    private string BlockText(
+        string key) =>
+        _texts.GetText(
+            key,
+            string.Empty);
+
+
     private void HeaderTitleChanged(
         ChangeEventArgs e)
     {
         _header.TitleKey =
-            Normalize(
-                e.Value?.ToString());
+            ReportTextKeys.BlockTitle(_id);
+
+        _texts.SetText(
+            _header.TitleKey,
+            e.Value?.ToString());
     }
 
 
@@ -551,8 +604,11 @@
         ChangeEventArgs e)
     {
         _header.SubtitleKey =
-            Normalize(
-                e.Value?.ToString());
+            ReportTextKeys.BlockSubtitle(_id);
+
+        _texts.SetText(
+            _header.SubtitleKey,
+            e.Value?.ToString());
     }
 
 
@@ -578,8 +634,11 @@
         ChangeEventArgs e)
     {
         _footer.TextKey =
-            Normalize(
-                e.Value?.ToString());
+            ReportTextKeys.BlockText(_id);
+
+        _texts.SetText(
+            _footer.TextKey,
+            e.Value?.ToString());
     }
 
 
@@ -604,7 +663,11 @@
     ReportVariable variable)
     {
         _header.SubtitleKey =
-            $"{{{{{variable.Key}}}}}";
+            ReportTextKeys.BlockSubtitle(_id);
+
+        _texts.SetText(
+            _header.SubtitleKey,
+            $"{{{{{variable.Key}}}}}");
 
         return Task.CompletedTask;
     }

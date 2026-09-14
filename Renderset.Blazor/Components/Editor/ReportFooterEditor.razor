@@ -53,8 +53,8 @@
                 <label>Texto</label>
 
                 <textarea rows="3"
-                          value="@Resolved?.Text"
-                          @oninput="TextChangedAsync"
+                          value="@FooterText"
+                          @onchange="TextChangedAsync"
                           placeholder="Texto legal, datos de contacto..."></textarea>
             </div>
 
@@ -92,6 +92,13 @@
     [Parameter]
     public IReadOnlyCollection<ReportBlock> Blocks { get; set; } = [];
 
+    /// <summary>
+    /// Diccionario en edición. Las etiquetas se guardan aquí, no en el preset.
+    /// </summary>
+    [Parameter]
+    public ReportTextWorkspace Texts { get; set; } =
+        ReportTextWorkspace.Detached();
+
     [Parameter]
     public EventCallback Changed { get; set; }
 
@@ -114,6 +121,11 @@
         ?? Footer.ShowGenerationDate
         ?? Definition.ShowGenerationDate;
 
+    private string FooterText =>
+        Texts.GetText(
+            ReportTextKeys.FooterText,
+            Definition.Text ?? string.Empty);
+
     private async Task ToggleVisibleAsync(ChangeEventArgs e)
     {
         Footer.Visible = GetBool(e);
@@ -128,7 +140,10 @@
 
     private async Task TextChangedAsync(ChangeEventArgs e)
     {
-        Footer.TextKey = Normalize(e.Value?.ToString());
+        Texts.SetText(
+            ReportTextKeys.FooterText,
+            e.Value?.ToString());
+
         await Changed.InvokeAsync();
     }
 

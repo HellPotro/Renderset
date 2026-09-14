@@ -4,6 +4,7 @@
 @using Renderset.Blazor.Components.Editor
 @using Renderset.Core.Blocks
 @using Renderset.Core.Configurations
+@using Renderset.Core.Localization
 @using Renderset.Core.Persistence
 @using Renderset.Core.Reports
 @using Renderset.Core.Themes
@@ -43,6 +44,9 @@ else if (_configuration is not null &&
                       HeaderBlocks="_headerBlocks"
                       FooterBlocks="_footerBlocks"
                       BodyBlocks="_bodyBlocks"
+                      Texts="_texts"
+                      Cultures="_cultures"
+                      CultureChanged="ChangeCultureAsync"
                       SaveRequested="SaveAsync" />
 
     </div>
@@ -70,6 +74,11 @@ else if (_configuration is not null &&
     private JsonElement _data;
 
     private string? _presetId;
+
+    private IReadOnlyCollection<TenantCulture> _cultures = [];
+
+    private ReportTextWorkspace _texts =
+        ReportTextWorkspace.Detached();
 
     protected override async Task OnInitializedAsync()
     {
@@ -114,6 +123,18 @@ else if (_configuration is not null &&
             _theme =
                 Clone(preset.Theme);
 
+            _cultures =
+                await RenderSetApi.GetCulturesAsync(
+                    CurrentTenant.Id);
+
+            var initialCulture =
+                _cultures.FirstOrDefault(x => x.IsDefault)
+                ?? _cultures.FirstOrDefault();
+
+            _texts =
+                await LoadTextsAsync(
+                    initialCulture?.Culture);
+
             if (_report.SampleData.HasValue)
             {
                 _data =
@@ -125,6 +146,66 @@ else if (_configuration is not null &&
             _loading =
                 false;
         }
+    }
+
+    /// <summary>
+    /// Construye el área de trabajo del diseñador: lo heredado (global y
+    /// report) llega ya aplanado desde la API, y los valores propios del
+    /// preset se cargan aparte porque son los que se van a editar.
+    /// </summary>
+    private async Task<ReportTextWorkspace> LoadTextsAsync(
+        string? culture)
+    {
+        if (string.IsNullOrWhiteSpace(culture) ||
+            string.IsNullOrWhiteSpace(_presetId))
+        {
+            return ReportTextWorkspace.Detached();
+        }
+
+        var inherited =
+            await RenderSetApi.GetCatalogAsync(
+                CurrentTenant.Id,
+                ReportId,
+                presetId: null,
+                culture: culture);
+
+        var presetScope =
+            ReportResourceScope.ForPreset(_presetId);
+
+        var own =
+            await RenderSetApi.GetResourcesAsync(
+                CurrentTenant.Id,
+                presetScope);
+
+        return new ReportTextWorkspace(
+            presetScope,
+            culture,
+            own,
+            inherited);
+    }
+
+    private async Task ChangeCultureAsync(
+        string culture)
+    {
+        // Los cambios sin guardar se pierden al cambiar de idioma: se avisa
+        // guardando antes, que es lo menos sorprendente.
+        if (_texts.HasPendingChanges)
+            await SaveTextsAsync();
+
+        _texts =
+            await LoadTextsAsync(culture);
+    }
+
+    private async Task SaveTextsAsync()
+    {
+        if (!_texts.HasPendingChanges)
+            return;
+
+        await RenderSetApi.SaveResourcesAsync(
+            CurrentTenant.Id,
+            _texts.GetPendingChanges());
+
+        _texts.AcceptPendingChanges();
     }
 
     private async Task SaveAsync()
@@ -153,6 +234,8 @@ else if (_configuration is not null &&
             CurrentTenant.Id,
             _presetId,
             preset);
+
+        await SaveTextsAsync();
     }
 
     private async Task<IReadOnlyCollection<ReportBlock>> LoadResolvedBlocksAsync(

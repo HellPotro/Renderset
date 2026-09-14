@@ -53,16 +53,16 @@
                 <label>Título</label>
 
                 <input type="text"
-                       value="@Resolved?.Title"
-                       @oninput="TitleChangedAsync" />
+                       value="@HeaderTitle"
+                       @onchange="TitleChangedAsync" />
             </div>
 
             <div class="report-editor-property">
                 <label>Subtítulo</label>
 
                 <input type="text"
-                       value="@Resolved?.Subtitle"
-                       @oninput="SubtitleChangedAsync" />
+                       value="@HeaderSubtitle"
+                       @onchange="SubtitleChangedAsync" />
             </div>
 
             @if (Definition.AllowLogo)
@@ -114,8 +114,25 @@
     [Parameter]
     public IReadOnlyCollection<ReportBlock> Blocks { get; set; } = [];
 
+    /// <summary>
+    /// Diccionario en edición. Las etiquetas se guardan aquí, no en el preset.
+    /// </summary>
+    [Parameter]
+    public ReportTextWorkspace Texts { get; set; } =
+        ReportTextWorkspace.Detached();
+
     [Parameter]
     public EventCallback Changed { get; set; }
+
+    private string HeaderTitle =>
+        Texts.GetText(
+            ReportTextKeys.HeaderTitle,
+            Definition.Title ?? string.Empty);
+
+    private string HeaderSubtitle =>
+        Texts.GetText(
+            ReportTextKeys.HeaderSubtitle,
+            Definition.Subtitle ?? string.Empty);
 
     private ReportHeaderConfiguration Header
     {
@@ -150,13 +167,19 @@
 
     private async Task TitleChangedAsync(ChangeEventArgs e)
     {
-        Header.TitleKey = Normalize(e.Value?.ToString());
+        Texts.SetText(
+            ReportTextKeys.HeaderTitle,
+            e.Value?.ToString());
+
         await Changed.InvokeAsync();
     }
 
     private async Task SubtitleChangedAsync(ChangeEventArgs e)
     {
-        Header.SubtitleKey = Normalize(e.Value?.ToString());
+        Texts.SetText(
+            ReportTextKeys.HeaderSubtitle,
+            e.Value?.ToString());
+
         await Changed.InvokeAsync();
     }
 

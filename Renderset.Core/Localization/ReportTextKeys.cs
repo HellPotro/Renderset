@@ -32,13 +32,19 @@ public static class ReportTextKeys
         return $"section.{sectionId}";
     }
 
-    public static string TextBlockTitle(
+    public static string BlockTitle(
         string blockId)
     {
         return $"block.{blockId}.title";
     }
 
-    public static string TextBlockText(
+    public static string BlockSubtitle(
+        string blockId)
+    {
+        return $"block.{blockId}.subtitle";
+    }
+
+    public static string BlockText(
         string blockId)
     {
         return $"block.{blockId}.text";

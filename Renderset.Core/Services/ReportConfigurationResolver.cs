@@ -128,7 +128,9 @@ public sealed class ReportConfigurationResolver
             Id = configuration.SectionId,
             Name = texts.Resolve(
                 configuration.NameKey,
-                configuration.SectionId),
+                texts.Resolve(
+                    ReportTextKeys.Section(configuration.SectionId),
+                    configuration.SectionId)),
             Visible = configuration.Visible ?? true,
             Layout = configuration.Layout ?? ReportSectionLayout.List,
             Order = configuration.Order ?? 0,

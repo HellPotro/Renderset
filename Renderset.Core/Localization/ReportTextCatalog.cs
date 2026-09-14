@@ -26,6 +26,8 @@ public sealed class ReportTextCatalog
 
     public int Count => _entries.Count;
 
+    public IReadOnlyDictionary<string, string> Entries => _entries;
+
     /// <summary>
     /// Devuelve el texto de la clave, o <paramref name="fallback"/> si la
     /// clave es nula, no existe o está sin traducir. Nunca lanza: un informe

@@ -1,5 +1,6 @@
-﻿using Refit;
+using Refit;
 using Renderset.Core.Blocks;
+using Renderset.Core.Localization;
 using Renderset.Core.Persistence;
 using Renderset.Core.Presets;
 using Renderset.Core.Reports;
@@ -9,6 +10,57 @@ namespace Renderset.Web;
 
 public interface IRenderSetApi
 {
+    #region Cultures
+
+    [Get("/api/cultures/{tenantId}")]
+    Task<IReadOnlyCollection<TenantCulture>> GetCulturesAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
+    [Put("/api/cultures/{tenantId}/{culture}")]
+    Task SaveCultureAsync(
+        string tenantId,
+        string culture,
+        [Body] TenantCulture body,
+        CancellationToken cancellationToken = default);
+
+    #endregion
+
+    #region Resources
+
+    [Get("/api/resources/{tenantId}/{scope}")]
+    Task<IReadOnlyCollection<ReportResource>> GetResourcesAsync(
+        string tenantId,
+        string scope,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Diccionario ya aplanado para una cultura: global + report (+ preset si
+    /// se indica), con el fallback de cultura ya aplicado.
+    /// </summary>
+    [Get("/api/resources/{tenantId}/{scope}/catalog")]
+    Task<IReadOnlyDictionary<string, string>> GetCatalogAsync(
+        string tenantId,
+        string scope,
+        [Query] string? presetId,
+        [Query] string? culture,
+        CancellationToken cancellationToken = default);
+
+    [Put("/api/resources/{tenantId}")]
+    Task SaveResourcesAsync(
+        string tenantId,
+        [Body] IReadOnlyCollection<ReportResource> resources,
+        CancellationToken cancellationToken = default);
+
+    [Delete("/api/resources/{tenantId}/{scope}/{key}")]
+    Task DeleteResourceAsync(
+        string tenantId,
+        string scope,
+        string key,
+        CancellationToken cancellationToken = default);
+
+    #endregion
+
     #region Assignments
 
     [Get("/api/assignments/{tenantId}/{reportId}")]

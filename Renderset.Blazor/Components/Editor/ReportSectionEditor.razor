@@ -267,6 +267,13 @@
     [Parameter]
     public EventCallback MoveDown { get; set; }
 
+    /// <summary>
+    /// Diccionario en edición. Las etiquetas se guardan aquí, no en el preset.
+    /// </summary>
+    [Parameter]
+    public ReportTextWorkspace Texts { get; set; } =
+        ReportTextWorkspace.Detached();
+
     [Parameter]
     public EventCallback Changed { get; set; }
 
@@ -328,7 +335,13 @@
         ReportFieldDefinition field,
         string? label)
     {
-        GetOrCreateFieldConfiguration(field.Id).LabelKey = Normalize(label);
+        // El texto no se guarda en el preset: va al diccionario, en el ámbito
+        // del preset y bajo la clave convencional del campo. Vaciarlo devuelve
+        // la etiqueta heredada del report.
+        Texts.SetText(
+            ReportTextKeys.Field(field.Id),
+            label);
+
         await Changed.InvokeAsync();
     }
 
@@ -344,7 +357,12 @@
         ReportColumnDefinition column,
         string? label)
     {
-        GetOrCreateColumnConfiguration(column.Id).LabelKey = Normalize(label);
+        Texts.SetText(
+            ReportTextKeys.Column(
+                Definition.Table?.Id ?? Definition.Id,
+                column.Id),
+            label);
+
         await Changed.InvokeAsync();
     }
 
@@ -488,12 +506,26 @@
                     StringComparison.OrdinalIgnoreCase));
 
     private string GetFieldLabel(ReportFieldDefinition field) =>
-        FindFieldConfiguration(field.Id)?.LabelKey
-        ?? field.Label;
+        Texts.GetText(
+            ReportTextKeys.Field(field.Id),
+            field.Label);
 
     private string GetColumnLabel(ReportColumnDefinition column) =>
-        FindColumnConfiguration(column.Id)?.LabelKey
-        ?? column.Label;
+        Texts.GetText(
+            ReportTextKeys.Column(
+                Definition.Table?.Id ?? Definition.Id,
+                column.Id),
+            column.Label);
+
+    private bool IsFieldLabelCustomized(ReportFieldDefinition field) =>
+        Texts.HasOwnValue(
+            ReportTextKeys.Field(field.Id));
+
+    private bool IsColumnLabelCustomized(ReportColumnDefinition column) =>
+        Texts.HasOwnValue(
+            ReportTextKeys.Column(
+                Definition.Table?.Id ?? Definition.Id,
+                column.Id));
 
     private static string GetWidthValue(ResolvedReportColumn column) =>
         column.Width?.ToString(CultureInfo.InvariantCulture)

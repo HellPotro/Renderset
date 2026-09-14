@@ -69,12 +69,7 @@ public static class ReportResourceEndpoints
                 culture,
                 cancellationToken);
 
-        return Results.Ok(
-            new
-            {
-                culture = catalog.Culture,
-                count = catalog.Count
-            });
+        return Results.Ok(catalog.Entries);
     }
 
     private static async Task<IResult> GetCoverageAsync(
