@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Renderset.Core.Definitions;
 using Renderset.Core.Reports;
 using Renderset.Infrastructure.Persistence;
 using Renderset.Infrastructure.Persistence.Entities;
@@ -12,17 +11,16 @@ public sealed class EfReportRepository : IReportRepository
 {
     private readonly IDbContextFactory<RenderSetDbContext> _contextFactory;
 
-    private static readonly JsonSerializerOptions JsonOptions =
-        new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters =
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            Converters =
-            {
-                new JsonStringEnumConverter()
-            }
-        };
+            new JsonStringEnumConverter()
+        }
+    };
 
     public EfReportRepository(
         IDbContextFactory<RenderSetDbContext> contextFactory)

@@ -1,4 +1,4 @@
-﻿namespace Renderset.Core.Resolved;
+namespace Renderset.Core.Resolved;
 
 public sealed class ResolvedReportDefinition
 {
@@ -11,6 +11,8 @@ public sealed class ResolvedReportDefinition
     public ResolvedReportHeader? Header { get; set; }
 
     public List<ResolvedReportSection> Sections { get; init; } = [];
+
+    public List<ResolvedReportBodyItem> Body { get; init; } = [];
 
     public ResolvedReportFooter? Footer { get; set; }
 

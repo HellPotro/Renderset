@@ -82,6 +82,12 @@
                 Pies
             </button>
 
+            <button type="button"
+                    class="@GetFilterClass(ReportBlockType.Text)"
+                    @onclick="() => SetFilter(ReportBlockType.Text)">
+                Textos
+            </button>
+
         </div>
 
 
@@ -210,6 +216,9 @@
             ReportBlockType.Footer =>
                 "fa-solid fa-align-justify",
 
+            ReportBlockType.Text =>
+                "fa-solid fa-file-lines",
+
             _ =>
                 "fa-solid fa-cube"
         };
@@ -223,6 +232,7 @@
         {
             ReportBlockType.Header => "header",
             ReportBlockType.Footer => "footer",
+            ReportBlockType.Text => "text",
             _ => ""
         };
     }

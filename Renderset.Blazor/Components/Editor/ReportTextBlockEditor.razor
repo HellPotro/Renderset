@@ -1,0 +1,181 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Renderset.Core.Configurations
+@using Renderset.Core.Definitions
+
+<div class="report-editor-content-item report-editor-text-content-item">
+
+    <div class="report-editor-content-item-header">
+
+        <div class="report-editor-content-item-heading">
+            <span class="report-editor-content-item-icon">
+                <i class="fa-solid fa-align-left"></i>
+            </span>
+
+            <div>
+                <strong>@DisplayName</strong>
+                <span>Texto local</span>
+            </div>
+        </div>
+
+        <div class="report-editor-section-actions">
+            <button type="button"
+                    class="report-editor-section-order-button"
+                    title="Mover arriba"
+                    disabled="@(!CanMoveUp)"
+                    @onclick="MoveUp">
+                <i class="fa-solid fa-arrow-up"></i>
+            </button>
+
+            <button type="button"
+                    class="report-editor-section-order-button"
+                    title="Mover abajo"
+                    disabled="@(!CanMoveDown)"
+                    @onclick="MoveDown">
+                <i class="fa-solid fa-arrow-down"></i>
+            </button>
+
+            <button type="button"
+                    class="report-editor-section-order-button report-editor-danger-button"
+                    title="Eliminar bloque"
+                    @onclick="Remove">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+
+    </div>
+
+    <div class="report-editor-content-item-body">
+
+        <div class="report-editor-property">
+            <label>Título</label>
+            <input type="text"
+                   value="@_text.Title"
+                   @onchange="SetTitleAsync"
+                   placeholder="Título opcional" />
+        </div>
+
+        <div class="report-editor-property">
+            <label>Texto</label>
+            <textarea rows="5"
+                      value="@_text.Text"
+                      @onchange="SetTextAsync"
+                      placeholder="Escribe aquí el contenido del bloque..."></textarea>
+        </div>
+
+        <div class="report-editor-property">
+            <label>Estilo</label>
+            <select value="@_text.Style"
+                    @onchange="SetStyleAsync">
+                <option value="@ReportTextBlockStyle.Default">Normal</option>
+                <option value="@ReportTextBlockStyle.Information">Información</option>
+                <option value="@ReportTextBlockStyle.Warning">Aviso</option>
+                <option value="@ReportTextBlockStyle.Success">Correcto</option>
+            </select>
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
+    };
+
+    [Parameter, EditorRequired]
+    public ReportBodyItemConfiguration Item { get; set; } = default!;
+
+    [Parameter]
+    public bool CanMoveUp { get; set; }
+
+    [Parameter]
+    public bool CanMoveDown { get; set; }
+
+    [Parameter]
+    public EventCallback MoveUp { get; set; }
+
+    [Parameter]
+    public EventCallback MoveDown { get; set; }
+
+    [Parameter]
+    public EventCallback Remove { get; set; }
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private ReportTextBlockConfiguration _text = new();
+
+    private string DisplayName =>
+        !string.IsNullOrWhiteSpace(_text.Title)
+            ? _text.Title
+            : Item.LocalBlock?.Name ?? "Texto";
+
+    protected override void OnParametersSet()
+    {
+        _text = Deserialize();
+    }
+
+    private ReportTextBlockConfiguration Deserialize()
+    {
+        var json = Item.LocalBlock?.ConfigurationJson;
+
+        if (string.IsNullOrWhiteSpace(json))
+            return new ReportTextBlockConfiguration();
+
+        try
+        {
+            return JsonSerializer.Deserialize<ReportTextBlockConfiguration>(json, JsonOptions)
+                   ?? new ReportTextBlockConfiguration();
+        }
+        catch (JsonException)
+        {
+            return new ReportTextBlockConfiguration();
+        }
+    }
+
+    private async Task SetTitleAsync(ChangeEventArgs e)
+    {
+        _text.Title = Normalize(e.Value?.ToString());
+        await PersistAsync();
+    }
+
+    private async Task SetTextAsync(ChangeEventArgs e)
+    {
+        _text.Text = e.Value?.ToString() ?? string.Empty;
+        await PersistAsync();
+    }
+
+    private async Task SetStyleAsync(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<ReportTextBlockStyle>(e.Value?.ToString(), out var style))
+            return;
+
+        _text.Style = style;
+        await PersistAsync();
+    }
+
+    private async Task PersistAsync()
+    {
+        if (Item.LocalBlock is null)
+            return;
+
+        Item.LocalBlock.Name = _text.Title ?? "Texto";
+        Item.LocalBlock.ConfigurationJson =
+            JsonSerializer.Serialize(_text, JsonOptions);
+
+        await Changed.InvokeAsync();
+    }
+
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+}

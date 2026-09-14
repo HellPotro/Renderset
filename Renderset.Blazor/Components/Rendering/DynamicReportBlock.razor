@@ -1,0 +1,38 @@
+@using Renderset.Core.Blocks
+@using Renderset.Core.Configurations
+@using Renderset.Core.Resolved
+
+@if (Block.Type == ReportBlockType.Text && Block.Text is not null)
+{
+    <section class="dynamic-report-content-block dynamic-report-text-block @GetTextStyleClass(Block.Text.Style)">
+
+        @if (!string.IsNullOrWhiteSpace(Block.Text.Title))
+        {
+            <div class="dynamic-report-text-block-title">
+                @Block.Text.Title
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Block.Text.Text))
+        {
+            <div class="dynamic-report-text-block-content">
+                @Block.Text.Text
+            </div>
+        }
+
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ResolvedReportBlock Block { get; set; } = default!;
+
+    private static string GetTextStyleClass(ReportTextBlockStyle style) =>
+        style switch
+        {
+            ReportTextBlockStyle.Information => "dynamic-report-text-block-information",
+            ReportTextBlockStyle.Warning => "dynamic-report-text-block-warning",
+            ReportTextBlockStyle.Success => "dynamic-report-text-block-success",
+            _ => "dynamic-report-text-block-default"
+        };
+}

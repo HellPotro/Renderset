@@ -35,9 +35,7 @@
                     <button type="button"
                             class="report-editor-action-button report-editor-action-primary"
                             @onclick="SaveRequested">
-
                         Guardar
-
                     </button>
                 }
 
@@ -84,35 +82,258 @@
         {
             <div class="report-editor-block">
 
-                <div class="report-editor-block-title">
-                    Estructura
+                <div class="report-editor-block-title-row">
+                    <div class="report-editor-block-title">
+                        Estructura
+                    </div>
+
+                    <button type="button"
+                            class="report-editor-add-content-button"
+                            @onclick="ToggleAddContentMenu">
+                        <i class="fa-solid fa-plus"></i>
+                        Añadir contenido
+                    </button>
                 </div>
 
-                @{
-                    var orderedSections = GetOrderedSections();
+                @if (_showAddContentMenu)
+                {
+                    <div class="report-editor-add-content-menu">
+
+                        <button type="button"
+                                class="report-editor-add-content-option"
+                                @onclick="AddCustomSectionAsync">
+                            <span class="report-editor-add-content-icon">
+                                <i class="fa-regular fa-square"></i>
+                            </span>
+                            <span>
+                                <strong>Nueva sección</strong>
+                                <small>Agrupa contenido bajo un nuevo título</small>
+                            </span>
+                        </button>
+
+                        <button type="button"
+                                class="report-editor-add-content-option"
+                                @onclick="AddTextBlockAsync">
+                            <span class="report-editor-add-content-icon">
+                                <i class="fa-solid fa-align-left"></i>
+                            </span>
+                            <span>
+                                <strong>Texto</strong>
+                                <small>Añade instrucciones, notas o contenido fijo</small>
+                            </span>
+                        </button>
+
+                        <button type="button"
+                                class="report-editor-add-content-option"
+                                @onclick="ToggleExistingBlocks">
+                            <span class="report-editor-add-content-icon">
+                                <i class="fa-solid fa-cubes"></i>
+                            </span>
+                            <span>
+                                <strong>Bloque existente</strong>
+                                <small>Reutiliza contenido guardado</small>
+                            </span>
+                        </button>
+
+                        @if (_showExistingBlocks)
+                        {
+                            <div class="report-editor-existing-blocks">
+                                @if (ReusableBodyBlocks.Count == 0)
+                                {
+                                    <div class="report-editor-empty-state">
+                                        No hay bloques de contenido reutilizables.
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var block in ReusableBodyBlocks)
+                                    {
+                                        <button type="button"
+                                                class="report-editor-existing-block"
+                                                @onclick="() => AddExistingBlockAsync(block)">
+                                            <span>@block.Name</span>
+                                            <small>@GetBlockTypeLabel(block.Type)</small>
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        }
+
+                    </div>
                 }
 
-                @for (var i = 0; i < orderedSections.Count; i++)
+                @{
+                    var bodyItems = GetOrderedBodyItems();
+                }
+
+                @for (var i = 0; i < bodyItems.Count; i++)
                 {
-                    var sectionDefinition = orderedSections[i];
-                    var resolvedSection = _resolved?.GetSection(sectionDefinition.Id);
+                    var item = bodyItems[i];
+                    var canMoveUp = i > 0;
+                    var canMoveDown = i < bodyItems.Count - 1;
 
-                    if (resolvedSection is null)
-                        continue;
+                    if (item.Type == ReportBodyItemType.Section &&
+                        !string.IsNullOrWhiteSpace(item.SectionId))
+                    {
+                        var sectionDefinition = Definition.Sections.FirstOrDefault(x =>
+                            string.Equals(x.Id, item.SectionId, StringComparison.OrdinalIgnoreCase));
 
-                    <ReportSectionEditor @key="sectionDefinition.Id"
-                                         Definition="sectionDefinition"
-                                         Resolved="resolvedSection"
-                                         Configuration="Configuration"
-                                         CanMoveUp="@(i > 0)"
-                                         CanMoveDown="@(i < orderedSections.Count - 1)"
-                                         MoveUp="() => MoveSectionAsync(sectionDefinition.Id, -1)"
-                                         MoveDown="() => MoveSectionAsync(sectionDefinition.Id, 1)"
-                                         Changed="ConfigurationUpdated" />
+                        var resolvedSection = _resolved?.GetSection(item.SectionId);
+
+                        if (resolvedSection is null)
+                            continue;
+
+                        if (sectionDefinition is not null)
+                        {
+                            <ReportSectionEditor @key="item.Id"
+                                                 Definition="sectionDefinition"
+                                                 Resolved="resolvedSection"
+                                                 Configuration="Configuration"
+                                                 CanMoveUp="canMoveUp"
+                                                 CanMoveDown="canMoveDown"
+                                                 MoveUp="() => MoveBodyItemAsync(item.Id, -1)"
+                                                 MoveDown="() => MoveBodyItemAsync(item.Id, 1)"
+                                                 Changed="ConfigurationUpdated" />
+                        }
+                        else
+                        {
+                            var sectionConfiguration = FindSectionConfiguration(item.SectionId);
+
+                            if (sectionConfiguration is not null)
+                            {
+                                <div class="report-editor-content-item report-editor-custom-section" @key="item.Id">
+
+                                    <div class="report-editor-content-item-header">
+                                        <div class="report-editor-content-item-heading">
+                                            <span class="report-editor-content-item-icon">
+                                                <i class="fa-regular fa-square"></i>
+                                            </span>
+                                            <div>
+                                                <strong>@resolvedSection.Name</strong>
+                                                <span>Sección personalizada</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="report-editor-section-actions">
+                                            <button type="button"
+                                                    class="report-editor-section-order-button"
+                                                    title="Mover sección arriba"
+                                                    disabled="@(!canMoveUp)"
+                                                    @onclick="() => MoveBodyItemAsync(item.Id, -1)">
+                                                <i class="fa-solid fa-arrow-up"></i>
+                                            </button>
+
+                                            <button type="button"
+                                                    class="report-editor-section-order-button"
+                                                    title="Mover sección abajo"
+                                                    disabled="@(!canMoveDown)"
+                                                    @onclick="() => MoveBodyItemAsync(item.Id, 1)">
+                                                <i class="fa-solid fa-arrow-down"></i>
+                                            </button>
+
+                                            <button type="button"
+                                                    class="report-editor-section-order-button report-editor-danger-button"
+                                                    title="Eliminar sección"
+                                                    @onclick="() => RemoveBodyItemAsync(item.Id)">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="report-editor-content-item-body">
+                                        <div class="report-editor-property">
+                                            <label>Nombre</label>
+                                            <input type="text"
+                                                   value="@sectionConfiguration.NameOverride"
+                                                   @onchange="e => SetCustomSectionNameAsync(sectionConfiguration, e.Value?.ToString())"
+                                                   placeholder="Nombre de la sección" />
+                                        </div>
+
+                                        <div class="report-editor-section-layout">
+                                            <label>Layout</label>
+                                            <select value="@resolvedSection.Layout"
+                                                    @onchange="e => SetCustomSectionLayoutAsync(sectionConfiguration, e)">
+                                                <option value="@ReportSectionLayout.List">Lista</option>
+                                                <option value="@ReportSectionLayout.Columns2">2 columnas</option>
+                                                <option value="@ReportSectionLayout.Columns3">3 columnas</option>
+                                                <option value="@ReportSectionLayout.Columns4">4 columnas</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="report-editor-custom-section-placeholder">
+                                            <i class="fa-solid fa-arrow-pointer"></i>
+                                            <span>Sección vacía</span>
+                                            <small>En el siguiente paso podrás mover campos aquí.</small>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            }
+                        }
+                    }
+                    else if (item.Type == ReportBodyItemType.Block)
+                    {
+                        if (item.LocalBlock?.Type == ReportBlockType.Text)
+                        {
+                            <ReportTextBlockEditor @key="item.Id"
+                                                   Item="item"
+                                                   CanMoveUp="canMoveUp"
+                                                   CanMoveDown="canMoveDown"
+                                                   MoveUp="() => MoveBodyItemAsync(item.Id, -1)"
+                                                   MoveDown="() => MoveBodyItemAsync(item.Id, 1)"
+                                                   Remove="() => RemoveBodyItemAsync(item.Id)"
+                                                   Changed="ConfigurationUpdated" />
+                        }
+                        else
+                        {
+                            var reusableBlock = FindBodyBlock(item.BlockId);
+
+                            if (reusableBlock is not null)
+                            {
+                                <div class="report-editor-content-item" @key="item.Id">
+                                    <div class="report-editor-content-item-header">
+                                        <div class="report-editor-content-item-heading">
+                                            <span class="report-editor-content-item-icon">
+                                                <i class="fa-solid fa-cube"></i>
+                                            </span>
+                                            <div>
+                                                <strong>@reusableBlock.Name</strong>
+                                                <span>Bloque reutilizable · @GetBlockTypeLabel(reusableBlock.Type)</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="report-editor-section-actions">
+                                            <button type="button"
+                                                    class="report-editor-section-order-button"
+                                                    title="Mover arriba"
+                                                    disabled="@(!canMoveUp)"
+                                                    @onclick="() => MoveBodyItemAsync(item.Id, -1)">
+                                                <i class="fa-solid fa-arrow-up"></i>
+                                            </button>
+                                            <button type="button"
+                                                    class="report-editor-section-order-button"
+                                                    title="Mover abajo"
+                                                    disabled="@(!canMoveDown)"
+                                                    @onclick="() => MoveBodyItemAsync(item.Id, 1)">
+                                                <i class="fa-solid fa-arrow-down"></i>
+                                            </button>
+                                            <button type="button"
+                                                    class="report-editor-section-order-button report-editor-danger-button"
+                                                    title="Quitar del report"
+                                                    @onclick="() => RemoveBodyItemAsync(item.Id)">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    }
                 }
 
             </div>
         }
+
         @if (_activeTab == HeaderFooterTab)
         {
             <div class="report-editor-block">
@@ -141,6 +362,7 @@
 
             </div>
         }
+
         @if (_activeTab == ThemeTab)
         {
             <ReportThemeEditor Theme="Theme"
@@ -152,7 +374,6 @@
     <main class="report-editor-preview">
 
         <div class="report-editor-preview-toolbar">
-
             <div>
                 <strong>Vista previa</strong>
                 <span>@Definition.Name</span>
@@ -161,22 +382,17 @@
             <div class="report-editor-preview-badge">
                 Tiempo real
             </div>
-
         </div>
 
         <div class="report-editor-preview-canvas">
-
             @if (_resolved is not null)
             {
                 <div class="report-editor-paper">
-
                     <DynamicReportRenderer Report="@_resolved"
                                            Data="@Data"
                                            Theme="@Theme" />
-
                 </div>
             }
-
         </div>
 
     </main>
@@ -184,7 +400,6 @@
 </div>
 
 @code {
-
     private const string StructureTab = "structure";
     private const string HeaderFooterTab = "header-footer";
     private const string ThemeTab = "theme";
@@ -195,7 +410,8 @@
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new JsonStringEnumConverter() }
     };
 
     [Parameter, EditorRequired]
@@ -209,6 +425,9 @@
 
     [Parameter]
     public IReadOnlyCollection<ReportBlock> FooterBlocks { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyCollection<ReportBlock> BodyBlocks { get; set; } = [];
 
     [Parameter]
     public EventCallback<ReportConfiguration> ConfigurationChanged { get; set; }
@@ -232,6 +451,14 @@
 
     private ResolvedReportDefinition? _resolved;
     private string _activeTab = StructureTab;
+    private bool _showAddContentMenu;
+    private bool _showExistingBlocks;
+
+    private IReadOnlyList<ReportBlock> ReusableBodyBlocks =>
+        BodyBlocks
+            .Where(x => x.Type is ReportBlockType.Text or ReportBlockType.Image or ReportBlockType.Fields)
+            .OrderBy(x => x.Name)
+            .ToList();
 
     protected override void OnParametersSet()
     {
@@ -257,7 +484,8 @@
         _resolved =
             _resolver.Resolve(
                 Definition,
-                effectiveConfiguration);
+                effectiveConfiguration,
+                BodyBlocks);
     }
 
     private static ReportBlock? FindSelectedBlock(
@@ -273,6 +501,12 @@
                 blockId,
                 StringComparison.OrdinalIgnoreCase));
     }
+
+    private ReportBlock? FindBodyBlock(string? blockId) =>
+        string.IsNullOrWhiteSpace(blockId)
+            ? null
+            : BodyBlocks.FirstOrDefault(x =>
+                string.Equals(x.Id, blockId, StringComparison.OrdinalIgnoreCase));
 
     private async Task ConfigurationUpdated()
     {
@@ -292,19 +526,249 @@
     private void ShowTheme() =>
         _activeTab = ThemeTab;
 
+    private void ToggleAddContentMenu()
+    {
+        _showAddContentMenu = !_showAddContentMenu;
+
+        if (!_showAddContentMenu)
+            _showExistingBlocks = false;
+    }
+
+    private void ToggleExistingBlocks() =>
+        _showExistingBlocks = !_showExistingBlocks;
+
+    private IReadOnlyList<ReportBodyItemConfiguration> GetOrderedBodyItems()
+    {
+        if (Configuration.Body.Count > 0)
+        {
+            return Configuration.Body
+                .OrderBy(x => x.Order)
+                .ToList();
+        }
+
+        return Definition.Sections
+            .OrderBy(GetSectionOrder)
+            .ThenBy(x => x.Order)
+            .Select((section, index) => new ReportBodyItemConfiguration
+            {
+                Id = $"section-{section.Id}",
+                Type = ReportBodyItemType.Section,
+                SectionId = section.Id,
+                Order = (index + 1) * 10
+            })
+            .ToList();
+    }
+
+    private void EnsureBodyInitialized()
+    {
+        if (Configuration.Body.Count > 0)
+            return;
+
+        Configuration.Body = GetOrderedBodyItems()
+            .Select(x => new ReportBodyItemConfiguration
+            {
+                Id = x.Id,
+                Type = x.Type,
+                SectionId = x.SectionId,
+                BlockId = x.BlockId,
+                LocalBlock = x.LocalBlock,
+                Order = x.Order
+            })
+            .ToList();
+    }
+
+    private async Task AddCustomSectionAsync()
+    {
+        EnsureBodyInitialized();
+
+        var sectionId = $"custom-section-{Guid.NewGuid():N}";
+
+        Configuration.Sections.Add(
+            new ReportSectionConfiguration
+            {
+                SectionId = sectionId,
+                SourceSectionId = null,
+                NameOverride = "Nueva sección",
+                Visible = true,
+                Layout = ReportSectionLayout.List
+            });
+
+        Configuration.Body.Add(
+            new ReportBodyItemConfiguration
+            {
+                Id = $"body-{Guid.NewGuid():N}",
+                Type = ReportBodyItemType.Section,
+                SectionId = sectionId,
+                Order = GetNextBodyOrder()
+            });
+
+        CloseAddContentMenu();
+        NormalizeBodyOrders();
+        await ConfigurationUpdated();
+    }
+
+    private async Task AddTextBlockAsync()
+    {
+        EnsureBodyInitialized();
+
+        var textConfiguration = new ReportTextBlockConfiguration
+        {
+            Title = "Nota",
+            Text = "Escribe aquí el contenido del bloque."
+        };
+
+        Configuration.Body.Add(
+            new ReportBodyItemConfiguration
+            {
+                Id = $"body-{Guid.NewGuid():N}",
+                Type = ReportBodyItemType.Block,
+                Order = GetNextBodyOrder(),
+                LocalBlock = new ReportBodyBlockConfiguration
+                {
+                    Type = ReportBlockType.Text,
+                    Name = "Nota",
+                    ConfigurationJson = JsonSerializer.Serialize(
+                        textConfiguration,
+                        JsonOptions)
+                }
+            });
+
+        CloseAddContentMenu();
+        NormalizeBodyOrders();
+        await ConfigurationUpdated();
+    }
+
+    private async Task AddExistingBlockAsync(ReportBlock block)
+    {
+        EnsureBodyInitialized();
+
+        Configuration.Body.Add(
+            new ReportBodyItemConfiguration
+            {
+                Id = $"body-{Guid.NewGuid():N}",
+                Type = ReportBodyItemType.Block,
+                BlockId = block.Id,
+                Order = GetNextBodyOrder()
+            });
+
+        CloseAddContentMenu();
+        NormalizeBodyOrders();
+        await ConfigurationUpdated();
+    }
+
+    private async Task MoveBodyItemAsync(
+        string itemId,
+        int direction)
+    {
+        EnsureBodyInitialized();
+
+        var ordered = Configuration.Body
+            .OrderBy(x => x.Order)
+            .ToList();
+
+        var currentIndex = ordered.FindIndex(x =>
+            string.Equals(x.Id, itemId, StringComparison.OrdinalIgnoreCase));
+
+        if (currentIndex < 0)
+            return;
+
+        var targetIndex = currentIndex + direction;
+
+        if (targetIndex < 0 || targetIndex >= ordered.Count)
+            return;
+
+        (ordered[currentIndex], ordered[targetIndex]) =
+            (ordered[targetIndex], ordered[currentIndex]);
+
+        Configuration.Body = ordered;
+        NormalizeBodyOrders();
+
+        await ConfigurationUpdated();
+    }
+
+    private async Task RemoveBodyItemAsync(string itemId)
+    {
+        EnsureBodyInitialized();
+
+        var item = Configuration.Body.FirstOrDefault(x =>
+            string.Equals(x.Id, itemId, StringComparison.OrdinalIgnoreCase));
+
+        if (item is null)
+            return;
+
+        Configuration.Body.Remove(item);
+
+        if (item.Type == ReportBodyItemType.Section &&
+            !string.IsNullOrWhiteSpace(item.SectionId) &&
+            Definition.Sections.All(x =>
+                !string.Equals(x.Id, item.SectionId, StringComparison.OrdinalIgnoreCase)))
+        {
+            var customSection = FindSectionConfiguration(item.SectionId);
+
+            if (customSection is not null)
+                Configuration.Sections.Remove(customSection);
+        }
+
+        NormalizeBodyOrders();
+        await ConfigurationUpdated();
+    }
+
+    private async Task SetCustomSectionNameAsync(
+        ReportSectionConfiguration section,
+        string? name)
+    {
+        section.NameOverride = string.IsNullOrWhiteSpace(name)
+            ? "Nueva sección"
+            : name.Trim();
+
+        await ConfigurationUpdated();
+    }
+
+    private async Task SetCustomSectionLayoutAsync(
+        ReportSectionConfiguration section,
+        ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<ReportSectionLayout>(e.Value?.ToString(), out var layout))
+            return;
+
+        section.Layout = layout;
+        await ConfigurationUpdated();
+    }
+
+    private void NormalizeBodyOrders()
+    {
+        var ordered = Configuration.Body
+            .OrderBy(x => x.Order)
+            .ToList();
+
+        for (var i = 0; i < ordered.Count; i++)
+            ordered[i].Order = (i + 1) * 10;
+
+        Configuration.Body = ordered;
+    }
+
+    private int GetNextBodyOrder() =>
+        Configuration.Body.Count == 0
+            ? 10
+            : Configuration.Body.Max(x => x.Order) + 10;
+
+    private void CloseAddContentMenu()
+    {
+        _showAddContentMenu = false;
+        _showExistingBlocks = false;
+    }
+
+    private static string GetBlockTypeLabel(ReportBlockType type) =>
+        type switch
+        {
+            ReportBlockType.Text => "Texto",
+            ReportBlockType.Image => "Imagen",
+            ReportBlockType.Fields => "Campos",
+            _ => type.ToString()
+        };
+
     private async Task ExportPresetAsync()
     {
-        var configurationJson =
-            JsonSerializer.Serialize(
-                Configuration,
-                JsonOptions);
-
-        Console.WriteLine("=== CONFIGURATION ===");
-        Console.WriteLine(
-            $"Sections: {Configuration.Sections.Count}");
-
-        Console.WriteLine(configurationJson);
-
         var preset = new ReportPreset
         {
             Id = Configuration.Id,
@@ -313,20 +777,10 @@
             Theme = Theme
         };
 
-        Console.WriteLine("=== PRESET ===");
-        Console.WriteLine(
-            $"Sections preset: {preset.Configuration.Sections.Count}");
-
-        Console.WriteLine(
-            $"Same configuration: " +
-            $"{ReferenceEquals(Configuration, preset.Configuration)}");
-
         var json =
             JsonSerializer.Serialize(
                 preset,
                 JsonOptions);
-
-        Console.WriteLine(json);
 
         var fileName =
             $"report-{Configuration.ReportId}-{Configuration.Id}.json";
@@ -337,7 +791,6 @@
             json,
             "application/json;charset=utf-8");
     }
-
 
     private async Task ImportPresetAsync(
         InputFileChangeEventArgs args)
@@ -377,97 +830,20 @@
         await ThemeChanged.InvokeAsync(Theme);
     }
 
-    private IReadOnlyList<ReportSectionDefinition> GetOrderedSections()
-    {
-        return Definition.Sections
-            .OrderBy(GetSectionOrder)
-            .ThenBy(x => x.Order)
-            .ToList();
-    }
-
     private int GetSectionOrder(
         ReportSectionDefinition definition)
     {
-        var configuration =
-            Configuration.Sections.FirstOrDefault(x =>
-                string.Equals(
-                    x.SectionId,
-                    definition.Id,
-                    StringComparison.OrdinalIgnoreCase));
+        var configuration = FindSectionConfiguration(definition.Id);
 
         return configuration?.Order
             ?? definition.Order;
     }
 
-    private async Task MoveSectionAsync(
-    string sectionId,
-    int direction)
-    {
-        var orderedSections =
-            GetOrderedSections().ToList();
-
-        var currentIndex =
-            orderedSections.FindIndex(x =>
-                string.Equals(
-                    x.Id,
-                    sectionId,
-                    StringComparison.OrdinalIgnoreCase));
-
-        if (currentIndex < 0)
-            return;
-
-        var targetIndex =
-            currentIndex + direction;
-
-        if (targetIndex < 0 ||
-            targetIndex >= orderedSections.Count)
-        {
-            return;
-        }
-
-        (orderedSections[currentIndex],
-         orderedSections[targetIndex]) =
-        (
-            orderedSections[targetIndex],
-            orderedSections[currentIndex]
-        );
-
-        // Normalizamos todos los órdenes:
-        // 10, 20, 30, 40...
-        for (var i = 0; i < orderedSections.Count; i++)
-        {
-            var section =
-                GetOrCreateSectionConfiguration(
-                    orderedSections[i].Id);
-
-            section.Order =
-                (i + 1) * 10;
-        }
-
-        await ConfigurationUpdated();
-    }
-
-    private ReportSectionConfiguration GetOrCreateSectionConfiguration(
-    string sectionId)
-    {
-        var configuration =
-            Configuration.Sections.FirstOrDefault(x =>
-                string.Equals(
-                    x.SectionId,
-                    sectionId,
-                    StringComparison.OrdinalIgnoreCase));
-
-        if (configuration is not null)
-            return configuration;
-
-        configuration =
-            new ReportSectionConfiguration
-            {
-                SectionId = sectionId
-            };
-
-        Configuration.Sections.Add(configuration);
-
-        return configuration;
-    }
+    private ReportSectionConfiguration? FindSectionConfiguration(
+        string sectionId) =>
+        Configuration.Sections.FirstOrDefault(x =>
+            string.Equals(
+                x.SectionId,
+                sectionId,
+                StringComparison.OrdinalIgnoreCase));
 }

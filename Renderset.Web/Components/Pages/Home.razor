@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 
 @using System.Text.Json
 @using Renderset.Blazor.Components.Editor
@@ -120,6 +120,7 @@ else
                           Data="_data"
                           HeaderBlocks="_headerBlocks"
                           FooterBlocks="_footerBlocks"
+                          BodyBlocks="_bodyBlocks"
                           ShowSaveButton="false" />
 
         </div>
@@ -156,6 +157,7 @@ else
 
     private IReadOnlyCollection<ReportBlock> _headerBlocks = [];
     private IReadOnlyCollection<ReportBlock> _footerBlocks = [];
+    private IReadOnlyCollection<ReportBlock> _bodyBlocks = [];
 
     private bool HasReport =>
         _definition is not null &&
@@ -171,6 +173,10 @@ else
         _footerBlocks =
             await LoadResolvedBlocksAsync(
                 ReportBlockType.Footer);
+
+        _bodyBlocks =
+            await LoadResolvedBlocksAsync(
+                ReportBlockType.Text);
     }
 
     private async Task<IReadOnlyCollection<ReportBlock>>

@@ -1,4 +1,5 @@
-﻿@using System.Text.Json
+@using System.Text.Json
+@using Renderset.Core.Definitions
 @using Renderset.Core.Resolved
 @using Renderset.Core.Themes
 
@@ -7,30 +8,41 @@
 
     <DynamicReportHeader Header="Report.Header" />
 
-    @foreach (var section in VisibleSections)
+    @foreach (var item in VisibleBodyItems)
     {
-        <section class="dynamic-report-section">
+        @if (item.Type == ReportBodyItemType.Section &&
+             item.Section is not null)
+        {
+            var section = item.Section;
 
-            @if (!string.IsNullOrWhiteSpace(section.Name))
-            {
-                <div class="dynamic-report-section-title">
-                    @section.Name
-                </div>
-            }
+            <section class="dynamic-report-section">
 
-            @if (section.Fields.Any(x => x.Visible))
-            {
-                <DynamicReportFields Section="@section"
-                                     Data="@Data" />
-            }
+                @if (!string.IsNullOrWhiteSpace(section.Name))
+                {
+                    <div class="dynamic-report-section-title">
+                        @section.Name
+                    </div>
+                }
 
-            @if (section.Table is not null)
-            {
-                <DynamicReportTable Table="@section.Table"
-                                    Data="@Data" />
-            }
+                @if (section.Fields.Any(x => x.Visible))
+                {
+                    <DynamicReportFields Section="@section"
+                                         Data="@Data" />
+                }
 
-        </section>
+                @if (section.Table is not null)
+                {
+                    <DynamicReportTable Table="@section.Table"
+                                        Data="@Data" />
+                }
+
+            </section>
+        }
+        else if (item.Type == ReportBodyItemType.Block &&
+                 item.Block is not null)
+        {
+            <DynamicReportBlock Block="item.Block" />
+        }
     }
 
     <DynamicReportFooter Footer="Report.Footer" />
@@ -47,9 +59,11 @@
     [Parameter]
     public ReportTheme Theme { get; set; } = new();
 
-    private IEnumerable<ResolvedReportSection> VisibleSections =>
-        Report.Sections
-            .Where(x => x.Visible)
+    private IEnumerable<ResolvedReportBodyItem> VisibleBodyItems =>
+        Report.Body
+            .Where(x =>
+                x.Type != ReportBodyItemType.Section ||
+                x.Section?.Visible == true)
             .OrderBy(x => x.Order);
 
     private string ThemeStyle => $"""

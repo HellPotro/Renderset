@@ -42,6 +42,7 @@ else if (_configuration is not null &&
                       Data="_data"
                       HeaderBlocks="_headerBlocks"
                       FooterBlocks="_footerBlocks"
+                      BodyBlocks="_bodyBlocks"
                       SaveRequested="SaveAsync" />
 
     </div>
@@ -62,6 +63,7 @@ else if (_configuration is not null &&
 
     private IReadOnlyCollection<ReportBlock> _headerBlocks = [];
     private IReadOnlyCollection<ReportBlock> _footerBlocks = [];
+    private IReadOnlyCollection<ReportBlock> _bodyBlocks = [];
 
     private ReportTheme? _theme;
 
@@ -85,6 +87,10 @@ else if (_configuration is not null &&
             _footerBlocks =
                 await LoadResolvedBlocksAsync(
                     ReportBlockType.Footer);
+
+            _bodyBlocks =
+                await LoadResolvedBlocksAsync(
+                    ReportBlockType.Text);
 
             var preset =
                 await RenderSetApi.ResolvePresetAsync(

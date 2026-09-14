@@ -214,3 +214,8 @@
     margin: 0 0 18px;
     font-size: 12px;
 }
+
+.block-icon.text {
+    background: #f3eef8;
+    color: #72558a;
+}

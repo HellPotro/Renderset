@@ -109,6 +109,10 @@
                                 Pie de página
                             </option>
 
+                            <option value="@ReportBlockType.Text">
+                                Texto
+                            </option>
+
                         </select>
                     </div>
 
@@ -236,6 +240,75 @@
             }
 
 
+            @if (_type == ReportBlockType.Text)
+            {
+                <section class="editor-card">
+
+                    <div class="editor-card-header">
+                        <h2>Texto</h2>
+                    </div>
+
+                    <div class="editor-card-body">
+
+                        <div class="form-group">
+                            <label>Título opcional</label>
+
+                            <div class="variable-input-row">
+                                <input type="text"
+                                       value="@_text.Title"
+                                       @oninput="TextTitleChanged"
+                                       placeholder="Directrices de seguridad" />
+
+                                <VariablePicker Variables="_variables"
+                                                Selected="InsertTextTitleVariableAsync" />
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="form-label-row">
+                                <label>Contenido</label>
+
+                                <VariablePicker Variables="_variables"
+                                                Selected="InsertTextVariableAsync" />
+                            </div>
+
+                            <textarea rows="8"
+                                      value="@_text.Text"
+                                      @oninput="TextContentChanged"
+                                      placeholder="Escribe las directrices, avisos, condiciones o cualquier texto reutilizable..."></textarea>
+
+                            <small>
+                                Puedes insertar variables del tenant dentro del texto.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Estilo</label>
+
+                            <select value="@_text.Style"
+                                    @onchange="TextStyleChanged">
+                                <option value="@ReportTextBlockStyle.Default">Normal</option>
+                                <option value="@ReportTextBlockStyle.Information">Información</option>
+                                <option value="@ReportTextBlockStyle.Warning">Aviso</option>
+                                <option value="@ReportTextBlockStyle.Success">Correcto</option>
+                            </select>
+                        </div>
+
+                        <div class="text-block-preview @GetTextPreviewClass()">
+                            @if (!string.IsNullOrWhiteSpace(_text.Title))
+                            {
+                                <strong>@_text.Title</strong>
+                            }
+
+                            <div>@(_text.Text.Length == 0 ? "Vista previa del bloque de texto" : _text.Text)</div>
+                        </div>
+
+                    </div>
+
+                </section>
+            }
+
+
             <section class="editor-card">
 
                 <div class="editor-card-header">
@@ -260,8 +333,8 @@
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters =
         {
@@ -281,6 +354,8 @@
     private ReportHeaderConfiguration _header = new();
 
     private ReportFooterConfiguration _footer = new();
+
+    private ReportTextBlockConfiguration _text = new();
 
     private IReadOnlyCollection<ReportVariable> _variables = [];
 
@@ -315,6 +390,11 @@
                         _footer,
                         JsonOptions),
 
+                ReportBlockType.Text =>
+                    JsonSerializer.Serialize(
+                        _text,
+                        JsonOptions),
+
                 _ => "{}"
             };
         }
@@ -326,6 +406,7 @@
         if (!IsEditMode)
         {
             ResetNewBlock();
+            _variables = await RenderSetApi.GetVariablesAsync(CurrentTenant.Id);
             return;
         }
 
@@ -364,6 +445,14 @@
                         JsonOptions)
                     ?? new ReportFooterConfiguration();
             }
+            else if (_type == ReportBlockType.Text)
+            {
+                _text =
+                    JsonSerializer.Deserialize<ReportTextBlockConfiguration>(
+                        block.ConfigurationJson,
+                        JsonOptions)
+                    ?? new ReportTextBlockConfiguration();
+            }
 
             _variables = await RenderSetApi.GetVariablesAsync(CurrentTenant.Id);
         }
@@ -387,6 +476,9 @@
 
         _footer =
             new ReportFooterConfiguration();
+
+        _text =
+            new ReportTextBlockConfiguration();
     }
 
 
@@ -524,6 +616,60 @@
             $"{{{{{variable.Key}}}}}";
 
         return Task.CompletedTask;
+    }
+
+
+    private void TextTitleChanged(ChangeEventArgs e)
+    {
+        _text.Title = Normalize(e.Value?.ToString());
+    }
+
+    private void TextContentChanged(ChangeEventArgs e)
+    {
+        _text.Text = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private void TextStyleChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ReportTextBlockStyle>(
+                e.Value?.ToString(),
+                out var style))
+        {
+            _text.Style = style;
+        }
+    }
+
+    private Task InsertTextTitleVariableAsync(ReportVariable variable)
+    {
+        _text.Title = AppendVariable(_text.Title, variable.Key);
+        return Task.CompletedTask;
+    }
+
+    private Task InsertTextVariableAsync(ReportVariable variable)
+    {
+        _text.Text = AppendVariable(_text.Text, variable.Key);
+        return Task.CompletedTask;
+    }
+
+    private string GetTextPreviewClass() =>
+        _text.Style switch
+        {
+            ReportTextBlockStyle.Information => "information",
+            ReportTextBlockStyle.Warning => "warning",
+            ReportTextBlockStyle.Success => "success",
+            _ => "default"
+        };
+
+    private static string AppendVariable(string? current, string key)
+    {
+        var token = $"{{{{{key}}}}}";
+
+        if (string.IsNullOrEmpty(current))
+            return token;
+
+        return current.EndsWith(' ')
+            ? current + token
+            : current + " " + token;
     }
 
 

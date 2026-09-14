@@ -15,17 +15,16 @@ public sealed class EfReportPresetRepository
 {
     private readonly IDbContextFactory<RenderSetDbContext> _contextFactory;
 
-    private static readonly JsonSerializerOptions JsonOptions =
-        new()
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters =
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            Converters =
-            {
-                new JsonStringEnumConverter()
-            }
-        };
+            new JsonStringEnumConverter()
+        }
+    };
 
     public EfReportPresetRepository(
         IDbContextFactory<RenderSetDbContext> contextFactory)
