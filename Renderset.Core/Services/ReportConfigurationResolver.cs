@@ -1,6 +1,7 @@
 using Renderset.Core.Blocks;
 using Renderset.Core.Configurations;
 using Renderset.Core.Definitions;
+using Renderset.Core.Localization;
 using Renderset.Core.Resolved;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -9,9 +10,8 @@ namespace Renderset.Core.Services;
 
 public sealed class ReportConfigurationResolver
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters =
@@ -23,9 +23,12 @@ public sealed class ReportConfigurationResolver
     public ResolvedReportDefinition Resolve(
         ReportDefinition definition,
         ReportConfiguration? configuration = null,
-        IReadOnlyCollection<ReportBlock>? bodyBlocks = null)
+        IReadOnlyCollection<ReportBlock>? bodyBlocks = null,
+        ReportTextCatalog? catalog = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
+
+        var texts = catalog ?? ReportTextCatalog.Empty;
 
         if (configuration is not null &&
             !string.Equals(
@@ -39,19 +42,23 @@ public sealed class ReportConfigurationResolver
         }
 
         var header = ResolveHeader(
+            texts,
             definition.Header,
             configuration?.Header);
 
         var sections = ResolveSections(
+            texts,
             definition,
             configuration);
 
         var body = ResolveBody(
+            texts,
             sections,
             configuration,
             bodyBlocks ?? []);
 
         var footer = ResolveFooter(
+            texts,
             definition.Footer,
             configuration?.Footer);
 
@@ -68,22 +75,31 @@ public sealed class ReportConfigurationResolver
     }
 
     private static List<ResolvedReportSection> ResolveSections(
+        ReportTextCatalog texts,
         ReportDefinition definition,
         ReportConfiguration? configuration)
     {
         var sections = definition.Sections
-            .Select(section => ResolveSection(section, configuration))
+            .Select(section => ResolveSection(
+                texts,
+                section,
+                definition,
+                configuration))
             .ToList();
 
         if (configuration is not null)
         {
-            var definitionIds = definition.Sections
+            var definitionSectionIds = definition.Sections
                 .Select(x => x.Id)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var customSections = configuration.Sections
-                .Where(x => !definitionIds.Contains(x.SectionId))
-                .Select(ResolveCustomSection);
+                .Where(x => !definitionSectionIds.Contains(x.SectionId))
+                .Select(sectionConfiguration => ResolveCustomSection(
+                    texts,
+                    sectionConfiguration,
+                    definition,
+                    configuration));
 
             sections.AddRange(customSections);
         }
@@ -95,21 +111,264 @@ public sealed class ReportConfigurationResolver
     }
 
     private static ResolvedReportSection ResolveCustomSection(
-        ReportSectionConfiguration configuration)
+        ReportTextCatalog texts,
+        ReportSectionConfiguration configuration,
+        ReportDefinition definition,
+        ReportConfiguration reportConfiguration)
     {
+        var fields = ResolvePlacedFields(
+            texts,
+            sectionId: configuration.SectionId,
+            definition,
+            reportConfiguration,
+            sectionConfiguration: configuration);
+
         return new ResolvedReportSection
         {
             Id = configuration.SectionId,
-            Name = configuration.NameOverride ?? "Nueva sección",
+            Name = texts.Resolve(
+                configuration.NameKey,
+                configuration.SectionId),
             Visible = configuration.Visible ?? true,
             Layout = configuration.Layout ?? ReportSectionLayout.List,
-            Order = configuration.Order ?? int.MaxValue,
-            Fields = [],
+            Order = configuration.Order ?? 0,
+            Fields = fields,
             Table = null
         };
     }
 
+    private static ResolvedReportSection ResolveSection(
+        ReportTextCatalog texts,
+        ReportSectionDefinition definition,
+        ReportDefinition reportDefinition,
+        ReportConfiguration? configuration)
+    {
+        var sectionConfiguration = configuration?
+            .Sections
+            .FirstOrDefault(x =>
+                string.Equals(
+                    x.SectionId,
+                    definition.Id,
+                    StringComparison.OrdinalIgnoreCase));
+
+        var fields = ResolveDefinitionSectionFields(
+            texts,
+            definition,
+            reportDefinition,
+            configuration,
+            sectionConfiguration);
+
+        var table = definition.Table is null
+            ? null
+            : ResolveTable(
+                texts,
+                definition.Table,
+                sectionConfiguration?.Table);
+
+        return new ResolvedReportSection
+        {
+            Id = definition.Id,
+            Name = texts.Resolve(
+                sectionConfiguration?.NameKey,
+                texts.Resolve(
+                    ReportTextKeys.Section(definition.Id),
+                    definition.Name)),
+            Visible = sectionConfiguration?.Visible ?? definition.VisibleByDefault,
+            Layout = definition.Table is not null
+                ? ReportSectionLayout.List
+                : sectionConfiguration?.Layout ?? ReportSectionLayout.List,
+            Order = sectionConfiguration?.Order ?? definition.Order,
+            Fields = fields,
+            Table = table
+        };
+    }
+
+    private static List<ResolvedReportField> ResolveDefinitionSectionFields(
+        ReportTextCatalog texts,
+        ReportSectionDefinition sectionDefinition,
+        ReportDefinition reportDefinition,
+        ReportConfiguration? configuration,
+        ReportSectionConfiguration? sectionConfiguration)
+    {
+        if (configuration is null)
+        {
+            return sectionDefinition.Fields
+                .Select(field => ResolveField(
+                    texts,
+                    field,
+                    sectionConfiguration?.Fields.FirstOrDefault(x =>
+                        string.Equals(
+                            x.FieldId,
+                            field.Id,
+                            StringComparison.OrdinalIgnoreCase))))
+                .OrderBy(x => x.Order)
+                .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        var placementsByFieldId =
+            configuration.FieldPlacements
+                .GroupBy(
+                    x => x.FieldId,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    x => x.Key,
+                    x => x.OrderBy(p => p.Order).First(),
+                    StringComparer.OrdinalIgnoreCase);
+
+        var fields =
+            new List<ResolvedReportField>();
+
+        foreach (var fieldDefinition in sectionDefinition.Fields)
+        {
+            var hasPlacement =
+                placementsByFieldId.TryGetValue(
+                    fieldDefinition.Id,
+                    out var placement);
+
+            if (hasPlacement &&
+                placement is not null &&
+                !string.Equals(
+                    placement.SectionId,
+                    sectionDefinition.Id,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var fieldConfiguration =
+                sectionConfiguration?
+                    .Fields
+                    .FirstOrDefault(x =>
+                        string.Equals(
+                            x.FieldId,
+                            fieldDefinition.Id,
+                            StringComparison.OrdinalIgnoreCase));
+
+            var orderOverride =
+                hasPlacement &&
+                placement is not null &&
+                string.Equals(
+                    placement.SectionId,
+                    sectionDefinition.Id,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? placement.Order
+                    : (int?)null;
+
+            fields.Add(
+                ResolveField(
+                    texts,
+                    fieldDefinition,
+                    fieldConfiguration,
+                    orderOverride));
+        }
+
+        var originalFieldIds =
+            sectionDefinition.Fields
+                .Select(x => x.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var incomingPlacements =
+            configuration.FieldPlacements
+                .Where(x =>
+                    string.Equals(
+                        x.SectionId,
+                        sectionDefinition.Id,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    !originalFieldIds.Contains(x.FieldId))
+                .OrderBy(x => x.Order)
+                .ToList();
+
+        foreach (var placement in incomingPlacements)
+        {
+            var fieldDefinition =
+                FindFieldDefinition(
+                    reportDefinition,
+                    placement.FieldId);
+
+            if (fieldDefinition is null)
+                continue;
+
+            var fieldConfiguration =
+                sectionConfiguration?
+                    .Fields
+                    .FirstOrDefault(x =>
+                        string.Equals(
+                            x.FieldId,
+                            fieldDefinition.Id,
+                            StringComparison.OrdinalIgnoreCase));
+
+            fields.Add(
+                ResolveField(
+                    texts,
+                    fieldDefinition,
+                    fieldConfiguration,
+                    placement.Order));
+        }
+
+        return fields
+            .OrderBy(x => x.Order)
+            .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static List<ResolvedReportField> ResolvePlacedFields(
+        ReportTextCatalog texts,
+        string sectionId,
+        ReportDefinition definition,
+        ReportConfiguration reportConfiguration,
+        ReportSectionConfiguration? sectionConfiguration)
+    {
+        return reportConfiguration.FieldPlacements
+            .Where(x =>
+                string.Equals(
+                    x.SectionId,
+                    sectionId,
+                    StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.Order)
+            .Select(placement =>
+            {
+                var fieldDefinition =
+                    FindFieldDefinition(
+                        definition,
+                        placement.FieldId);
+
+                if (fieldDefinition is null)
+                    return null;
+
+                var fieldConfiguration =
+                    sectionConfiguration?.Fields.FirstOrDefault(x =>
+                        string.Equals(
+                            x.FieldId,
+                            fieldDefinition.Id,
+                            StringComparison.OrdinalIgnoreCase));
+
+                return ResolveField(
+                    texts,
+                    fieldDefinition,
+                    fieldConfiguration,
+                    placement.Order);
+            })
+            .Where(x => x is not null)
+            .Select(x => x!)
+            .ToList();
+    }
+
+    private static ReportFieldDefinition? FindFieldDefinition(
+        ReportDefinition definition,
+        string fieldId)
+    {
+        return definition.Sections
+            .SelectMany(x => x.Fields)
+            .FirstOrDefault(x =>
+                string.Equals(
+                    x.Id,
+                    fieldId,
+                    StringComparison.OrdinalIgnoreCase));
+    }
+
     private static List<ResolvedReportBodyItem> ResolveBody(
+        ReportTextCatalog texts,
         IReadOnlyCollection<ResolvedReportSection> sections,
         ReportConfiguration? configuration,
         IReadOnlyCollection<ReportBlock> bodyBlocks)
@@ -117,7 +376,9 @@ public sealed class ReportConfigurationResolver
         if (configuration is null || configuration.Body.Count == 0)
         {
             return sections
+                .Where(x => x.Visible)
                 .OrderBy(x => x.Order)
+                .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
                 .Select(section => new ResolvedReportBodyItem
                 {
                     Id = $"section-{section.Id}",
@@ -135,52 +396,85 @@ public sealed class ReportConfigurationResolver
             switch (item.Type)
             {
                 case ReportBodyItemType.Section:
-                    {
-                        if (string.IsNullOrWhiteSpace(item.SectionId))
-                            continue;
-
-                        var section = sections.FirstOrDefault(x =>
-                            string.Equals(
-                                x.Id,
-                                item.SectionId,
-                                StringComparison.OrdinalIgnoreCase));
-
-                        if (section is null)
-                            continue;
-
-                        result.Add(new ResolvedReportBodyItem
-                        {
-                            Id = item.Id,
-                            Type = ReportBodyItemType.Section,
-                            Order = item.Order,
-                            Section = section
-                        });
-
-                        break;
-                    }
+                    ResolveBodySection(
+                        item,
+                        sections,
+                        result);
+                    break;
 
                 case ReportBodyItemType.Block:
-                    {
-                        var block = ResolveBodyBlock(item, bodyBlocks);
-
-                        if (block is null)
-                            continue;
-
-                        result.Add(new ResolvedReportBodyItem
-                        {
-                            Id = item.Id,
-                            Type = ReportBodyItemType.Block,
-                            Order = item.Order,
-                            Block = block
-                        });
-
-                        break;
-                    }
+                    ResolveBodyBlock(
+                        texts,
+                        item,
+                        bodyBlocks,
+                        result);
+                    break;
             }
         }
 
-        // Compatibilidad con presets anteriores: si una sección aún no figura
-        // explícitamente en Body, la conservamos al final en lugar de perderla.
+        AddMissingSectionsForBackwardCompatibility(
+            sections,
+            result);
+
+        return result
+            .OrderBy(x => x.Order)
+            .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void ResolveBodySection(
+        ReportBodyItemConfiguration item,
+        IReadOnlyCollection<ResolvedReportSection> sections,
+        List<ResolvedReportBodyItem> result)
+    {
+        if (string.IsNullOrWhiteSpace(item.SectionId))
+            return;
+
+        var section = sections.FirstOrDefault(x =>
+            string.Equals(
+                x.Id,
+                item.SectionId,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (section is null || !section.Visible)
+            return;
+
+        result.Add(new ResolvedReportBodyItem
+        {
+            Id = item.Id,
+            Type = ReportBodyItemType.Section,
+            Order = item.Order,
+            Section = section
+        });
+    }
+
+    private static void ResolveBodyBlock(
+        ReportTextCatalog texts,
+        ReportBodyItemConfiguration item,
+        IReadOnlyCollection<ReportBlock> bodyBlocks,
+        List<ResolvedReportBodyItem> result)
+    {
+        var block = ResolveBodyBlock(
+            texts,
+            item,
+            bodyBlocks);
+
+        if (block is null)
+            return;
+
+        result.Add(new ResolvedReportBodyItem
+        {
+            Id = item.Id,
+            Type = ReportBodyItemType.Block,
+            Order = item.Order,
+            Block = block
+        });
+    }
+
+    private static void AddMissingSectionsForBackwardCompatibility(
+        IReadOnlyCollection<ResolvedReportSection> sections,
+        List<ResolvedReportBodyItem> result)
+    {
         var includedSectionIds = result
             .Where(x => x.Section is not null)
             .Select(x => x.Section!.Id)
@@ -191,8 +485,10 @@ public sealed class ReportConfigurationResolver
             : result.Max(x => x.Order) + 10;
 
         foreach (var section in sections
+                     .Where(x => x.Visible)
                      .Where(x => !includedSectionIds.Contains(x.Id))
-                     .OrderBy(x => x.Order))
+                     .OrderBy(x => x.Order)
+                     .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase))
         {
             result.Add(new ResolvedReportBodyItem
             {
@@ -204,19 +500,17 @@ public sealed class ReportConfigurationResolver
 
             nextOrder += 10;
         }
-
-        return result
-            .OrderBy(x => x.Order)
-            .ToList();
     }
 
     private static ResolvedReportBlock? ResolveBodyBlock(
+        ReportTextCatalog texts,
         ReportBodyItemConfiguration item,
         IReadOnlyCollection<ReportBlock> bodyBlocks)
     {
         if (item.LocalBlock is not null)
         {
             return ResolveBlock(
+                texts,
                 item.Id,
                 item.LocalBlock.Name,
                 item.LocalBlock.Type,
@@ -236,6 +530,7 @@ public sealed class ReportConfigurationResolver
             return null;
 
         return ResolveBlock(
+            texts,
             source.Id,
             source.Name,
             source.Type,
@@ -243,6 +538,7 @@ public sealed class ReportConfigurationResolver
     }
 
     private static ResolvedReportBlock ResolveBlock(
+        ReportTextCatalog texts,
         string id,
         string? name,
         ReportBlockType type,
@@ -254,8 +550,30 @@ public sealed class ReportConfigurationResolver
             Name = name,
             Type = type,
             Text = type == ReportBlockType.Text
-                ? DeserializeTextConfiguration(configurationJson)
+                ? LocalizeTextBlock(
+                    texts,
+                    DeserializeTextConfiguration(configurationJson))
                 : null
+        };
+    }
+
+    private static ReportTextBlockConfiguration LocalizeTextBlock(
+        ReportTextCatalog texts,
+        ReportTextBlockConfiguration configuration)
+    {
+        return new ReportTextBlockConfiguration
+        {
+            TitleKey = configuration.TitleKey,
+            TextKey = configuration.TextKey,
+            Title = string.IsNullOrWhiteSpace(configuration.TitleKey)
+                ? configuration.Title
+                : texts.Resolve(
+                    configuration.TitleKey,
+                    configuration.Title ?? string.Empty),
+            Text = texts.Resolve(
+                configuration.TextKey,
+                configuration.Text),
+            Style = configuration.Style
         };
     }
 
@@ -279,6 +597,7 @@ public sealed class ReportConfigurationResolver
     }
 
     private static ResolvedReportHeader? ResolveHeader(
+        ReportTextCatalog texts,
         ReportHeaderDefinition? definition,
         ReportHeaderConfiguration? configuration)
     {
@@ -288,16 +607,27 @@ public sealed class ReportConfigurationResolver
         return new ResolvedReportHeader
         {
             Visible = configuration?.Visible ?? definition.VisibleByDefault,
-            Title = configuration?.TitleOverride ?? definition.Title,
-            Subtitle = configuration?.SubtitleOverride ?? definition.Subtitle,
+            Title = texts.Resolve(
+                configuration?.TitleKey,
+                texts.Resolve(
+                    ReportTextKeys.HeaderTitle,
+                    definition.Title ?? string.Empty)),
+            Subtitle = texts.Resolve(
+                configuration?.SubtitleKey,
+                texts.Resolve(
+                    ReportTextKeys.HeaderSubtitle,
+                    definition.Subtitle ?? string.Empty)),
             ShowLogo = configuration?.ShowLogo ?? definition.AllowLogo,
             LogoUrl = configuration?.LogoUrl,
             Fields = definition.Fields
                 .OrderBy(x => x.Order)
+                .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
                 .Select(field => new ResolvedReportField
                 {
                     Id = field.Id,
-                    Label = field.Label,
+                    Label = texts.Resolve(
+                        ReportTextKeys.Field(field.Id),
+                        field.Label),
                     DataPath = field.DataPath,
                     Order = field.Order,
                     Visible = field.VisibleByDefault,
@@ -307,50 +637,8 @@ public sealed class ReportConfigurationResolver
         };
     }
 
-    private static ResolvedReportSection ResolveSection(
-        ReportSectionDefinition definition,
-        ReportConfiguration? configuration)
-    {
-        var config = configuration?
-            .Sections
-            .FirstOrDefault(x =>
-                string.Equals(
-                    x.SectionId,
-                    definition.Id,
-                    StringComparison.OrdinalIgnoreCase));
-
-        var fields = definition.Fields
-            .Select(field =>
-                ResolveField(
-                    field,
-                    config?.Fields.FirstOrDefault(x =>
-                        string.Equals(
-                            x.FieldId,
-                            field.Id,
-                            StringComparison.OrdinalIgnoreCase))))
-            .OrderBy(x => x.Order)
-            .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var table = definition.Table is null
-            ? null
-            : ResolveTable(definition.Table, config?.Table);
-
-        return new ResolvedReportSection
-        {
-            Id = definition.Id,
-            Name = config?.NameOverride ?? definition.Name,
-            Visible = config?.Visible ?? definition.VisibleByDefault,
-            Layout = definition.Table is not null
-                ? ReportSectionLayout.List
-                : config?.Layout ?? ReportSectionLayout.List,
-            Order = config?.Order ?? definition.Order,
-            Fields = fields,
-            Table = table
-        };
-    }
-
     private static ResolvedReportFooter? ResolveFooter(
+        ReportTextCatalog texts,
         ReportFooterDefinition? definition,
         ReportFooterConfiguration? configuration)
     {
@@ -360,34 +648,47 @@ public sealed class ReportConfigurationResolver
         return new ResolvedReportFooter
         {
             Visible = configuration?.Visible ?? definition.VisibleByDefault,
-            Text = configuration?.TextOverride ?? definition.Text,
+            Text = texts.Resolve(
+                configuration?.TextKey,
+                texts.Resolve(
+                    ReportTextKeys.FooterText,
+                    definition.Text ?? string.Empty)),
             ShowGenerationDate = configuration?.ShowGenerationDate ?? definition.ShowGenerationDate,
             ShowPageNumber = configuration?.ShowPageNumber ?? false
         };
     }
 
     private static ResolvedReportField ResolveField(
+        ReportTextCatalog texts,
         ReportFieldDefinition definition,
-        ReportFieldConfiguration? configuration)
+        ReportFieldConfiguration? configuration,
+        int? orderOverride = null)
     {
         return new ResolvedReportField
         {
             Id = definition.Id,
-            Label = configuration?.LabelOverride ?? definition.Label,
+            Label = texts.Resolve(
+                configuration?.LabelKey,
+                texts.Resolve(
+                    ReportTextKeys.Field(definition.Id),
+                    definition.Label)),
             DataPath = definition.DataPath,
             Visible = configuration?.Visible ?? definition.VisibleByDefault,
-            Order = configuration?.Order ?? definition.Order,
+            Order = orderOverride ?? configuration?.Order ?? definition.Order,
             Type = definition.Type
         };
     }
 
     private static ResolvedReportTable ResolveTable(
+        ReportTextCatalog texts,
         ReportTableDefinition definition,
         ReportTableConfiguration? configuration)
     {
         var columns = definition.Columns
             .Select(column =>
                 ResolveColumn(
+                    texts,
+                    definition.Id,
                     column,
                     configuration?.Columns.FirstOrDefault(x =>
                         string.Equals(
@@ -408,13 +709,19 @@ public sealed class ReportConfigurationResolver
     }
 
     private static ResolvedReportColumn ResolveColumn(
+        ReportTextCatalog texts,
+        string tableId,
         ReportColumnDefinition definition,
         ReportColumnConfiguration? configuration)
     {
         return new ResolvedReportColumn
         {
             Id = definition.Id,
-            Label = configuration?.LabelOverride ?? definition.Label,
+            Label = texts.Resolve(
+                configuration?.LabelKey,
+                texts.Resolve(
+                    ReportTextKeys.Column(tableId, definition.Id),
+                    definition.Label)),
             DataPath = definition.DataPath,
             Visible = configuration?.Visible ?? definition.VisibleByDefault,
             Order = configuration?.Order ?? definition.Order,

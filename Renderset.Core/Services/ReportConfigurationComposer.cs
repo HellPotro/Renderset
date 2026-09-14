@@ -68,8 +68,8 @@ public sealed class ReportConfigurationComposer
 
         effective.Header.BlockId ??= block.Id;
         effective.Header.Visible ??= blockConfiguration.Visible;
-        effective.Header.TitleOverride ??= blockConfiguration.TitleOverride;
-        effective.Header.SubtitleOverride ??= blockConfiguration.SubtitleOverride;
+        effective.Header.TitleKey ??= blockConfiguration.TitleKey;
+        effective.Header.SubtitleKey ??= blockConfiguration.SubtitleKey;
         effective.Header.ShowLogo ??= blockConfiguration.ShowLogo;
         effective.Header.LogoUrl ??= blockConfiguration.LogoUrl;
     }
@@ -108,7 +108,7 @@ public sealed class ReportConfigurationComposer
 
         effective.Footer.BlockId ??= block.Id;
         effective.Footer.Visible ??= blockConfiguration.Visible;
-        effective.Footer.TextOverride ??= blockConfiguration.TextOverride;
+        effective.Footer.TextKey ??= blockConfiguration.TextKey;
         effective.Footer.ShowGenerationDate ??= blockConfiguration.ShowGenerationDate;
         effective.Footer.ShowPageNumber ??= blockConfiguration.ShowPageNumber;
     }

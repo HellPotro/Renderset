@@ -38,7 +38,7 @@ public sealed class ReportConfigurationResolverTests
                 new ReportFieldConfiguration
                 {
                     FieldId = "number",
-                    LabelOverride = "Albarán",
+                    LabelKey = "Albarán",
                     Visible = false
                 }
             ]

@@ -1,0 +1,634 @@
+﻿.report-composer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+    background: rgba(31, 45, 53, .56);
+    backdrop-filter: blur(2px);
+}
+
+.report-composer {
+    width: min(1320px, 94vw);
+    height: min(860px, 92vh);
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid #d8e1e7;
+    border-radius: 14px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .24);
+}
+
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.report-composer-header {
+    padding: 22px 28px 18px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    border-bottom: 1px solid #e7ecef;
+}
+
+.report-composer-eyebrow {
+    margin-bottom: 6px;
+    color: #72818a;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+}
+
+.report-composer-header h2 {
+    margin: 0;
+    color: #1f2d35;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.report-composer-header p {
+    margin: 6px 0 0;
+    color: #6d7b83;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.report-composer-close-button {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid #d8e1e7;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #52636c;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+    .report-composer-close-button:hover {
+        background: #f1f5f7;
+        border-color: #bdcbd2;
+        color: #25313a;
+    }
+
+
+/* =========================================================
+   SETTINGS
+   ========================================================= */
+
+.report-composer-settings {
+    padding: 18px 28px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 18px;
+    border-bottom: 1px solid #e7ecef;
+    background: #ffffff;
+}
+
+.report-composer-field-group {
+    min-width: 0;
+}
+
+    .report-composer-field-group label {
+        display: block;
+        margin-bottom: 6px;
+        color: #6e7e86;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .report-composer-field-group input,
+    .report-composer-field-group select,
+    .report-composer-search input {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 7px 9px;
+        border: 1px solid #d8e1e7;
+        border-radius: 6px;
+        background: #f8fafb;
+        color: #1f2d33;
+        font-size: 12px;
+        line-height: 1.35;
+        outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+
+        .report-composer-field-group input:focus,
+        .report-composer-field-group select:focus,
+        .report-composer-search input:focus {
+            background: #ffffff;
+            border-color: #8ba4b3;
+            box-shadow: 0 0 0 2px rgba(65, 105, 125, .10);
+        }
+
+
+/* =========================================================
+   BODY
+   ========================================================= */
+
+.report-composer-body {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    overflow: hidden;
+}
+
+.report-composer-left {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding: 20px 28px 24px;
+    background: #ffffff;
+}
+
+.report-composer-right {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding: 20px 22px 24px;
+    border-left: 1px solid #e7ecef;
+    background: #f8fafb;
+}
+
+
+/* =========================================================
+   PANEL TITLES
+   ========================================================= */
+
+.report-composer-panel-title-row {
+    margin-bottom: 12px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.report-composer-panel-title {
+    color: #25313a;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.report-composer-panel-subtitle {
+    margin-top: 3px;
+    color: #7a8991;
+    font-size: 11px;
+}
+
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
+
+.report-composer-search {
+    position: relative;
+    margin-bottom: 14px;
+}
+
+    .report-composer-search i {
+        position: absolute;
+        top: 50%;
+        left: 10px;
+        transform: translateY(-50%);
+        color: #8fa0a9;
+        font-size: 11px;
+        pointer-events: none;
+    }
+
+    .report-composer-search input {
+        padding-left: 30px;
+    }
+
+
+/* =========================================================
+   SOURCE SECTIONS
+   ========================================================= */
+
+.report-composer-section-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.report-composer-source-section {
+    overflow: hidden;
+    border: 1px solid #d8e1e7;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.report-composer-source-header {
+    width: 100%;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 12px;
+    border: 0;
+    background: #f4f7f8;
+    color: #1f2d35;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color .15s ease, color .15s ease;
+}
+
+    .report-composer-source-header:hover {
+        background: #edf2f4;
+        color: #173d4f;
+    }
+
+.report-composer-source-chevron {
+    width: 16px;
+    color: #71828a;
+    font-size: 10px;
+    text-align: center;
+}
+
+.report-composer-source-name {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.report-composer-source-count {
+    min-width: 24px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #e4edf2;
+    color: #52636c;
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.report-composer-source-fields {
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+}
+
+
+/* =========================================================
+   AVAILABLE FIELDS
+   ========================================================= */
+
+.report-composer-available-field {
+    min-width: 0;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 7px 8px;
+    border: 1px solid #e1e7eb;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #25313a;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+
+    .report-composer-available-field:hover {
+        border-color: #c3d0d7;
+        background: #fbfcfd;
+        box-shadow: 0 1px 3px rgba(37, 49, 58, .04);
+    }
+
+    .report-composer-available-field.selected {
+        border-color: #a9c7b7;
+        background: #f0f8f3;
+    }
+
+    .report-composer-available-field input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+    }
+
+.report-composer-check {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border: 1px solid #b8c3c9;
+    border-radius: 5px;
+    background: #ffffff;
+    color: transparent;
+    font-size: 10px;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.report-composer-available-field.selected .report-composer-check {
+    background: #217346;
+    border-color: #217346;
+    color: #ffffff;
+}
+
+.report-composer-field-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.report-composer-field-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #25313a;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.report-composer-field-path {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #82909a;
+    font-size: 10px;
+}
+
+
+/* =========================================================
+   RIGHT PANEL / PREVIEW
+   ========================================================= */
+
+.report-composer-preview-card {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.report-composer-preview-header {
+    margin-bottom: 14px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.report-composer-count-badge {
+    min-width: 26px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #e4f3e9;
+    color: #217346;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.report-composer-mini-section {
+    overflow: hidden;
+    border: 1px solid #d8e1e7;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.report-composer-mini-section-title {
+    padding: 10px 12px;
+    background: #e8eff3;
+    color: #00285a;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.report-composer-empty-state {
+    min-height: 190px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    color: #7a8991;
+    text-align: center;
+}
+
+    .report-composer-empty-state i {
+        color: #a9b6bd;
+        font-size: 22px;
+    }
+
+    .report-composer-empty-state p {
+        max-width: 240px;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+
+
+/* =========================================================
+   SELECTED FIELDS
+   ========================================================= */
+
+.report-composer-selected-grid {
+    padding: 10px;
+    display: grid;
+    gap: 7px;
+}
+
+    .report-composer-selected-grid.list {
+        grid-template-columns: 1fr;
+    }
+
+    .report-composer-selected-grid.columns-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .report-composer-selected-grid.columns-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .report-composer-selected-grid.columns-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+.report-composer-selected-field {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 9px;
+    border: 1px solid #e1e7eb;
+    border-radius: 7px;
+    background: #ffffff;
+}
+
+    .report-composer-selected-field > i {
+        flex: 0 0 auto;
+        color: #a0adb4;
+        font-size: 12px;
+    }
+
+    .report-composer-selected-field span {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+    }
+
+    .report-composer-selected-field strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #25313a;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .report-composer-selected-field small {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #82909a;
+        font-size: 9px;
+    }
+
+    .report-composer-selected-field button {
+        width: 22px;
+        height: 22px;
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #8b9aa3;
+        cursor: pointer;
+        font-size: 11px;
+        transition: background-color .15s ease, color .15s ease;
+    }
+
+        .report-composer-selected-field button:hover {
+            background: #edf2f4;
+            color: #173d4f;
+        }
+
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+
+.report-composer-footer {
+    padding: 16px 28px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #e7ecef;
+    background: #ffffff;
+}
+
+.report-composer-primary-button,
+.report-composer-secondary-button {
+    min-height: 34px;
+    padding: 8px 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 700;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease;
+}
+
+.report-composer-primary-button {
+    border: 1px solid #00285a;
+    background: #00285a;
+    color: #ffffff;
+}
+
+    .report-composer-primary-button:hover:not(:disabled) {
+        background: #003b82;
+        border-color: #003b82;
+    }
+
+    .report-composer-primary-button:disabled {
+        opacity: .45;
+        cursor: default;
+    }
+
+.report-composer-secondary-button {
+    border: 1px solid #d8e1e7;
+    background: #ffffff;
+    color: #52636c;
+}
+
+    .report-composer-secondary-button:hover {
+        background: #f1f5f7;
+        border-color: #bdcbd2;
+        color: #25313a;
+    }
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+    .report-composer {
+        width: 96vw;
+    }
+
+    .report-composer-body {
+        grid-template-columns: minmax(0, 1fr) 320px;
+    }
+
+    .report-composer-source-fields {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 800px) {
+    .report-composer {
+        height: 96vh;
+    }
+
+    .report-composer-settings {
+        grid-template-columns: 1fr;
+    }
+
+    .report-composer-body {
+        grid-template-columns: 1fr;
+    }
+
+    .report-composer-right {
+        display: none;
+    }
+}

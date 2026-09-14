@@ -18,5 +18,7 @@ public sealed class ReportConfiguration
 
     public List<ReportBodyItemConfiguration> Body { get; set; } = [];
 
+    public List<ReportFieldPlacementConfiguration> FieldPlacements { get; set; } = [];
+
     public ReportFooterConfiguration? Footer { get; set; }
 }

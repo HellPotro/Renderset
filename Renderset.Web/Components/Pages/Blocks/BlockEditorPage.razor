@@ -135,7 +135,7 @@
                             <label>Título</label>
 
                             <input type="text"
-                                   value="@_header.TitleOverride"
+                                   value="@_header.TitleKey"
                                    @oninput="HeaderTitleChanged"
                                    placeholder="Opcional" />
                         </div>
@@ -147,7 +147,7 @@
                             <div class="variable-input-row">
 
                                 <input type="text"
-                                       value="@_header.SubtitleOverride"
+                                       value="@_header.SubtitleKey"
                                        @oninput="HeaderSubtitleChanged"
                                        placeholder="Talleres ORAN S.L.U." />
 
@@ -209,7 +209,7 @@
                             <label>Texto</label>
 
                             <textarea rows="4"
-                                      value="@_footer.TextOverride"
+                                      value="@_footer.TextKey"
                                       @oninput="FooterTextChanged"
                                       placeholder="Texto legal, dirección, contacto..."></textarea>
                         </div>
@@ -541,7 +541,7 @@
     private void HeaderTitleChanged(
         ChangeEventArgs e)
     {
-        _header.TitleOverride =
+        _header.TitleKey =
             Normalize(
                 e.Value?.ToString());
     }
@@ -550,7 +550,7 @@
     private void HeaderSubtitleChanged(
         ChangeEventArgs e)
     {
-        _header.SubtitleOverride =
+        _header.SubtitleKey =
             Normalize(
                 e.Value?.ToString());
     }
@@ -577,7 +577,7 @@
     private void FooterTextChanged(
         ChangeEventArgs e)
     {
-        _footer.TextOverride =
+        _footer.TextKey =
             Normalize(
                 e.Value?.ToString());
     }
@@ -603,7 +603,7 @@
     private Task InsertSubtitleVariableAsync(
     ReportVariable variable)
     {
-        _header.SubtitleOverride =
+        _header.SubtitleKey =
             $"{{{{{variable.Key}}}}}";
 
         return Task.CompletedTask;

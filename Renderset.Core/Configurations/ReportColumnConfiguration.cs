@@ -1,4 +1,4 @@
-﻿namespace Renderset.Core.Configurations;
+namespace Renderset.Core.Configurations;
 
 public sealed class ReportColumnConfiguration
 {
@@ -10,5 +10,5 @@ public sealed class ReportColumnConfiguration
 
     public decimal? Width { get; set; }
 
-    public string? LabelOverride { get; set; }
+    public string? LabelKey { get; set; }
 }

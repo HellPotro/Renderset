@@ -128,7 +128,7 @@
 
     private async Task TextChangedAsync(ChangeEventArgs e)
     {
-        Footer.TextOverride = Normalize(e.Value?.ToString());
+        Footer.TextKey = Normalize(e.Value?.ToString());
         await Changed.InvokeAsync();
     }
 

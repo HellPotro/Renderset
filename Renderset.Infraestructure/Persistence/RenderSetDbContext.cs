@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Renderset.Infrastructure.Persistence.Entities;
 
 namespace Renderset.Infrastructure.Persistence;
@@ -25,6 +25,12 @@ public sealed class RenderSetDbContext : DbContext
 
     public DbSet<ReportVariableEntity> ReportVariables =>
         Set<ReportVariableEntity>();
+
+    public DbSet<ReportResourceEntity> ReportResources =>
+        Set<ReportResourceEntity>();
+
+    public DbSet<TenantCultureEntity> TenantCultures =>
+        Set<TenantCultureEntity>();
 
     public DbSet<TenantEntity> Tenants =>
         Set<TenantEntity>();

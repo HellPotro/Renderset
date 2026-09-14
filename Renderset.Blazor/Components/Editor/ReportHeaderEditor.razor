@@ -150,13 +150,13 @@
 
     private async Task TitleChangedAsync(ChangeEventArgs e)
     {
-        Header.TitleOverride = Normalize(e.Value?.ToString());
+        Header.TitleKey = Normalize(e.Value?.ToString());
         await Changed.InvokeAsync();
     }
 
     private async Task SubtitleChangedAsync(ChangeEventArgs e)
     {
-        Header.SubtitleOverride = Normalize(e.Value?.ToString());
+        Header.SubtitleKey = Normalize(e.Value?.ToString());
         await Changed.InvokeAsync();
     }
 

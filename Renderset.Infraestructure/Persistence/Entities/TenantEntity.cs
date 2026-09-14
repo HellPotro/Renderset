@@ -1,4 +1,3 @@
-﻿using Renderset.Infrastructure.Persistence.Entities;
 using Renderset.Infrastructure.Persistence.Entities;
 
 public sealed class TenantEntity
@@ -22,4 +21,8 @@ public sealed class TenantEntity
     public ICollection<ReportBlockEntity> ReportBlocks { get; set; } = [];
 
     public ICollection<ReportVariableEntity> ReportVariables { get; set; } = [];
+
+    public ICollection<ReportResourceEntity> ReportResources { get; set; } = [];
+
+    public ICollection<TenantCultureEntity> Cultures { get; set; } = [];
 }

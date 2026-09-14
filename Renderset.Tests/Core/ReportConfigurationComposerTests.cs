@@ -36,7 +36,7 @@ public sealed class ReportConfigurationComposerTests
         var result = _sut.Compose(configuration, block);
 
         result.Header.Should().NotBeNull();
-        result.Header!.SubtitleOverride.Should().Be("Talleres ORAN S.L.U.");
+        result.Header!.SubtitleKey.Should().Be("Talleres ORAN S.L.U.");
         result.Header.ShowLogo.Should().BeTrue();
         result.Header.LogoUrl.Should().Be("https://example.com/logo.png");
     }
@@ -48,7 +48,7 @@ public sealed class ReportConfigurationComposerTests
         configuration.Header = new ReportHeaderConfiguration
         {
             BlockId = "oran-header",
-            SubtitleOverride = "Override del preset",
+            SubtitleKey = "Override del preset",
             ShowLogo = false
         };
 
@@ -67,7 +67,7 @@ public sealed class ReportConfigurationComposerTests
 
         var result = _sut.Compose(configuration, block);
 
-        result.Header!.SubtitleOverride.Should().Be("Override del preset");
+        result.Header!.SubtitleKey.Should().Be("Override del preset");
         result.Header.ShowLogo.Should().BeFalse();
     }
 
@@ -90,8 +90,8 @@ public sealed class ReportConfigurationComposerTests
 
         var result = _sut.Compose(configuration, block);
 
-        configuration.Header.SubtitleOverride.Should().BeNull();
-        result.Header!.SubtitleOverride.Should().Be("Empresa");
+        configuration.Header.SubtitleKey.Should().BeNull();
+        result.Header!.SubtitleKey.Should().Be("Empresa");
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class ReportConfigurationComposerTests
 
         var result = _sut.Compose(configuration, footerBlock: block);
 
-        result.Footer!.TextOverride.Should().Be("Documento generado por ORAN");
+        result.Footer!.TextKey.Should().Be("Documento generado por ORAN");
         result.Footer.ShowGenerationDate.Should().BeTrue();
     }
 

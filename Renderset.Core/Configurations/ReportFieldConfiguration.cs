@@ -1,4 +1,4 @@
-﻿namespace Renderset.Core.Configurations;
+namespace Renderset.Core.Configurations;
 
 public sealed class ReportFieldConfiguration
 {
@@ -8,5 +8,5 @@ public sealed class ReportFieldConfiguration
 
     public int? Order { get; set; }
 
-    public string? LabelOverride { get; set; }
+    public string? LabelKey { get; set; }
 }

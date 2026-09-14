@@ -328,7 +328,7 @@
         ReportFieldDefinition field,
         string? label)
     {
-        GetOrCreateFieldConfiguration(field.Id).LabelOverride = Normalize(label);
+        GetOrCreateFieldConfiguration(field.Id).LabelKey = Normalize(label);
         await Changed.InvokeAsync();
     }
 
@@ -344,7 +344,7 @@
         ReportColumnDefinition column,
         string? label)
     {
-        GetOrCreateColumnConfiguration(column.Id).LabelOverride = Normalize(label);
+        GetOrCreateColumnConfiguration(column.Id).LabelKey = Normalize(label);
         await Changed.InvokeAsync();
     }
 
@@ -488,11 +488,11 @@
                     StringComparison.OrdinalIgnoreCase));
 
     private string GetFieldLabel(ReportFieldDefinition field) =>
-        FindFieldConfiguration(field.Id)?.LabelOverride
+        FindFieldConfiguration(field.Id)?.LabelKey
         ?? field.Label;
 
     private string GetColumnLabel(ReportColumnDefinition column) =>
-        FindColumnConfiguration(column.Id)?.LabelOverride
+        FindColumnConfiguration(column.Id)?.LabelKey
         ?? column.Label;
 
     private static string GetWidthValue(ResolvedReportColumn column) =>

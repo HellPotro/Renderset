@@ -1,0 +1,454 @@
+﻿@using Renderset.Core.Composer
+@using Renderset.Core.Configurations
+@using Renderset.Core.Definitions
+
+<div class="report-composer-backdrop">
+
+    <div class="report-composer">
+
+        <header class="report-composer-header">
+
+            <div>
+                <div class="report-composer-eyebrow">
+                    Composición
+                </div>
+
+                <h2>Nueva sección</h2>
+
+                <p>
+                    Selecciona campos existentes para crear una nueva sección visual.
+                </p>
+            </div>
+
+            <button type="button"
+                    class="report-composer-close-button"
+                    title="Cerrar"
+                    @onclick="Cancel">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+        </header>
+
+        <section class="report-composer-settings">
+
+            <div class="report-composer-field-group report-composer-name-field">
+
+                <label>
+                    Nombre
+                </label>
+
+                <input type="text"
+                       placeholder="Ej. Información general"
+                       @bind="Request.Name" />
+
+            </div>
+
+            <div class="report-composer-field-group report-composer-layout-field">
+
+                <label>
+                    Layout
+                </label>
+
+                <select @bind="Request.Layout">
+
+                    <option value="@ReportSectionLayout.List">
+                        Lista
+                    </option>
+
+                    <option value="@ReportSectionLayout.Columns2">
+                        2 columnas
+                    </option>
+
+                    <option value="@ReportSectionLayout.Columns3">
+                        3 columnas
+                    </option>
+
+                    <option value="@ReportSectionLayout.Columns4">
+                        4 columnas
+                    </option>
+
+                </select>
+
+            </div>
+
+        </section>
+
+        <main class="report-composer-body">
+
+            <section class="report-composer-left">
+
+                <div class="report-composer-panel-title-row">
+
+                    <div>
+                        <div class="report-composer-panel-title">
+                            Campos disponibles
+                        </div>
+
+                        <div class="report-composer-panel-subtitle">
+                            Elige campos del report inferido.
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="report-composer-search">
+
+                    <i class="fa-solid fa-magnifying-glass"></i>
+
+                    <input type="text"
+                           placeholder="Buscar campos..."
+                           @bind="_search"
+                           @bind:event="oninput" />
+
+                </div>
+
+                <div class="report-composer-section-list">
+
+                    @foreach (var section in FilteredSections)
+                    {
+                        var expanded = IsSectionExpanded(section.Id);
+                        var fieldCount = GetFilteredFields(section).Count;
+
+                        <article class="report-composer-source-section">
+
+                            <button type="button"
+                                    class="report-composer-source-header"
+                                    @onclick="() => ToggleSection(section.Id)">
+
+                                <span class="report-composer-source-chevron">
+                                    <i class="fa-solid @(expanded ? "fa-chevron-down" : "fa-chevron-right")"></i>
+                                </span>
+
+                                <span class="report-composer-source-name">
+                                    @section.Name
+                                </span>
+
+                                <span class="report-composer-source-count">
+                                    @fieldCount
+                                </span>
+
+                            </button>
+
+                            @if (expanded)
+                            {
+                                <div class="report-composer-source-fields">
+
+                                    @foreach (var field in GetFilteredFields(section))
+                                    {
+                                        var selected = IsSelected(field.Id);
+
+                                        <label class="report-composer-available-field @(selected ? "selected" : null)">
+
+                                            <input type="checkbox"
+                                                   checked="@selected"
+                                                   @onchange="e => Toggle(field.Id, GetBool(e))" />
+
+                                            <span class="report-composer-check">
+                                                <i class="fa-solid fa-check"></i>
+                                            </span>
+
+                                            <span class="report-composer-field-text">
+
+                                                <span class="report-composer-field-label">
+                                                    @field.Label
+                                                </span>
+
+                                                <span class="report-composer-field-path">
+                                                    @field.Id
+                                                </span>
+
+                                            </span>
+
+                                        </label>
+                                    }
+
+                                </div>
+                            }
+
+                        </article>
+                    }
+
+                </div>
+
+            </section>
+
+            <aside class="report-composer-right">
+
+                <div class="report-composer-preview-card">
+
+                    <div class="report-composer-preview-header">
+
+                        <div>
+                            <div class="report-composer-panel-title">
+                                Nueva sección
+                            </div>
+
+                            <div class="report-composer-panel-subtitle">
+                                Preview de composición
+                            </div>
+                        </div>
+
+                        <span class="report-composer-count-badge">
+                            @Request.SelectedFieldIds.Count
+                        </span>
+
+                    </div>
+
+                    <div class="report-composer-mini-section">
+
+                        <div class="report-composer-mini-section-title">
+                            @SectionTitle
+                        </div>
+
+                        @if (Request.SelectedFieldIds.Count == 0)
+                        {
+                            <div class="report-composer-empty-state">
+
+                                <i class="fa-regular fa-square-check"></i>
+
+                                <p>
+                                    Selecciona campos a la izquierda para construir esta sección.
+                                </p>
+
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="@GetPreviewGridClass()">
+
+                                @foreach (var fieldId in Request.SelectedFieldIds)
+                                {
+                                    var field = FindField(fieldId);
+
+                                    <div class="report-composer-selected-field">
+
+                                        <i class="fa-solid fa-grip-vertical"></i>
+
+                                        <span>
+
+                                            <strong>
+                                                @(field?.Label ?? fieldId)
+                                            </strong>
+
+                                            <small>
+                                                @GetFieldSourceName(fieldId)
+                                            </small>
+
+                                        </span>
+
+                                        <button type="button"
+                                                title="Quitar campo"
+                                                @onclick="() => Remove(fieldId)">
+
+                                            <i class="fa-solid fa-xmark"></i>
+
+                                        </button>
+
+                                    </div>
+                                }
+
+                            </div>
+                        }
+
+                    </div>
+
+                </div>
+
+            </aside>
+
+        </main>
+
+        <footer class="report-composer-footer">
+
+            <button type="button"
+                    class="report-composer-secondary-button"
+                    @onclick="Cancel">
+
+                Cancelar
+
+            </button>
+
+            <button type="button"
+                    class="report-composer-primary-button"
+                    disabled="@(!CanSave)"
+                    @onclick="Save">
+
+                Crear sección
+
+            </button>
+
+        </footer>
+
+    </div>
+
+</div>
+
+@code
+{
+    [Parameter, EditorRequired]
+    public ReportDefinition Definition { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public SectionCompositionRequest Request { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<SectionCompositionRequest> Saved { get; set; }
+
+    [Parameter]
+    public EventCallback Cancelled { get; set; }
+
+    private string _search = "";
+
+    private readonly HashSet<string> _expandedSectionIds =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private bool CanSave =>
+        !string.IsNullOrWhiteSpace(Request.Name) &&
+        Request.SelectedFieldIds.Count > 0;
+
+    private string SectionTitle =>
+        string.IsNullOrWhiteSpace(Request.Name)
+            ? "Nueva sección"
+            : Request.Name.Trim();
+
+    private IEnumerable<ReportSectionDefinition> FilteredSections =>
+        Definition.Sections
+            .Where(section => GetFilteredFields(section).Count > 0);
+
+    protected override void OnInitialized()
+    {
+        foreach (var section in Definition.Sections.Take(2))
+        {
+            _expandedSectionIds.Add(section.Id);
+        }
+    }
+
+    private async Task Save()
+    {
+        if (!CanSave)
+            return;
+
+        Request.Name =
+            Request.Name.Trim();
+
+        await Saved.InvokeAsync(Request);
+    }
+
+    private async Task Cancel()
+    {
+        await Cancelled.InvokeAsync();
+    }
+
+    private IReadOnlyList<ReportFieldDefinition> GetFilteredFields(
+        ReportSectionDefinition section)
+    {
+        var fields =
+            section.Fields.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var search =
+                _search.Trim();
+
+            fields =
+                fields.Where(field =>
+                    field.Label.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    field.Id.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase));
+        }
+
+        return fields
+            .OrderBy(x => x.Order)
+            .ToList();
+    }
+
+    private bool IsSectionExpanded(string sectionId) =>
+        _expandedSectionIds.Contains(sectionId);
+
+    private void ToggleSection(string sectionId)
+    {
+        if (!_expandedSectionIds.Add(sectionId))
+            _expandedSectionIds.Remove(sectionId);
+    }
+
+    private bool IsSelected(string fieldId) =>
+        Request.SelectedFieldIds.Contains(
+            fieldId,
+            StringComparer.OrdinalIgnoreCase);
+
+    private void Toggle(string fieldId, bool selected)
+    {
+        if (selected)
+        {
+            if (!IsSelected(fieldId))
+                Request.SelectedFieldIds.Add(fieldId);
+        }
+        else
+        {
+            Remove(fieldId);
+        }
+    }
+
+    private void Remove(string fieldId)
+    {
+        var index =
+            Request.SelectedFieldIds.FindIndex(x =>
+                string.Equals(
+                    x,
+                    fieldId,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (index >= 0)
+            Request.SelectedFieldIds.RemoveAt(index);
+    }
+
+    private ReportFieldDefinition? FindField(string fieldId)
+    {
+        return Definition.Sections
+            .SelectMany(x => x.Fields)
+            .FirstOrDefault(x =>
+                string.Equals(
+                    x.Id,
+                    fieldId,
+                    StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string GetFieldSourceName(string fieldId)
+    {
+        var section =
+            Definition.Sections.FirstOrDefault(section =>
+                section.Fields.Any(field =>
+                    string.Equals(
+                        field.Id,
+                        fieldId,
+                        StringComparison.OrdinalIgnoreCase)));
+
+        return section?.Name ?? "";
+    }
+
+    private string GetPreviewGridClass()
+    {
+        return Request.Layout switch
+        {
+            ReportSectionLayout.Columns2 =>
+                "report-composer-selected-grid columns-2",
+
+            ReportSectionLayout.Columns3 =>
+                "report-composer-selected-grid columns-3",
+
+            ReportSectionLayout.Columns4 =>
+                "report-composer-selected-grid columns-4",
+
+            _ =>
+                "report-composer-selected-grid list"
+        };
+    }
+
+    private static bool GetBool(ChangeEventArgs e) =>
+        e.Value is bool value && value;
+}

@@ -1,4 +1,4 @@
-﻿namespace Renderset.Core.Configurations;
+namespace Renderset.Core.Configurations;
 
 public sealed class ReportHeaderConfiguration
 {
@@ -6,9 +6,9 @@ public sealed class ReportHeaderConfiguration
 
     public bool? Visible { get; set; }
 
-    public string? TitleOverride { get; set; }
+    public string? TitleKey { get; set; }
 
-    public string? SubtitleOverride { get; set; }
+    public string? SubtitleKey { get; set; }
 
     public bool? ShowLogo { get; set; }
 

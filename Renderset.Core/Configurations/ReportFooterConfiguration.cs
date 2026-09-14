@@ -1,4 +1,4 @@
-﻿namespace Renderset.Core.Configurations;
+namespace Renderset.Core.Configurations;
 
 public sealed class ReportFooterConfiguration
 {
@@ -6,7 +6,7 @@ public sealed class ReportFooterConfiguration
 
     public bool? Visible { get; set; }
 
-    public string? TextOverride { get; set; }
+    public string? TextKey { get; set; }
 
     public bool? ShowGenerationDate { get; set; }
 

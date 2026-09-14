@@ -8,7 +8,7 @@ public sealed class ReportSectionConfiguration
 
     public string? SourceSectionId { get; set; }
 
-    public string? NameOverride { get; set; }
+    public string? NameKey { get; set; }
 
     public bool? Visible { get; set; }
 

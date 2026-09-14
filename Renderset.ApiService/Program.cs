@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Renderset.Api.Endpoints;
 using Renderset.Core.Blocks;
+using Renderset.Core.Localization;
 using Renderset.Core.Presets;
 using Renderset.Core.Reports;
 using Renderset.Core.Services;
@@ -34,6 +35,9 @@ builder.Services.AddScoped<IReportPresetProvider, ReportPresetProvider>();
 builder.Services.AddScoped<IReportRepository, EfReportRepository>();
 builder.Services.AddScoped<IReportVariableRepository, EfReportVariableRepository>();
 builder.Services.AddScoped<IReportVariableResolver, ReportVariableResolver>();
+builder.Services.AddScoped<IReportResourceRepository, EfReportResourceRepository>();
+builder.Services.AddScoped<ITenantCultureRepository, EfTenantCultureRepository>();
+builder.Services.AddScoped<IReportTextCatalogFactory, ReportTextCatalogFactory>();
 
 builder.Services.AddSingleton<IReportConfigurationComposer, ReportConfigurationComposer>();
 
@@ -51,6 +55,8 @@ app.MapPresetEndpoints();
 app.MapReportBlockEndpoints();
 app.MapReportEndpoints();
 app.MapReportVariableEndpoints();
+app.MapReportResourceEndpoints();
+app.MapTenantCultureEndpoints();
 
 app.MapDefaultEndpoints();
 
