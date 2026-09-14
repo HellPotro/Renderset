@@ -1,0 +1,310 @@
+﻿@page "/"
+
+@using System.Text.Json
+@using Renderset.Blazor.Components.Editor
+@using Renderset.Core.Blocks
+@using Renderset.Core.Configurations
+@using Renderset.Core.Definitions
+@using Renderset.Core.Reports
+@using Renderset.Core.Reports.Inference
+@using Renderset.Core.Themes
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+
+<PageTitle>Playground - RenderSet</PageTitle>
+
+@if (!HasReport)
+{
+    <div class="playground-page">
+
+        <div class="playground-hero">
+
+            <span class="playground-eyebrow">
+                Playground
+            </span>
+
+            <h1>
+                Convierte JSON en un report configurable
+            </h1>
+
+            <p>
+                Pega un dataset, RenderSet inferirá su estructura
+                y podrás diseñar el report sin guardar nada.
+            </p>
+
+        </div>
+
+        <div class="playground-input-card">
+
+            <div class="playground-input-header">
+                <span>JSON dataset</span>
+            </div>
+
+            <textarea @bind="_json"
+                      class="playground-json-input"
+                      spellcheck="false">
+            </textarea>
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div class="playground-error">
+                    @_error
+                </div>
+            }
+
+            <div class="playground-actions">
+
+                <button type="button"
+                        class="primary-button"
+                        @onclick="GenerateReport">
+
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+
+                    Generar report
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+}
+else
+{
+    <div class="playground-designer">
+
+        <div class="playground-toolbar">
+
+            <div>
+
+                <button type="button"
+                        class="back-button"
+                        @onclick="ResetPlayground">
+
+                    <i class="fa-solid fa-arrow-left"></i>
+
+                    Cambiar JSON
+
+                </button>
+
+                <strong>
+                    Playground report
+                </strong>
+
+            </div>
+
+            @*
+            <button type="button"
+                    class="primary-button"
+                    @onclick="OpenSaveDialog">
+
+                <i class="fa-solid fa-floppy-disk"></i>
+
+                Guardar como report
+
+            </button>
+*@
+
+        </div>
+
+        <div class="playground-editor">
+
+            <ReportEditor @key="_definition!.Id"
+                          Definition="_definition"
+                          Configuration="_configuration!"
+                          ConfigurationChanged="ConfigurationChangedAsync"
+                          Theme="_theme!"
+                          ThemeChanged="ThemeChangedAsync"
+                          Data="_data"
+                          HeaderBlocks="_headerBlocks"
+                          FooterBlocks="_footerBlocks"
+                          ShowSaveButton="false" />
+
+        </div>
+
+    </div>
+}
+
+@code {
+
+    private string _json = """
+{
+  "customer": {
+    "code": "000762",
+    "name": "N.V. Van Wezel Autoparts"
+  },
+  "lines": [
+    {
+      "reference": "15004521",
+      "description": "Soporte parachoques delantero",
+      "quantity": 120
+    }
+  ]
+}
+""";
+
+    private string? _error;
+
+    private ReportDataSchema? _schema;
+    private ReportDefinition? _definition;
+    private ReportConfiguration? _configuration;
+    private ReportTheme? _theme;
+
+    private JsonElement _data;
+
+    private IReadOnlyCollection<ReportBlock> _headerBlocks = [];
+    private IReadOnlyCollection<ReportBlock> _footerBlocks = [];
+
+    private bool HasReport =>
+        _definition is not null &&
+        _configuration is not null &&
+        _theme is not null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _headerBlocks =
+            await LoadResolvedBlocksAsync(
+                ReportBlockType.Header);
+
+        _footerBlocks =
+            await LoadResolvedBlocksAsync(
+                ReportBlockType.Footer);
+    }
+
+    private async Task<IReadOnlyCollection<ReportBlock>>
+        LoadResolvedBlocksAsync(
+            ReportBlockType type)
+    {
+        var blocks =
+            await RenderSetApi.GetBlocksByTypeAsync(
+                CurrentTenant.Id,
+                type);
+
+        if (blocks.Count == 0)
+            return [];
+
+        var resolved =
+            await Task.WhenAll(
+                blocks.Select(block =>
+                    RenderSetApi.GetResolvedBlockAsync(
+                        CurrentTenant.Id,
+                        block.Id)));
+
+        return resolved;
+    }
+
+    private void GenerateReport()
+    {
+        _error = null;
+
+        try
+        {
+            using var document =
+                JsonDocument.Parse(_json);
+
+            if (document.RootElement.ValueKind !=
+                JsonValueKind.Object)
+            {
+                _error =
+                    "El JSON raíz debe ser un objeto.";
+
+                return;
+            }
+
+            /*
+             * Clone() es importante porque JsonDocument
+             * se destruye al salir del using.
+             */
+            _data =
+                document.RootElement.Clone();
+
+            _schema =
+                JsonSchemaInferer.Infer(
+                    _data);
+
+            /*
+             * Este ID se genera UNA SOLA VEZ
+             * por cada report creado en Playground.
+             */
+            var reportId =
+                $"playground-{Guid.NewGuid():N}";
+
+            _definition =
+                ReportDefinitionFactory.Create(
+                    reportId,
+                    "Playground report",
+                    _schema);
+
+            /*
+             * La configuración nace vacía.
+             *
+             * A partir de este momento NO debe volver
+             * a recrearse mientras el usuario esté
+             * trabajando en este report.
+             */
+            _configuration =
+                new ReportConfiguration
+                {
+                    Id = $"{reportId}-default",
+                    ReportId = reportId,
+                    Name = "Playground",
+                    Version = 1,
+                    Sections = []
+                };
+
+            _theme =
+                new ReportTheme
+                {
+                    Id = $"{reportId}-theme",
+                    Name = "Default"
+                };
+        }
+        catch (JsonException ex)
+        {
+            _error =
+                $"JSON no válido: {ex.Message}";
+        }
+    }
+
+    private Task ConfigurationChangedAsync(
+        ReportConfiguration configuration)
+    {
+        /*
+         * Conservamos siempre la configuración que
+         * está editando ReportEditor.
+         */
+        _configuration = configuration;
+
+        return Task.CompletedTask;
+    }
+
+    private Task ThemeChangedAsync(
+        ReportTheme theme)
+    {
+        /*
+         * Lo mismo con el tema.
+         */
+        _theme = theme;
+
+        return Task.CompletedTask;
+    }
+
+    private void ResetPlayground()
+    {
+        /*
+         * Solo aquí descartamos realmente
+         * el report que estaba editándose.
+         */
+
+        _schema = null;
+        _definition = null;
+        _configuration = null;
+        _theme = null;
+
+        _data = default;
+
+        _error = null;
+    }
+}

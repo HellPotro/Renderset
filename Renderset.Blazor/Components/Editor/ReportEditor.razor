@@ -1,0 +1,473 @@
+@using System.IO
+@using System.Text
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@using Renderset.Blazor.Components.Rendering
+@using Renderset.Core.Blocks
+@using Renderset.Core.Configurations
+@using Renderset.Core.Definitions
+@using Renderset.Core.Persistence
+@using Renderset.Core.Resolved
+@using Renderset.Core.Services
+@using Renderset.Core.Themes
+
+@inject IJSRuntime JS
+@inject IReportConfigurationComposer ConfigurationComposer
+
+<div class="report-editor">
+
+    <aside class="report-editor-sidebar">
+
+        <div class="report-editor-header">
+
+            <div class="report-editor-eyebrow">
+                Configuración
+            </div>
+
+            <h2>@Configuration.Name</h2>
+
+            <div class="report-editor-actions">
+
+                @if (ShowSaveButton)
+                {
+                    <button type="button"
+                            class="report-editor-action-button report-editor-action-primary"
+                            @onclick="SaveRequested">
+
+                        Guardar
+
+                    </button>
+                }
+
+                <button type="button"
+                        class="report-editor-action-button"
+                        @onclick="ExportPresetAsync">
+                    Exportar JSON
+                </button>
+
+                <label class="report-editor-action-button report-editor-import-button">
+                    Importar JSON
+
+                    <InputFile OnChange="ImportPresetAsync"
+                               accept=".json,application/json" />
+                </label>
+
+            </div>
+
+        </div>
+
+        <div class="report-editor-tabs">
+
+            <button type="button"
+                    class="report-editor-tab @(_activeTab == StructureTab ? "active" : null)"
+                    @onclick="ShowStructure">
+                Estructura
+            </button>
+
+            <button type="button"
+                    class="report-editor-tab @(_activeTab == HeaderFooterTab ? "active" : null)"
+                    @onclick="ShowHeaderFooter">
+                Cabecera y pie
+            </button>
+
+            <button type="button"
+                    class="report-editor-tab @(_activeTab == ThemeTab ? "active" : null)"
+                    @onclick="ShowTheme">
+                Tema
+            </button>
+
+        </div>
+
+        @if (_activeTab == StructureTab)
+        {
+            <div class="report-editor-block">
+
+                <div class="report-editor-block-title">
+                    Estructura
+                </div>
+
+                @{
+                    var orderedSections = GetOrderedSections();
+                }
+
+                @for (var i = 0; i < orderedSections.Count; i++)
+                {
+                    var sectionDefinition = orderedSections[i];
+                    var resolvedSection = _resolved?.GetSection(sectionDefinition.Id);
+
+                    if (resolvedSection is null)
+                        continue;
+
+                    <ReportSectionEditor @key="sectionDefinition.Id"
+                                         Definition="sectionDefinition"
+                                         Resolved="resolvedSection"
+                                         Configuration="Configuration"
+                                         CanMoveUp="@(i > 0)"
+                                         CanMoveDown="@(i < orderedSections.Count - 1)"
+                                         MoveUp="() => MoveSectionAsync(sectionDefinition.Id, -1)"
+                                         MoveDown="() => MoveSectionAsync(sectionDefinition.Id, 1)"
+                                         Changed="ConfigurationUpdated" />
+                }
+
+            </div>
+        }
+        @if (_activeTab == HeaderFooterTab)
+        {
+            <div class="report-editor-block">
+
+                <div class="report-editor-block-title">
+                    Cabecera y pie
+                </div>
+
+                @if (Definition.Header is not null)
+                {
+                    <ReportHeaderEditor Definition="Definition.Header"
+                                        Resolved="_resolved?.Header"
+                                        Configuration="Configuration"
+                                        Blocks="HeaderBlocks"
+                                        Changed="ConfigurationUpdated" />
+                }
+
+                @if (Definition.Footer is not null)
+                {
+                    <ReportFooterEditor Definition="Definition.Footer"
+                                        Resolved="_resolved?.Footer"
+                                        Configuration="Configuration"
+                                        Blocks="FooterBlocks"
+                                        Changed="ConfigurationUpdated" />
+                }
+
+            </div>
+        }
+        @if (_activeTab == ThemeTab)
+        {
+            <ReportThemeEditor Theme="Theme"
+                               Changed="ThemeUpdated" />
+        }
+
+    </aside>
+
+    <main class="report-editor-preview">
+
+        <div class="report-editor-preview-toolbar">
+
+            <div>
+                <strong>Vista previa</strong>
+                <span>@Definition.Name</span>
+            </div>
+
+            <div class="report-editor-preview-badge">
+                Tiempo real
+            </div>
+
+        </div>
+
+        <div class="report-editor-preview-canvas">
+
+            @if (_resolved is not null)
+            {
+                <div class="report-editor-paper">
+
+                    <DynamicReportRenderer Report="@_resolved"
+                                           Data="@Data"
+                                           Theme="@Theme" />
+
+                </div>
+            }
+
+        </div>
+
+    </main>
+
+</div>
+
+@code {
+
+    private const string StructureTab = "structure";
+    private const string HeaderFooterTab = "header-footer";
+    private const string ThemeTab = "theme";
+    private const long MaxPresetFileSize = 1024 * 1024;
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    [Parameter, EditorRequired]
+    public ReportDefinition Definition { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public ReportConfiguration Configuration { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyCollection<ReportBlock> HeaderBlocks { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyCollection<ReportBlock> FooterBlocks { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<ReportConfiguration> ConfigurationChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public ReportTheme Theme { get; set; } = default!;
+
+    [Parameter]
+    public bool ShowSaveButton { get; set; } = true;
+
+    [Parameter]
+    public EventCallback<ReportTheme> ThemeChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public JsonElement Data { get; set; }
+
+    [Parameter]
+    public EventCallback SaveRequested { get; set; }
+
+    private readonly ReportConfigurationResolver _resolver = new();
+
+    private ResolvedReportDefinition? _resolved;
+    private string _activeTab = StructureTab;
+
+    protected override void OnParametersSet()
+    {
+        Resolve();
+    }
+
+    private void Resolve()
+    {
+        var headerBlock = FindSelectedBlock(
+            HeaderBlocks,
+            Configuration.Header?.BlockId);
+
+        var footerBlock = FindSelectedBlock(
+            FooterBlocks,
+            Configuration.Footer?.BlockId);
+
+        var effectiveConfiguration =
+            ConfigurationComposer.Compose(
+                Configuration,
+                headerBlock,
+                footerBlock);
+
+        _resolved =
+            _resolver.Resolve(
+                Definition,
+                effectiveConfiguration);
+    }
+
+    private static ReportBlock? FindSelectedBlock(
+        IReadOnlyCollection<ReportBlock> blocks,
+        string? blockId)
+    {
+        if (string.IsNullOrWhiteSpace(blockId))
+            return null;
+
+        return blocks.FirstOrDefault(x =>
+            string.Equals(
+                x.Id,
+                blockId,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task ConfigurationUpdated()
+    {
+        Resolve();
+        await ConfigurationChanged.InvokeAsync(Configuration);
+    }
+
+    private Task ThemeUpdated() =>
+        ThemeChanged.InvokeAsync(Theme);
+
+    private void ShowStructure() =>
+        _activeTab = StructureTab;
+
+    private void ShowHeaderFooter() =>
+        _activeTab = HeaderFooterTab;
+
+    private void ShowTheme() =>
+        _activeTab = ThemeTab;
+
+    private async Task ExportPresetAsync()
+    {
+        var configurationJson =
+            JsonSerializer.Serialize(
+                Configuration,
+                JsonOptions);
+
+        Console.WriteLine("=== CONFIGURATION ===");
+        Console.WriteLine(
+            $"Sections: {Configuration.Sections.Count}");
+
+        Console.WriteLine(configurationJson);
+
+        var preset = new ReportPreset
+        {
+            Id = Configuration.Id,
+            Version = 1,
+            Configuration = Configuration,
+            Theme = Theme
+        };
+
+        Console.WriteLine("=== PRESET ===");
+        Console.WriteLine(
+            $"Sections preset: {preset.Configuration.Sections.Count}");
+
+        Console.WriteLine(
+            $"Same configuration: " +
+            $"{ReferenceEquals(Configuration, preset.Configuration)}");
+
+        var json =
+            JsonSerializer.Serialize(
+                preset,
+                JsonOptions);
+
+        Console.WriteLine(json);
+
+        var fileName =
+            $"report-{Configuration.ReportId}-{Configuration.Id}.json";
+
+        await JS.InvokeVoidAsync(
+            "renderSet.downloadText",
+            fileName,
+            json,
+            "application/json;charset=utf-8");
+    }
+
+
+    private async Task ImportPresetAsync(
+        InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+
+        await using var stream =
+            file.OpenReadStream(MaxPresetFileSize);
+
+        using var reader =
+            new StreamReader(stream, Encoding.UTF8);
+
+        var json =
+            await reader.ReadToEndAsync();
+
+        var preset =
+            JsonSerializer.Deserialize<ReportPreset>(json, JsonOptions)
+            ?? throw new InvalidOperationException(
+                "El archivo no contiene un preset válido.");
+
+        if (!string.Equals(
+                preset.Configuration.ReportId,
+                Definition.Id,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"La configuración pertenece al report '{preset.Configuration.ReportId}' " +
+                $"y no a '{Definition.Id}'.");
+        }
+
+        Configuration = preset.Configuration;
+        Theme = preset.Theme;
+
+        Resolve();
+
+        await ConfigurationChanged.InvokeAsync(Configuration);
+        await ThemeChanged.InvokeAsync(Theme);
+    }
+
+    private IReadOnlyList<ReportSectionDefinition> GetOrderedSections()
+    {
+        return Definition.Sections
+            .OrderBy(GetSectionOrder)
+            .ThenBy(x => x.Order)
+            .ToList();
+    }
+
+    private int GetSectionOrder(
+        ReportSectionDefinition definition)
+    {
+        var configuration =
+            Configuration.Sections.FirstOrDefault(x =>
+                string.Equals(
+                    x.SectionId,
+                    definition.Id,
+                    StringComparison.OrdinalIgnoreCase));
+
+        return configuration?.Order
+            ?? definition.Order;
+    }
+
+    private async Task MoveSectionAsync(
+    string sectionId,
+    int direction)
+    {
+        var orderedSections =
+            GetOrderedSections().ToList();
+
+        var currentIndex =
+            orderedSections.FindIndex(x =>
+                string.Equals(
+                    x.Id,
+                    sectionId,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (currentIndex < 0)
+            return;
+
+        var targetIndex =
+            currentIndex + direction;
+
+        if (targetIndex < 0 ||
+            targetIndex >= orderedSections.Count)
+        {
+            return;
+        }
+
+        (orderedSections[currentIndex],
+         orderedSections[targetIndex]) =
+        (
+            orderedSections[targetIndex],
+            orderedSections[currentIndex]
+        );
+
+        // Normalizamos todos los órdenes:
+        // 10, 20, 30, 40...
+        for (var i = 0; i < orderedSections.Count; i++)
+        {
+            var section =
+                GetOrCreateSectionConfiguration(
+                    orderedSections[i].Id);
+
+            section.Order =
+                (i + 1) * 10;
+        }
+
+        await ConfigurationUpdated();
+    }
+
+    private ReportSectionConfiguration GetOrCreateSectionConfiguration(
+    string sectionId)
+    {
+        var configuration =
+            Configuration.Sections.FirstOrDefault(x =>
+                string.Equals(
+                    x.SectionId,
+                    sectionId,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (configuration is not null)
+            return configuration;
+
+        configuration =
+            new ReportSectionConfiguration
+            {
+                SectionId = sectionId
+            };
+
+        Configuration.Sections.Add(configuration);
+
+        return configuration;
+    }
+}

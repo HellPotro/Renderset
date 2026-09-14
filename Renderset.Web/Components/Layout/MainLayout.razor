@@ -1,0 +1,59 @@
+@inherits LayoutComponentBase
+@inject ICurrentTenant CurrentTenant
+
+<div class="renderset-layout">
+
+    <aside class="renderset-sidebar">
+
+        <div class="renderset-brand">
+
+            <div class="renderset-brand-mark">
+                R
+            </div>
+
+            <div class="renderset-brand-text">
+                <strong>RenderSet</strong>
+                <span>Reporting platform</span>
+            </div>
+
+        </div>
+
+        <NavMenu />
+
+        <div class="renderset-sidebar-footer">
+
+            <div class="renderset-tenant-label">
+                Workspace
+            </div>
+
+            <div class="renderset-tenant">
+                <div class="renderset-tenant-avatar">
+                    @TenantInitial
+                </div>
+
+                <div>
+                    <strong>@(CurrentTenant.Name ?? CurrentTenant.Id)</strong>
+                    <span>@CurrentTenant.Id</span>
+                </div>
+            </div>
+
+        </div>
+
+    </aside>
+
+    <main class="renderset-main">
+
+        <div class="renderset-content">
+            @Body
+        </div>
+
+    </main>
+
+</div>
+
+@code {
+    private string TenantInitial =>
+        !string.IsNullOrWhiteSpace(CurrentTenant.Name)
+            ? CurrentTenant.Name![..1].ToUpperInvariant()
+            : CurrentTenant.Id[..1].ToUpperInvariant();
+}

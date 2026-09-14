@@ -1,0 +1,81 @@
+﻿.renderset-nav {
+    flex: 1;
+    padding: 18px 12px;
+    overflow-y: auto;
+}
+
+.renderset-nav-section {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+    .renderset-nav-section + .renderset-nav-section {
+        margin-top: 28px;
+    }
+
+.renderset-nav-title {
+    margin-bottom: 7px;
+    padding: 0 10px;
+    color: #98a6ad;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+}
+
+
+/* IMPORTANTE:
+   NavLink genera internamente un <a>,
+   por eso necesitamos ::deep con CSS isolation.
+*/
+
+::deep a.renderset-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+    box-sizing: border-box;
+    border-radius: 8px;
+    color: #586970;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    transition: background-color .15s ease, color .15s ease;
+}
+
+    ::deep a.renderset-nav-item:visited {
+        color: #586970;
+        text-decoration: none;
+    }
+
+    ::deep a.renderset-nav-item:hover {
+        background: #f1f5f6;
+        color: #244b5d;
+        text-decoration: none;
+    }
+
+    ::deep a.renderset-nav-item.active {
+        background: #e7eff2;
+        color: #173d4f;
+        text-decoration: none;
+    }
+
+.renderset-nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 21px;
+    height: 21px;
+    flex: 0 0 21px;
+    color: #7d919a;
+    font-size: 13px;
+}
+
+::deep a.renderset-nav-item:hover .renderset-nav-icon,
+::deep a.renderset-nav-item.active .renderset-nav-icon {
+    color: #173d4f;
+}

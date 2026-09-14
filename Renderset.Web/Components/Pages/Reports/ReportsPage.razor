@@ -1,0 +1,117 @@
+@page "/reports"
+
+@using Renderset.Core.Reports
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject NavigationManager Navigation
+
+<PageTitle>Reports - RenderSet</PageTitle>
+
+<div class="container py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+
+        <div>
+            <h1 class="h3 mb-1">Reports</h1>
+            <div class="text-muted">
+                Gestiona tus informes y configuraciones.
+            </div>
+        </div>
+
+        <button class="btn btn-primary"
+                @onclick="CreateReport">
+            + Nuevo report
+        </button>
+
+    </div>
+
+    @if (_loading)
+    {
+        <p>Cargando reports...</p>
+    }
+    else if (_reports.Count == 0)
+    {
+        <div class="alert alert-light border">
+            Todavía no hay reports creados.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+
+            <table class="table table-hover align-middle">
+
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Id</th>
+                        <th>Versión</th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (var report in _reports)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@report.Name</strong>
+                            </td>
+
+                            <td>
+                                <code>@report.Id</code>
+                            </td>
+
+                            <td>
+                                @report.Version
+                            </td>
+
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary"
+                                        @onclick="() => OpenDesigner(report.Id)">
+                                    Diseñar
+                                </button>
+                            </td>
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    private bool _loading = true;
+
+    private IReadOnlyCollection<Report> _reports =
+        [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _reports =
+            await RenderSetApi.GetReportsAsync(
+                CurrentTenant.Id);
+
+        _loading = false;
+    }
+
+    private void CreateReport()
+    {
+        Navigation.NavigateTo(
+            "/reports/new");
+    }
+
+    private void OpenDesigner(
+        string reportId)
+    {
+        Navigation.NavigateTo(
+            $"/reports/{reportId}/designer");
+    }
+}

@@ -1,0 +1,349 @@
+@page "/variables"
+
+@using Renderset.Core.Variables
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+
+<PageTitle>Variables - RenderSet</PageTitle>
+
+<div class="page">
+
+    <header class="page-header">
+
+        <div>
+            <h1>Variables</h1>
+
+            <p>
+                Valores compartidos que puedes reutilizar
+                en blocks y reports.
+            </p>
+        </div>
+
+        <button type="button"
+                class="primary-button"
+                @onclick="NewVariable">
+
+            <i class="fa-solid fa-plus"></i>
+            Nueva variable
+
+        </button>
+
+    </header>
+
+
+    @if (_editing is not null)
+    {
+        <section class="editor-card">
+
+            <header>
+                <h2>
+                    @(_isNew
+                        ? "Nueva variable"
+                        : "Editar variable")
+                </h2>
+            </header>
+
+
+            <div class="editor-grid">
+
+                <div class="form-group">
+                    <label>Clave</label>
+
+                    <input value="@_editing.Key"
+                           disabled="@(!_isNew)"
+                           @oninput="VariableKeyChanged"
+                           placeholder="company.name" />
+                </div>
+
+
+                <div class="form-group">
+                    <label>Tipo</label>
+
+                    <select value="@_editing.Type"
+                            @onchange="VariableTypeChanged">
+
+                        @foreach (var type in Enum.GetValues<ReportVariableType>())
+                        {
+                            <option value="@type">
+                                @type
+                            </option>
+                        }
+
+                    </select>
+                </div>
+
+
+                <div class="form-group editor-full">
+                    <label>Valor</label>
+
+                    <input value="@_editing.Value"
+                           @oninput="VariableValueChanged"
+                           placeholder="Talleres ORAN S.L.U." />
+                </div>
+
+
+                <div class="form-group editor-full">
+                    <label>Descripción</label>
+
+                    <input value="@_editing.Description"
+                           @oninput="VariableDescriptionChanged"
+                           placeholder="Nombre fiscal de la empresa" />
+                </div>
+
+            </div>
+
+
+            <div class="editor-actions">
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="CancelEdit">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        class="primary-button"
+                        disabled="@(!CanSave)"
+                        @onclick="SaveAsync">
+                    Guardar
+                </button>
+
+            </div>
+
+        </section>
+    }
+
+
+    @if (_loading)
+    {
+        <div class="page-state">
+            Cargando variables...
+        </div>
+    }
+    else
+    {
+        <div class="variables-card">
+
+            <div class="variables-table-header">
+
+                <span>Variable</span>
+                <span>Valor</span>
+                <span>Tipo</span>
+                <span></span>
+
+            </div>
+
+
+            @foreach (var variable in _variables)
+            {
+                <div class="variable-row">
+
+                    <div class="variable-name">
+
+                        <code>
+                            @variable.Key
+                        </code>
+
+                        @if (!string.IsNullOrWhiteSpace(variable.Description))
+                        {
+                            <small>
+                                @variable.Description
+                            </small>
+                        }
+
+                    </div>
+
+
+                    <div class="variable-value">
+                        @variable.Value
+                    </div>
+
+
+                    <div>
+                        <span class="type-badge">
+                            @variable.Type
+                        </span>
+                    </div>
+
+
+                    <div class="variable-actions">
+
+                        <button type="button"
+                                title="Editar"
+                                @onclick="() => Edit(variable)">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+
+                        <button type="button"
+                                title="Eliminar"
+                                @onclick="() => DeleteAsync(variable)">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+
+                    </div>
+
+                </div>
+            }
+
+        </div>
+    }
+
+</div>
+
+
+@code {
+
+    private IReadOnlyCollection<ReportVariable> _variables = [];
+
+    private ReportVariable? _editing;
+
+    private bool _isNew;
+
+    private bool _loading = true;
+
+
+    private bool CanSave =>
+        _editing is not null &&
+        !string.IsNullOrWhiteSpace(_editing.Key);
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _variables =
+                await RenderSetApi.GetVariablesAsync(
+                    CurrentTenant.Id);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+    private void NewVariable()
+    {
+        _isNew = true;
+
+        _editing =
+            new ReportVariable
+            {
+                Key = string.Empty,
+                Type = ReportVariableType.Text
+            };
+    }
+
+
+    private void Edit(
+        ReportVariable variable)
+    {
+        _isNew = false;
+
+        _editing =
+            new ReportVariable
+            {
+                Key = variable.Key,
+                Value = variable.Value,
+                Description = variable.Description,
+                Type = variable.Type
+            };
+    }
+
+
+    private void CancelEdit()
+    {
+        _editing = null;
+    }
+
+
+    private void VariableKeyChanged(
+        ChangeEventArgs e)
+    {
+        if (_editing is not null)
+        {
+            _editing.Key =
+                e.Value?.ToString() ?? string.Empty;
+        }
+    }
+
+
+    private void VariableValueChanged(
+        ChangeEventArgs e)
+    {
+        if (_editing is not null)
+        {
+            _editing.Value =
+                e.Value?.ToString();
+        }
+    }
+
+
+    private void VariableDescriptionChanged(
+        ChangeEventArgs e)
+    {
+        if (_editing is not null)
+        {
+            _editing.Description =
+                e.Value?.ToString();
+        }
+    }
+
+
+    private void VariableTypeChanged(
+        ChangeEventArgs e)
+    {
+        if (_editing is null)
+            return;
+
+        if (Enum.TryParse<ReportVariableType>(
+                e.Value?.ToString(),
+                out var type))
+        {
+            _editing.Type = type;
+        }
+    }
+
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null ||
+            !CanSave)
+        {
+            return;
+        }
+
+        _editing.Key =
+            _editing.Key.Trim();
+
+        await RenderSetApi.SaveVariableAsync(
+            CurrentTenant.Id,
+            _editing.Key,
+            _editing);
+
+        _editing = null;
+
+        await ReloadAsync();
+    }
+
+
+    private async Task DeleteAsync(
+        ReportVariable variable)
+    {
+        await RenderSetApi.DeleteVariableAsync(
+            CurrentTenant.Id,
+            variable.Key);
+
+        await ReloadAsync();
+    }
+
+}

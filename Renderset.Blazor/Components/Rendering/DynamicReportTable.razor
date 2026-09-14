@@ -1,0 +1,121 @@
+﻿@using System.Text.Json
+@using Renderset.Core.Data
+@using Renderset.Core.Definitions
+@using Renderset.Core.Resolved
+
+@if (VisibleColumns.Any())
+{
+    <div class="dynamic-report-table-wrapper">
+
+        <table class="dynamic-report-table">
+
+            <thead>
+                <tr>
+                    @foreach (var column in VisibleColumns)
+                    {
+                        <th style="@GetWidthStyle(column)"
+                            class="@GetAlignmentClass(column)">
+                            @column.Label
+                        </th>
+                    }
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var row in Rows)
+                {
+                    <tr>
+                        @foreach (var column in VisibleColumns)
+                        {
+                            <td class="@GetAlignmentClass(column)">
+                                @FormatValue(
+                                    row,
+                                    column)
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+
+        </table>
+
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ResolvedReportTable Table { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public JsonElement Data { get; set; }
+
+    private readonly IReportDataAccessor _dataAccessor =
+        new JsonReportDataAccessor();
+
+    private IEnumerable<ResolvedReportColumn> VisibleColumns =>
+        Table.Columns
+            .Where(x => x.Visible)
+            .OrderBy(x => x.Order);
+
+    private IReadOnlyList<JsonElement> Rows =>
+        _dataAccessor.GetCollection(
+            Data,
+            Table.DataPath);
+
+    private string FormatValue(
+        JsonElement row,
+        ResolvedReportColumn column)
+    {
+        if (!_dataAccessor.TryGetValue(
+                row,
+                column.DataPath,
+                out var value)
+            || value is null)
+        {
+            return string.Empty;
+        }
+
+        return column.Type switch
+        {
+            ReportFieldType.Date when value is DateTime date
+                => date.ToString("dd/MM/yyyy"),
+
+            ReportFieldType.Currency when value is decimal number
+                => number.ToString("N2"),
+
+            ReportFieldType.Number when value is decimal number
+                => number.ToString("N2"),
+
+            ReportFieldType.Percentage when value is decimal number
+                => $"{number:N2} %",
+
+            ReportFieldType.Boolean when value is bool boolean
+                => boolean ? "Sí" : "No",
+
+            _ =>
+                value.ToString() ?? string.Empty
+        };
+    }
+
+    private static string GetWidthStyle(
+        ResolvedReportColumn column)
+    {
+        return column.Width.HasValue
+            ? $"width:{column.Width.Value}%;"
+            : string.Empty;
+    }
+
+    private static string GetAlignmentClass(
+        ResolvedReportColumn column)
+    {
+        return column.Type switch
+        {
+            ReportFieldType.Number
+                or ReportFieldType.Currency
+                or ReportFieldType.Percentage
+                => "number",
+
+            _ => string.Empty
+        };
+    }
+}

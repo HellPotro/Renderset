@@ -1,0 +1,136 @@
+﻿@page "/blocks/test"
+
+@using Renderset.Core.Blocks
+
+@inject IRenderSetApi RenderSetApi
+
+<h3>Report blocks test</h3>
+
+<div class="d-flex gap-2 mb-3">
+
+    <button class="btn btn-primary"
+            @onclick="CreateBlocksAsync">
+        Crear bloques de prueba
+    </button>
+
+    <button class="btn btn-secondary"
+            @onclick="LoadBlocksAsync">
+        Cargar bloques
+    </button>
+
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert alert-info">
+        @_message
+    </div>
+}
+
+@if (_blocks.Count > 0)
+{
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Nombre</th>
+                <th>Tipo</th>
+                <th>Configuración</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @foreach (var block in _blocks)
+            {
+                <tr>
+                    <td>
+                        <code>@block.Id</code>
+                    </td>
+
+                    <td>
+                        @block.Name
+                    </td>
+
+                    <td>
+                        @block.Type
+                    </td>
+
+                    <td>
+                        <pre class="mb-0">@block.ConfigurationJson</pre>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+
+    private const string TenantId = "oranauto";
+
+    private IReadOnlyCollection<ReportBlock> _blocks =
+        [];
+
+    private string? _message;
+
+    private async Task CreateBlocksAsync()
+    {
+        var header =
+            new ReportBlock
+            {
+                Id = "oran-default-header",
+                Name = "Cabecera ORAN",
+                Type = ReportBlockType.Header,
+
+                ConfigurationJson =
+                    """
+                    {
+                      "subtitle": "Talleres ORAN S.L.U.",
+                      "showLogo": true,
+                      "logoUrl": "https://oranauto.com/wp-content/uploads/logo.png"
+                    }
+                    """
+            };
+
+        var footer =
+            new ReportBlock
+            {
+                Id = "oran-default-footer",
+                Name = "Pie ORAN",
+                Type = ReportBlockType.Footer,
+
+                ConfigurationJson =
+                    """
+                    {
+                      "text": "Talleres ORAN S.L.U.",
+                      "showGenerationDate": true
+                    }
+                    """
+            };
+
+        await RenderSetApi.SaveBlockAsync(
+            TenantId,
+            header.Id,
+            header);
+
+        await RenderSetApi.SaveBlockAsync(
+            TenantId,
+            footer.Id,
+            footer);
+
+        _message =
+            "Bloques guardados correctamente.";
+
+        await LoadBlocksAsync();
+    }
+
+    private async Task LoadBlocksAsync()
+    {
+        _blocks =
+            await RenderSetApi.GetBlocksAsync(
+                TenantId);
+
+        _message =
+            $"Se han cargado {_blocks.Count} bloques.";
+    }
+}

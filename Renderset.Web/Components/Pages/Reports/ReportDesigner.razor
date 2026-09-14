@@ -1,0 +1,180 @@
+@page "/reports/{ReportId}/designer"
+
+@using System.Text.Json
+@using Renderset.Blazor.Components.Editor
+@using Renderset.Core.Blocks
+@using Renderset.Core.Configurations
+@using Renderset.Core.Persistence
+@using Renderset.Core.Reports
+@using Renderset.Core.Themes
+
+@layout EmptyLayout
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject NavigationManager Navigation
+
+<PageTitle>Designer - RenderSet</PageTitle>
+
+@if (_loading)
+{
+    <div class="p-4">
+        Cargando diseñador...
+    </div>
+}
+else if (_report is null)
+{
+    <div class="p-4">
+
+        <div class="alert alert-danger">
+            No se ha encontrado el report.
+        </div>
+
+    </div>
+}
+else if (_configuration is not null &&
+         _theme is not null)
+{
+    <div class="report-designer-page">
+
+        <ReportEditor Definition="_report.Definition"
+                      @bind-Configuration="_configuration"
+                      @bind-Theme="_theme"
+                      Data="_data"
+                      HeaderBlocks="_headerBlocks"
+                      FooterBlocks="_footerBlocks"
+                      SaveRequested="SaveAsync" />
+
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public string ReportId { get; set; } =
+        default!;
+
+    private bool _loading =
+        true;
+
+    private Report? _report;
+
+    private ReportConfiguration? _configuration;
+
+    private IReadOnlyCollection<ReportBlock> _headerBlocks = [];
+    private IReadOnlyCollection<ReportBlock> _footerBlocks = [];
+
+    private ReportTheme? _theme;
+
+    private JsonElement _data;
+
+    private string? _presetId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _report =
+                await RenderSetApi.GetReportAsync(
+                    CurrentTenant.Id,
+                    ReportId);
+
+            _headerBlocks =
+                await LoadResolvedBlocksAsync(
+                    ReportBlockType.Header);
+
+            _footerBlocks =
+                await LoadResolvedBlocksAsync(
+                    ReportBlockType.Footer);
+
+            var preset =
+                await RenderSetApi.ResolvePresetAsync(
+                    tenantId: CurrentTenant.Id,
+                    reportId: ReportId,
+                    contextType: null,
+                    contextKey: null);
+
+            if (preset is null)
+            {
+                throw new InvalidOperationException(
+                    $"No existe preset default para '{ReportId}'.");
+            }
+
+            _presetId =
+                preset.Id;
+
+            _configuration =
+                Clone(preset.Configuration);
+
+            _theme =
+                Clone(preset.Theme);
+
+            if (_report.SampleData.HasValue)
+            {
+                _data =
+                    _report.SampleData.Value.Clone();
+            }
+        }
+        finally
+        {
+            _loading =
+                false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_configuration is null ||
+            _theme is null ||
+            string.IsNullOrWhiteSpace(_presetId))
+        {
+            return;
+        }
+
+        var preset =
+            new ReportPreset
+            {
+                Id = _presetId,
+                Version = 1,
+
+                Configuration =
+                    Clone(_configuration),
+
+                Theme =
+                    Clone(_theme)
+            };
+
+        await RenderSetApi.SavePresetAsync(
+            CurrentTenant.Id,
+            _presetId,
+            preset);
+    }
+
+    private async Task<IReadOnlyCollection<ReportBlock>> LoadResolvedBlocksAsync(
+    ReportBlockType type)
+    {
+        var blocks =
+            await RenderSetApi.GetBlocksByTypeAsync(
+                CurrentTenant.Id,
+                type);
+
+        var resolvedBlocks =
+            await Task.WhenAll(
+                blocks.Select(block =>
+                    RenderSetApi.GetResolvedBlockAsync(
+                        CurrentTenant.Id,
+                        block.Id)));
+
+        return resolvedBlocks;
+    }
+
+    private static T Clone<T>(
+        T source)
+    {
+        var json =
+            JsonSerializer.Serialize(source);
+
+        return JsonSerializer.Deserialize<T>(json)
+            ?? throw new InvalidOperationException(
+                $"No se ha podido clonar '{typeof(T).Name}'.");
+    }
+}

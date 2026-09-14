@@ -1,0 +1,68 @@
+﻿@using System.Text.Json
+@using Renderset.Core.Resolved
+@using Renderset.Core.Themes
+
+<div class="dynamic-report"
+     style="@ThemeStyle">
+
+    <DynamicReportHeader Header="Report.Header" />
+
+    @foreach (var section in VisibleSections)
+    {
+        <section class="dynamic-report-section">
+
+            @if (!string.IsNullOrWhiteSpace(section.Name))
+            {
+                <div class="dynamic-report-section-title">
+                    @section.Name
+                </div>
+            }
+
+            @if (section.Fields.Any(x => x.Visible))
+            {
+                <DynamicReportFields Section="@section"
+                                     Data="@Data" />
+            }
+
+            @if (section.Table is not null)
+            {
+                <DynamicReportTable Table="@section.Table"
+                                    Data="@Data" />
+            }
+
+        </section>
+    }
+
+    <DynamicReportFooter Footer="Report.Footer" />
+
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ResolvedReportDefinition Report { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public JsonElement Data { get; set; }
+
+    [Parameter]
+    public ReportTheme Theme { get; set; } = new();
+
+    private IEnumerable<ResolvedReportSection> VisibleSections =>
+        Report.Sections
+            .Where(x => x.Visible)
+            .OrderBy(x => x.Order);
+
+    private string ThemeStyle => $"""
+        --report-primary:{Theme.PrimaryColor};
+        --report-secondary:{Theme.SecondaryColor};
+        --report-text:{Theme.TextColor};
+        --report-muted:{Theme.MutedTextColor};
+        --report-border:{Theme.BorderColor};
+        --report-section-bg:{Theme.SectionBackgroundColor};
+        --report-section-text:{Theme.SectionTextColor};
+        --report-table-header-bg:{Theme.TableHeaderBackgroundColor};
+        --report-table-header-text:{Theme.TableHeaderTextColor};
+        --report-background:{Theme.BackgroundColor};
+        --report-font:{Theme.FontFamily};
+        """;
+}

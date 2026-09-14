@@ -1,0 +1,273 @@
+@page "/reports/new"
+
+@using System.Text.Json
+@using Renderset.Core.Configurations
+@using Renderset.Core.Persistence
+@using Renderset.Core.Presets
+@using Renderset.Core.Reports
+@using Renderset.Core.Reports.Inference
+@using Renderset.Core.Themes
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject NavigationManager Navigation
+
+<PageTitle>Nuevo report - RenderSet</PageTitle>
+
+<div class="container py-4">
+
+    <div class="mb-4">
+        <h1 class="h3 mb-1">
+            Nuevo report
+        </h1>
+
+        <div class="text-muted">
+            Pega un JSON de ejemplo y RenderSet generará
+            automáticamente la estructura inicial.
+        </div>
+    </div>
+
+    <div class="row">
+
+        <div class="col-lg-8">
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Nombre
+                </label>
+
+                <input class="form-control"
+                       @bind="_name"
+                       placeholder="Factura cliente" />
+
+            </div>
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Identificador
+                </label>
+
+                <input class="form-control"
+                       @bind="_reportId"
+                       placeholder="invoice" />
+
+                <div class="form-text">
+                    Identificador utilizado posteriormente
+                    desde la API.
+                </div>
+
+            </div>
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    JSON de ejemplo
+                </label>
+
+                <textarea class="form-control font-monospace"
+                          rows="22"
+                          @bind="_json">
+                </textarea>
+
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div class="alert alert-danger">
+                    @_error
+                </div>
+            }
+
+            <div class="d-flex gap-2">
+
+                <button class="btn btn-primary"
+                        disabled="@_saving"
+                        @onclick="CreateReportAsync">
+
+                    @if (_saving)
+                    {
+                        <span>Creando...</span>
+                    }
+                    else
+                    {
+                        <span>Crear report</span>
+                    }
+
+                </button>
+
+                <button class="btn btn-outline-secondary"
+                        @onclick="Cancel">
+                    Cancelar
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+
+    private string _name =
+        string.Empty;
+
+    private string _reportId =
+        string.Empty;
+
+    private string _json =
+        """
+        {
+          "customer": {
+            "code": "000762",
+            "name": "Customer name"
+          },
+          "lines": [
+            {
+              "reference": "001",
+              "description": "Product",
+              "quantity": 1,
+              "price": 10.50
+            }
+          ]
+        }
+        """;
+
+    private string? _error;
+
+    private bool _saving;
+
+    private async Task CreateReportAsync()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            _error =
+                "Introduce un nombre para el report.";
+
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_reportId))
+        {
+            _error =
+                "Introduce un identificador para el report.";
+
+            return;
+        }
+
+        try
+        {
+            _saving = true;
+
+            using var document =
+                JsonDocument.Parse(_json);
+
+            var data =
+                document.RootElement.Clone();
+
+            var schema =
+                JsonSchemaInferer.Infer(data);
+
+            var definition =
+                ReportDefinitionFactory.Create(
+                    _reportId,
+                    _name,
+                    schema);
+
+            var report =
+                new Report
+                {
+                    Id = _reportId,
+                    Name = _name,
+                    Version = 1,
+
+                    Definition = definition,
+                    DataSchema = schema,
+
+                    SampleData = data
+                };
+
+            await RenderSetApi.SaveReportAsync(
+                CurrentTenant.Id,
+                _reportId,
+                report);
+
+            await CreateDefaultPresetAsync();
+
+            Navigation.NavigateTo(
+                $"/reports/{_reportId}/designer");
+        }
+        catch (JsonException ex)
+        {
+            _error =
+                $"El JSON no es válido: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            _error =
+                ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task CreateDefaultPresetAsync()
+    {
+        var presetId =
+            $"{_reportId}-default";
+
+        var preset =
+            new ReportPreset
+            {
+                Id = presetId,
+                Version = 1,
+
+                Configuration =
+                    new ReportConfiguration
+                    {
+                        Id = presetId,
+                        ReportId = _reportId,
+                        Name = "Default",
+                        Version = 1,
+                        Sections = []
+                    },
+
+                Theme =
+                    new ReportTheme
+                    {
+                        Id = "default",
+                        Name = "Default"
+                    }
+            };
+
+        await RenderSetApi.SavePresetAsync(
+            CurrentTenant.Id,
+            presetId,
+            preset);
+
+        await RenderSetApi.SaveAssignmentAsync(
+            CurrentTenant.Id,
+            new ReportPresetAssignment
+            {
+                ReportId = _reportId,
+
+                ContextType = null,
+                ContextKey = null,
+
+                PresetId = presetId
+            });
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo(
+            "/reports");
+    }
+}

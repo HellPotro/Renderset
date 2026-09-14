@@ -1,0 +1,32 @@
+﻿@if (Footer is not null &&
+     Footer.Visible &&
+     HasContent)
+{
+    <footer class="report-footer">
+
+        @if (!string.IsNullOrWhiteSpace(Footer.Text))
+        {
+            <div class="report-footer-text">
+                @Footer.Text
+            </div>
+        }
+
+        @if (Footer.ShowGenerationDate)
+        {
+            <div class="report-footer-generation-date">
+                Generado el @DateTime.Now.ToString("dd/MM/yyyy HH:mm")
+            </div>
+        }
+
+    </footer>
+}
+
+@code {
+
+    [Parameter]
+    public ResolvedReportFooter? Footer { get; set; }
+
+    private bool HasContent =>
+        !string.IsNullOrWhiteSpace(Footer?.Text)
+        || Footer?.ShowGenerationDate == true;
+}

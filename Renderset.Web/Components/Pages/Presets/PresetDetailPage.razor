@@ -1,0 +1,515 @@
+@page "/presets/{ReportId}/{PresetId}"
+
+@using Renderset.Core.Persistence
+@using Renderset.Core.Presets
+@using Renderset.Core.Reports
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject NavigationManager Navigation
+
+<PageTitle>Preset - RenderSet</PageTitle>
+
+<div class="page">
+
+    @if (_loading)
+    {
+        <div class="page-state">
+            Cargando preset...
+        </div>
+    }
+    else if (_preset is null || _report is null)
+    {
+        <div class="page-state">
+            No se ha encontrado el preset.
+        </div>
+    }
+    else
+    {
+        <header class="page-header">
+
+            <div>
+
+                <button type="button"
+                        class="back-button"
+                        @onclick="GoBack">
+
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Presets
+
+                </button>
+
+                <h1>@_preset.Configuration.Name</h1>
+
+                <div class="report-reference">
+                    @_report.Name
+                    <span>·</span>
+                    <code>@_preset.Id</code>
+                </div>
+
+            </div>
+
+
+            <div class="page-actions">
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="OpenDesigner">
+
+                    <i class="fa-solid fa-pen-ruler"></i>
+                    Designer
+
+                </button>
+
+                <button type="button"
+                        class="primary-button"
+                        @onclick="SavePresetAsync">
+
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Guardar
+
+                </button>
+
+            </div>
+
+        </header>
+
+
+        <div class="page-grid">
+
+            <div class="main-column">
+
+                <section class="card">
+
+                    <header class="card-header">
+                        <h2>Preset</h2>
+                    </header>
+
+                    <div class="card-body">
+
+                        <div class="form-group">
+
+                            <label>Nombre</label>
+
+                            <input type="text"
+                                   value="@_preset.Configuration.Name"
+                                   @oninput="PresetNameChanged" />
+
+                        </div>
+
+
+                        <div class="info-grid">
+
+                            <div class="info-item">
+                                <span>ID</span>
+                                <code>@_preset.Id</code>
+                            </div>
+
+                            <div class="info-item">
+                                <span>Report</span>
+                                <code>@_preset.Configuration.ReportId</code>
+                            </div>
+
+                            <div class="info-item">
+                                <span>Versión</span>
+                                <strong>@_preset.Version</strong>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+
+                <section class="card">
+
+                    <header class="card-header assignments-header">
+
+                        <div>
+                            <h2>Assignments</h2>
+
+                            <p>
+                                Seleccionan automáticamente este preset
+                                según el contexto recibido.
+                            </p>
+                        </div>
+
+                    </header>
+
+
+                    <div class="card-body">
+
+                        @if (IsDefaultPreset)
+                        {
+                            <div class="default-panel">
+
+                                <div class="default-icon">
+                                    <i class="fa-solid fa-check"></i>
+                                </div>
+
+                                <div>
+                                    <strong>Preset por defecto</strong>
+
+                                    <span>
+                                        Se utilizará cuando no exista
+                                        un assignment más específico.
+                                    </span>
+                                </div>
+
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="SetAsDefaultAsync">
+
+                                <i class="fa-solid fa-star"></i>
+                                Establecer como default
+
+                            </button>
+                        }
+
+
+                        <div class="assignment-divider"></div>
+
+
+                        @if (_assignments.Count == 0)
+                        {
+                            <div class="empty-assignments">
+                                No hay assignments específicos.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="assignment-list">
+
+                                @foreach (var assignment in SpecificAssignments)
+                                {
+                                    <div class="assignment-row">
+
+                                        <div class="assignment-context">
+
+                                            <span class="context-type">
+                                                @assignment.ContextType
+                                            </span>
+
+                                            <strong>
+                                                @assignment.ContextKey
+                                            </strong>
+
+                                        </div>
+
+                                        <div class="assignment-arrow">
+                                            <i class="fa-solid fa-arrow-right"></i>
+                                        </div>
+
+                                        <div class="assignment-preset">
+                                            @GetPresetName(assignment.PresetId)
+                                        </div>
+
+                                    </div>
+                                }
+
+                            </div>
+                        }
+
+
+                        <div class="new-assignment">
+
+                            <h3>Nuevo assignment</h3>
+
+                            <div class="assignment-form">
+
+                                <div class="form-group">
+
+                                    <label>Tipo de contexto</label>
+
+                                    <input type="text"
+                                           value="@_contextType"
+                                           @oninput="e => _contextType = e.Value?.ToString() ?? string.Empty"
+                                           placeholder="customer" />
+
+                                </div>
+
+                                <div class="form-group">
+
+                                    <label>Valor</label>
+
+                                    <input type="text"
+                                           value="@_contextKey"
+                                           @oninput="e => _contextKey = e.Value?.ToString() ?? string.Empty"
+                                           placeholder="000762" />
+
+                                </div>
+
+                                <button type="button"
+                                        class="primary-button assignment-add"
+                                        disabled="@(!CanAddAssignment)"
+                                        @onclick="AddAssignmentAsync">
+
+                                    <i class="fa-solid fa-plus"></i>
+                                    Añadir
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+            </div>
+
+
+            <aside class="side-column">
+
+                <section class="card">
+
+                    <header class="card-header">
+                        <h2>Resolución</h2>
+                    </header>
+
+                    <div class="card-body">
+
+                        <div class="resolution-flow">
+
+                            <div class="resolution-step">
+                                <span>1</span>
+
+                                <div>
+                                    <strong>Contexto específico</strong>
+                                    <small>customer / 000762</small>
+                                </div>
+                            </div>
+
+                            <div class="resolution-line"></div>
+
+                            <div class="resolution-step">
+                                <span>2</span>
+
+                                <div>
+                                    <strong>Preset default</strong>
+                                    <small>Fallback del report</small>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+            </aside>
+
+        </div>
+    }
+
+</div>
+
+
+@code {
+
+
+    [Parameter]
+    public required string ReportId { get; set; }
+
+    [Parameter]
+    public required string PresetId { get; set; }
+
+
+    private Report? _report;
+
+    private ReportPreset? _preset;
+
+    private IReadOnlyCollection<ReportPreset> _reportPresets = [];
+
+    private IReadOnlyCollection<ReportPresetAssignment> _assignments = [];
+
+
+    private string _contextType = string.Empty;
+
+    private string _contextKey = string.Empty;
+
+    private bool _loading = true;
+
+
+    private IEnumerable<ReportPresetAssignment> SpecificAssignments =>
+        _assignments.Where(x =>
+            !string.IsNullOrWhiteSpace(x.ContextType));
+
+
+    private bool IsDefaultPreset =>
+        _assignments.Any(x =>
+            x.ContextType is null &&
+            x.ContextKey is null &&
+            string.Equals(
+                x.PresetId,
+                PresetId,
+                StringComparison.OrdinalIgnoreCase));
+
+
+    private bool CanAddAssignment =>
+        !string.IsNullOrWhiteSpace(_contextType) &&
+        !string.IsNullOrWhiteSpace(_contextKey);
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _report =
+                await RenderSetApi.GetReportAsync(
+                    CurrentTenant.Id,
+                    ReportId);
+
+            _preset =
+                await RenderSetApi.GetPresetAsync(
+                    CurrentTenant.Id,
+                    PresetId);
+
+            var allPresets =
+                await RenderSetApi.GetPresetsAsync(
+                    CurrentTenant.Id);
+
+            _reportPresets =
+                allPresets
+                    .Where(x =>
+                        string.Equals(
+                            x.Configuration.ReportId,
+                            ReportId,
+                            StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+            await ReloadAssignmentsAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+    private async Task ReloadAssignmentsAsync()
+    {
+        _assignments =
+            await RenderSetApi.GetAssignmentsAsync(
+                CurrentTenant.Id,
+                ReportId);
+    }
+
+
+    private void PresetNameChanged(
+        ChangeEventArgs e)
+    {
+        if (_preset is null)
+            return;
+
+        _preset.Configuration.Name =
+            e.Value?.ToString() ?? string.Empty;
+    }
+
+
+    private async Task SavePresetAsync()
+    {
+        if (_preset is null)
+            return;
+
+        await RenderSetApi.SavePresetAsync(
+            CurrentTenant.Id,
+            _preset.Id,
+            _preset);
+    }
+
+
+    private async Task SetAsDefaultAsync()
+    {
+        if (_preset is null)
+            return;
+
+        var assignment =
+            new ReportPresetAssignment
+            {
+                ReportId = ReportId,
+
+                ContextType = null,
+                ContextKey = null,
+
+                PresetId = _preset.Id
+            };
+
+        await RenderSetApi.SaveAssignmentAsync(
+            CurrentTenant.Id,
+            assignment);
+
+        await ReloadAssignmentsAsync();
+    }
+
+
+    private async Task AddAssignmentAsync()
+    {
+        if (_preset is null ||
+            !CanAddAssignment)
+        {
+            return;
+        }
+
+        var assignment =
+            new ReportPresetAssignment
+            {
+                ReportId = ReportId,
+
+                ContextType =
+                    _contextType.Trim(),
+
+                ContextKey =
+                    _contextKey.Trim(),
+
+                PresetId =
+                    _preset.Id
+            };
+
+        await RenderSetApi.SaveAssignmentAsync(
+            CurrentTenant.Id,
+            assignment);
+
+        _contextType = string.Empty;
+        _contextKey = string.Empty;
+
+        await ReloadAssignmentsAsync();
+    }
+
+
+    private string GetPresetName(
+        string presetId)
+    {
+        return _reportPresets
+                   .FirstOrDefault(x =>
+                       string.Equals(
+                           x.Id,
+                           presetId,
+                           StringComparison.OrdinalIgnoreCase))
+                   ?.Configuration.Name
+               ?? presetId;
+    }
+
+
+    private void OpenDesigner()
+    {
+        Navigation.NavigateTo(
+            $"/reports/{Uri.EscapeDataString(ReportId)}/designer");
+    }
+
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo(
+            "/presets");
+    }
+
+}

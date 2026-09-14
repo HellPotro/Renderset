@@ -1,0 +1,666 @@
+@using System.Globalization
+@using Renderset.Core.Configurations
+@using Renderset.Core.Definitions
+@using Renderset.Core.Resolved
+
+<div class="report-editor-section">
+
+    <div class="report-editor-section-header">
+
+        <label class="report-editor-toggle-row">
+            <input type="checkbox"
+                   class="report-editor-toggle-input"
+                   checked="@Resolved.Visible"
+                   @onchange="e => SetSectionVisibleAsync(GetBool(e))" />
+
+            <span class="report-editor-toggle"></span>
+
+            <span class="report-editor-section-name">
+                @Definition.Name
+            </span>
+        </label>
+
+        <div class="report-editor-section-actions">
+
+            <button type="button"
+                    class="report-editor-section-order-button"
+                    title="Mover sección arriba"
+                    disabled="@(!CanMoveUp)"
+                    @onclick="MoveUp">
+                <i class="fa-solid fa-arrow-up"></i>
+            </button>
+
+            <button type="button"
+                    class="report-editor-section-order-button"
+                    title="Mover sección abajo"
+                    disabled="@(!CanMoveDown)"
+                    @onclick="MoveDown">
+                <i class="fa-solid fa-arrow-down"></i>
+            </button>
+
+            <button type="button"
+                    class="report-editor-collapse-button"
+                    @onclick="ToggleCollapsed">
+
+                <span class="report-editor-chevron @(_collapsed ? null : "expanded")"></span>
+
+            </button>
+
+        </div>
+
+    </div>
+
+    @if (Resolved.Visible && !_collapsed)
+    {
+        <div class="report-editor-section-content">
+
+            @if (Definition.Table is null &&
+                Definition.Fields.Count > 0)
+            {
+                <div class="report-editor-section-layout">
+
+                    <label>Layout</label>
+
+                    <select value="@Resolved.Layout"
+                            @onchange="LayoutChangedAsync">
+
+                        <option value="@ReportSectionLayout.List">
+                            Lista
+                        </option>
+
+                        <option value="@ReportSectionLayout.Columns2">
+                            2 columnas
+                        </option>
+
+                        <option value="@ReportSectionLayout.Columns3">
+                            3 columnas
+                        </option>
+
+                        <option value="@ReportSectionLayout.Columns4">
+                            4 columnas
+                        </option>
+
+                    </select>
+
+                </div>
+            }
+
+            @foreach (var fieldDefinition in OrderedFields)
+            {
+                var resolvedField = Resolved.GetField(fieldDefinition.Id);
+
+                if (resolvedField is null)
+                    continue;
+
+                <div class="report-editor-item @(resolvedField.Visible ? null : "report-editor-item-disabled") @GetDragClass(DragItemType.Field, fieldDefinition.Id)"
+                     draggable="true"
+                     @key="fieldDefinition.Id"
+                     @ondragstart="() => StartDrag(DragItemType.Field, fieldDefinition.Id)"
+                     @ondragover:preventDefault
+                     @ondrop="() => DropFieldAsync(fieldDefinition.Id)"
+                     @ondragend="ClearDrag">
+
+                    <div class="report-editor-item-header">
+
+                        <div class="report-editor-item-main">
+
+                            <span class="report-editor-drag-handle"
+                                  title="Arrastrar para reordenar">
+                                ⋮⋮
+                            </span>
+
+                            <label class="report-editor-toggle-row"
+                                   @onclick:stopPropagation="true">
+
+                                <input type="checkbox"
+                                       class="report-editor-toggle-input"
+                                       checked="@resolvedField.Visible"
+                                       @onchange="e => SetFieldVisibleAsync(fieldDefinition, GetBool(e))" />
+
+                                <span class="report-editor-toggle"></span>
+
+                                <span class="report-editor-toggle-label report-editor-item-title"
+                                      @onclick="() => ToggleFieldExpanded(fieldDefinition.Id)">
+                                    @resolvedField.Label
+                                </span>
+
+                            </label>
+
+                        </div>
+
+                        <button type="button"
+                                class="report-editor-item-expand-button"
+                                title="@(IsFieldExpanded(fieldDefinition.Id)
+                                                    ? "Ocultar propiedades"
+                                                    : "Editar propiedades")"
+                                @onclick="() => ToggleFieldExpanded(fieldDefinition.Id)">
+
+                            <span class="report-editor-chevron @(IsFieldExpanded(fieldDefinition.Id) ? "expanded" : null)">
+                            </span>
+
+                        </button>
+
+                    </div>
+
+                    @if (resolvedField.Visible &&
+                         IsFieldExpanded(fieldDefinition.Id))
+                    {
+                        <div class="report-editor-item-properties">
+
+                            <div class="report-editor-property">
+
+                                <label>Etiqueta</label>
+
+                                <input type="text"
+                                       value="@GetFieldLabel(fieldDefinition)"
+                                       @onchange="e => SetFieldLabelAsync(
+                                                                  fieldDefinition,
+                                                                  e.Value?.ToString())"
+                                       placeholder="@fieldDefinition.Label" />
+                            </div>
+
+                        </div>
+                    }
+
+                </div>
+            }
+
+            @if (Definition.Table is not null && Resolved.Table is not null)
+            {
+                <div class="report-editor-subtitle">
+                    Columnas
+                </div>
+
+                @foreach (var columnDefinition in OrderedColumns)
+                {
+                    var resolvedColumn = Resolved.Table.GetColumn(columnDefinition.Id);
+
+                    if (resolvedColumn is null)
+                        continue;
+
+                    <div class="report-editor-item @(resolvedColumn.Visible ? null : "report-editor-item-disabled") @GetDragClass(DragItemType.Column, columnDefinition.Id)"
+                         draggable="true"
+                         @key="columnDefinition.Id"
+                         @ondragstart="() => StartDrag(DragItemType.Column, columnDefinition.Id)"
+                         @ondragover:preventDefault
+                         @ondrop="() => DropColumnAsync(columnDefinition.Id)"
+                         @ondragend="ClearDrag">
+
+                        <div class="report-editor-item-header">
+
+                            <div class="report-editor-item-main">
+
+                                <span class="report-editor-drag-handle"
+                                      title="Arrastrar para reordenar">
+                                    ⋮⋮
+                                </span>
+
+                                <label class="report-editor-toggle-row">
+
+                                    <input type="checkbox"
+                                           class="report-editor-toggle-input"
+                                           checked="@resolvedColumn.Visible"
+                                           @onchange="e => SetColumnVisibleAsync(columnDefinition, GetBool(e))" />
+
+                                    <span class="report-editor-toggle"></span>
+
+                                    <span class="report-editor-toggle-label">
+                                        @resolvedColumn.Label
+                                    </span>
+
+                                </label>
+
+                            </div>
+
+                        </div>
+
+                        @if (resolvedColumn.Visible)
+                        {
+                            <input class="report-editor-text-input"
+                                   value="@GetColumnLabel(columnDefinition)"
+                                   @onchange="e => SetColumnLabelAsync(columnDefinition, e.Value?.ToString())"
+                                   placeholder="@columnDefinition.Label" />
+
+                            <div class="report-editor-width">
+
+                                <label>Ancho %</label>
+
+                                <input type="number"
+                                       min="5"
+                                       max="80"
+                                       step="1"
+                                       value="@GetWidthValue(resolvedColumn)"
+                                       @onchange="e => SetColumnWidthAsync(columnDefinition, e.Value?.ToString())" />
+
+                            </div>
+                        }
+
+                    </div>
+                }
+            }
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public ReportSectionDefinition Definition { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public ResolvedReportSection Resolved { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public ReportConfiguration Configuration { get; set; } = default!;
+
+    [Parameter]
+    public bool CanMoveUp { get; set; }
+
+    [Parameter]
+    public bool CanMoveDown { get; set; }
+
+    [Parameter]
+    public EventCallback MoveUp { get; set; }
+
+    [Parameter]
+    public EventCallback MoveDown { get; set; }
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private bool _collapsed = true;
+    private DragItem? _dragItem;
+
+    private IEnumerable<ReportFieldDefinition> OrderedFields =>
+        Definition.Fields.OrderBy(x =>
+            Resolved.GetField(x.Id)?.Order ?? x.Order);
+
+    private IEnumerable<ReportColumnDefinition> OrderedColumns =>
+        Definition.Table is null || Resolved.Table is null
+            ? []
+            : Definition.Table.Columns.OrderBy(x =>
+                Resolved.Table.GetColumn(x.Id)?.Order ?? x.Order);
+
+    private void ToggleCollapsed() =>
+        _collapsed = !_collapsed;
+
+
+    private readonly HashSet<string> _expandedFields =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly HashSet<string> _expandedColumns =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private async Task LayoutChangedAsync(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<ReportSectionLayout>(
+                e.Value?.ToString(),
+                out var layout))
+        {
+            return;
+        }
+
+        var section =
+            GetOrCreateSectionConfiguration();
+
+        section.Layout = layout;
+
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetSectionVisibleAsync(bool visible)
+    {
+        GetOrCreateSectionConfiguration().Visible = visible;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetFieldVisibleAsync(
+        ReportFieldDefinition field,
+        bool visible)
+    {
+        GetOrCreateFieldConfiguration(field.Id).Visible = visible;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetFieldLabelAsync(
+        ReportFieldDefinition field,
+        string? label)
+    {
+        GetOrCreateFieldConfiguration(field.Id).LabelOverride = Normalize(label);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetColumnVisibleAsync(
+        ReportColumnDefinition column,
+        bool visible)
+    {
+        GetOrCreateColumnConfiguration(column.Id).Visible = visible;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetColumnLabelAsync(
+        ReportColumnDefinition column,
+        string? label)
+    {
+        GetOrCreateColumnConfiguration(column.Id).LabelOverride = Normalize(label);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetColumnWidthAsync(
+        ReportColumnDefinition column,
+        string? value)
+    {
+        var configuration =
+            GetOrCreateColumnConfiguration(column.Id);
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            configuration.Width = null;
+            await Changed.InvokeAsync();
+            return;
+        }
+
+        if (!decimal.TryParse(
+                value,
+                NumberStyles.Number,
+                CultureInfo.InvariantCulture,
+                out var width))
+        {
+            return;
+        }
+
+        configuration.Width = Math.Clamp(width, 5m, 80m);
+        await Changed.InvokeAsync();
+    }
+
+    private ReportSectionConfiguration GetOrCreateSectionConfiguration()
+    {
+        var section =
+            Configuration.Sections.FirstOrDefault(x =>
+                string.Equals(
+                    x.SectionId,
+                    Definition.Id,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (section is not null)
+            return section;
+
+        section =
+            new ReportSectionConfiguration
+            {
+                SectionId = Definition.Id
+            };
+
+        Configuration.Sections.Add(section);
+
+        return section;
+    }
+
+    private ReportFieldConfiguration GetOrCreateFieldConfiguration(
+        string fieldId)
+    {
+        var section = GetOrCreateSectionConfiguration();
+
+        var configuration =
+            section.Fields.FirstOrDefault(x =>
+                string.Equals(
+                    x.FieldId,
+                    fieldId,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (configuration is not null)
+            return configuration;
+
+        configuration = new ReportFieldConfiguration
+        {
+            FieldId = fieldId
+        };
+
+        section.Fields.Add(configuration);
+        return configuration;
+    }
+
+    private ReportColumnConfiguration GetOrCreateColumnConfiguration(
+        string columnId)
+    {
+        var section = GetOrCreateSectionConfiguration();
+
+        var tableDefinition =
+            Definition.Table
+            ?? throw new InvalidOperationException(
+                $"La sección '{Definition.Id}' no contiene una tabla.");
+
+        section.Table ??= new ReportTableConfiguration
+        {
+            TableId = tableDefinition.Id
+        };
+
+        var configuration =
+            section.Table.Columns.FirstOrDefault(x =>
+                string.Equals(
+                    x.ColumnId,
+                    columnId,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (configuration is not null)
+            return configuration;
+
+        configuration = new ReportColumnConfiguration
+        {
+            ColumnId = columnId
+        };
+
+        section.Table.Columns.Add(configuration);
+        return configuration;
+    }
+
+    private ReportFieldConfiguration? FindFieldConfiguration(
+        string fieldId) =>
+        Configuration.Sections
+            .FirstOrDefault(x =>
+                string.Equals(
+                    x.SectionId,
+                    Definition.Id,
+                    StringComparison.OrdinalIgnoreCase))
+            ?.Fields
+            .FirstOrDefault(x =>
+                string.Equals(
+                    x.FieldId,
+                    fieldId,
+                    StringComparison.OrdinalIgnoreCase));
+
+    private ReportColumnConfiguration? FindColumnConfiguration(
+        string columnId) =>
+        Configuration.Sections
+            .FirstOrDefault(x =>
+                string.Equals(
+                    x.SectionId,
+                    Definition.Id,
+                    StringComparison.OrdinalIgnoreCase))
+            ?.Table
+            ?.Columns
+            .FirstOrDefault(x =>
+                string.Equals(
+                    x.ColumnId,
+                    columnId,
+                    StringComparison.OrdinalIgnoreCase));
+
+    private string GetFieldLabel(ReportFieldDefinition field) =>
+        FindFieldConfiguration(field.Id)?.LabelOverride
+        ?? field.Label;
+
+    private string GetColumnLabel(ReportColumnDefinition column) =>
+        FindColumnConfiguration(column.Id)?.LabelOverride
+        ?? column.Label;
+
+    private static string GetWidthValue(ResolvedReportColumn column) =>
+        column.Width?.ToString(CultureInfo.InvariantCulture)
+        ?? string.Empty;
+
+    private enum DragItemType
+    {
+        Field,
+        Column
+    }
+
+    private sealed record DragItem(
+        DragItemType Type,
+        string ItemId);
+
+    private void StartDrag(
+        DragItemType type,
+        string itemId)
+    {
+        _dragItem = new DragItem(type, itemId);
+    }
+
+    private void ClearDrag()
+    {
+        _dragItem = null;
+    }
+
+    private string? GetDragClass(
+        DragItemType type,
+        string itemId)
+    {
+        if (_dragItem is null)
+            return null;
+
+        return _dragItem.Type == type &&
+               string.Equals(
+                   _dragItem.ItemId,
+                   itemId,
+                   StringComparison.OrdinalIgnoreCase)
+            ? "report-editor-item-dragging"
+            : null;
+    }
+
+    private async Task DropFieldAsync(string targetFieldId)
+    {
+        if (!CanDrop(DragItemType.Field, targetFieldId))
+            return;
+
+        var fields =
+            Resolved.Fields
+                .OrderBy(x => x.Order)
+                .ToList();
+
+        var dragged = fields.FirstOrDefault(x =>
+            string.Equals(
+                x.Id,
+                _dragItem!.ItemId,
+                StringComparison.OrdinalIgnoreCase));
+
+        var target = fields.FirstOrDefault(x =>
+            string.Equals(
+                x.Id,
+                targetFieldId,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (dragged is null || target is null)
+            return;
+
+        fields.Remove(dragged);
+        fields.Insert(fields.IndexOf(target), dragged);
+
+        for (var i = 0; i < fields.Count; i++)
+        {
+            GetOrCreateFieldConfiguration(fields[i].Id).Order =
+                (i + 1) * 10;
+        }
+
+        ClearDrag();
+        await Changed.InvokeAsync();
+    }
+
+    private async Task DropColumnAsync(string targetColumnId)
+    {
+        if (!CanDrop(DragItemType.Column, targetColumnId) ||
+            Resolved.Table is null)
+        {
+            return;
+        }
+
+        var columns =
+            Resolved.Table.Columns
+                .OrderBy(x => x.Order)
+                .ToList();
+
+        var dragged = columns.FirstOrDefault(x =>
+            string.Equals(
+                x.Id,
+                _dragItem!.ItemId,
+                StringComparison.OrdinalIgnoreCase));
+
+        var target = columns.FirstOrDefault(x =>
+            string.Equals(
+                x.Id,
+                targetColumnId,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (dragged is null || target is null)
+            return;
+
+        columns.Remove(dragged);
+        columns.Insert(columns.IndexOf(target), dragged);
+
+        for (var i = 0; i < columns.Count; i++)
+        {
+            GetOrCreateColumnConfiguration(columns[i].Id).Order =
+                (i + 1) * 10;
+        }
+
+        ClearDrag();
+        await Changed.InvokeAsync();
+    }
+
+    private bool CanDrop(
+        DragItemType type,
+        string targetItemId)
+    {
+        if (_dragItem is null ||
+            _dragItem.Type != type)
+        {
+            return false;
+        }
+
+        if (!string.Equals(
+                _dragItem.ItemId,
+                targetItemId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        ClearDrag();
+        return false;
+    }
+
+    private bool IsFieldExpanded(string fieldId) =>
+        _expandedFields.Contains(fieldId);
+
+    private void ToggleFieldExpanded(string fieldId)
+    {
+        if (!_expandedFields.Add(fieldId))
+            _expandedFields.Remove(fieldId);
+    }
+
+    private bool IsColumnExpanded(string columnId) =>
+        _expandedColumns.Contains(columnId);
+
+    private void ToggleColumnExpanded(string columnId)
+    {
+        if (!_expandedColumns.Add(columnId))
+            _expandedColumns.Remove(columnId);
+    }
+
+    private static bool GetBool(ChangeEventArgs e) =>
+        e.Value is bool value && value;
+
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+}

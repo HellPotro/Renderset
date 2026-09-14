@@ -1,0 +1,90 @@
+﻿.variable-picker {
+    position: relative;
+    z-index: 20;
+}
+
+.variable-picker-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 1px solid #d8e1e5;
+    border-radius: 7px;
+    background: #fff;
+    color: #536970;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .variable-picker-button:hover {
+        background: #f5f8f9;
+        color: #173d4f;
+    }
+
+.variable-picker-menu {
+    position: absolute;
+    z-index: 1000;
+    bottom: calc(100% + 6px);
+    right: 0;
+    width: 320px;
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid #d8e1e5;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 12px 32px rgba(20, 42, 53, .16);
+}
+
+.variable-picker-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid #edf1f3;
+    color: #87969c;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.variable-picker-item {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-bottom: 1px solid #f0f3f4;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+}
+
+    .variable-picker-item:hover {
+        background: #f6f9fa;
+    }
+
+    .variable-picker-item:last-child {
+        border-bottom: 0;
+    }
+
+.variable-picker-key {
+    color: #294b59;
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.variable-picker-value {
+    margin-top: 3px;
+    overflow: hidden;
+    color: #8a989e;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.variable-picker-empty {
+    padding: 16px;
+    color: #8c999f;
+    font-size: 10px;
+    text-align: center;
+}

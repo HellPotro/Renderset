@@ -1,0 +1,78 @@
+@using Renderset.Core.Themes
+
+<div class="report-editor-block">
+
+    <ColorEditor Label="Color principal"
+                 Value="@Theme.PrimaryColor"
+                 ValueChanged="value => SetThemeColor(nameof(Theme.PrimaryColor), value)" />
+
+    <ColorEditor Label="Fondo secciones"
+                 Value="@Theme.SectionBackgroundColor"
+                 ValueChanged="value => SetThemeColor(nameof(Theme.SectionBackgroundColor), value)" />
+
+    <ColorEditor Label="Texto secciones"
+                 Value="@Theme.SectionTextColor"
+                 ValueChanged="value => SetThemeColor(nameof(Theme.SectionTextColor), value)" />
+
+    <ColorEditor Label="Cabecera tabla"
+                 Value="@Theme.TableHeaderBackgroundColor"
+                 ValueChanged="value => SetThemeColor(nameof(Theme.TableHeaderBackgroundColor), value)" />
+
+    <ColorEditor Label="Texto cabecera"
+                 Value="@Theme.TableHeaderTextColor"
+                 ValueChanged="value => SetThemeColor(nameof(Theme.TableHeaderTextColor), value)" />
+
+    <ColorEditor Label="Bordes"
+                 Value="@Theme.BorderColor"
+                 ValueChanged="value => SetThemeColor(nameof(Theme.BorderColor), value)" />
+
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public ReportTheme Theme { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private async Task SetThemeColor(
+        string property,
+        string value)
+    {
+        switch (property)
+        {
+            case nameof(Theme.PrimaryColor):
+                Theme.PrimaryColor = value;
+                break;
+
+            case nameof(Theme.SectionBackgroundColor):
+                Theme.SectionBackgroundColor = value;
+                break;
+
+            case nameof(Theme.SectionTextColor):
+                Theme.SectionTextColor = value;
+                break;
+
+            case nameof(Theme.TableHeaderBackgroundColor):
+                Theme.TableHeaderBackgroundColor = value;
+                break;
+
+            case nameof(Theme.TableHeaderTextColor):
+                Theme.TableHeaderTextColor = value;
+                break;
+
+            case nameof(Theme.BorderColor):
+                Theme.BorderColor = value;
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(property),
+                    property,
+                    null);
+        }
+
+        await Changed.InvokeAsync();
+    }
+}

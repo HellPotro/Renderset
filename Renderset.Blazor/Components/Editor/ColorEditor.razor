@@ -1,0 +1,57 @@
+﻿<div class="report-editor-color">
+
+    <label>
+        @Label
+    </label>
+
+    <div class="report-editor-color-controls">
+
+        <input type="color"
+               value="@Value"
+               @oninput="OnInput" />
+
+        <input type="text"
+               value="@Value"
+               @onchange="OnTextChanged" />
+
+    </div>
+
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string Value { get; set; } = "#000000";
+
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    private Task OnInput(
+        ChangeEventArgs args)
+    {
+        var value =
+            args.Value?.ToString();
+
+        if (string.IsNullOrWhiteSpace(value))
+            return Task.CompletedTask;
+
+        return ValueChanged.InvokeAsync(
+            value);
+    }
+
+    private Task OnTextChanged(
+        ChangeEventArgs args)
+    {
+        var value =
+            args.Value?.ToString();
+
+        if (string.IsNullOrWhiteSpace(value))
+            return Task.CompletedTask;
+
+        return ValueChanged.InvokeAsync(
+            value);
+    }
+}

@@ -1,0 +1,182 @@
+@using Renderset.Core.Blocks
+@using Renderset.Core.Configurations
+@using Renderset.Core.Definitions
+@using Renderset.Core.Resolved
+
+<div class="report-editor-section">
+
+    <div class="report-editor-section-header">
+
+        <label class="report-editor-toggle-row">
+
+            <input type="checkbox"
+                   class="report-editor-toggle-input"
+                   checked="@IsVisible"
+                   @onchange="ToggleVisibleAsync" />
+
+            <span class="report-editor-toggle">
+                <span></span>
+            </span>
+
+            <strong>Cabecera</strong>
+
+        </label>
+
+    </div>
+
+    @if (IsVisible)
+    {
+        <div class="report-editor-section-content">
+
+            @if (Blocks.Count > 0)
+            {
+                <div class="report-editor-property">
+                    <label>Bloque reutilizable</label>
+
+                    <select value="@Header.BlockId"
+                            @onchange="BlockChangedAsync">
+
+                        <option value="">Sin bloque</option>
+
+                        @foreach (var block in Blocks)
+                        {
+                            <option value="@block.Id">
+                                @block.Name
+                            </option>
+                        }
+
+                    </select>
+                </div>
+            }
+
+            <div class="report-editor-property">
+                <label>Título</label>
+
+                <input type="text"
+                       value="@Resolved?.Title"
+                       @oninput="TitleChangedAsync" />
+            </div>
+
+            <div class="report-editor-property">
+                <label>Subtítulo</label>
+
+                <input type="text"
+                       value="@Resolved?.Subtitle"
+                       @oninput="SubtitleChangedAsync" />
+            </div>
+
+            @if (Definition.AllowLogo)
+            {
+                <label class="report-editor-toggle-row">
+
+                    <input type="checkbox"
+                           class="report-editor-toggle-input"
+                           checked="@ShowLogo"
+                           @onchange="ToggleLogoAsync" />
+
+                    <span class="report-editor-toggle">
+                        <span></span>
+                    </span>
+
+                    <span>Mostrar logo</span>
+
+                </label>
+
+                @if (ShowLogo)
+                {
+                    <div class="report-editor-property">
+                        <label>URL del logo</label>
+
+                        <input type="url"
+                               value="@Resolved?.LogoUrl"
+                               @oninput="LogoUrlChangedAsync"
+                               placeholder="https://..." />
+                    </div>
+                }
+            }
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public ReportHeaderDefinition Definition { get; set; } = default!;
+
+    [Parameter]
+    public ResolvedReportHeader? Resolved { get; set; }
+
+    [Parameter, EditorRequired]
+    public ReportConfiguration Configuration { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyCollection<ReportBlock> Blocks { get; set; } = [];
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private ReportHeaderConfiguration Header
+    {
+        get
+        {
+            Configuration.Header ??= new ReportHeaderConfiguration();
+            return Configuration.Header;
+        }
+    }
+
+    private bool IsVisible =>
+        Resolved?.Visible
+        ?? Header.Visible
+        ?? Definition.VisibleByDefault;
+
+    private bool ShowLogo =>
+        Resolved?.ShowLogo
+        ?? Header.ShowLogo
+        ?? Definition.AllowLogo;
+
+    private async Task ToggleVisibleAsync(ChangeEventArgs e)
+    {
+        Header.Visible = GetBool(e);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task BlockChangedAsync(ChangeEventArgs e)
+    {
+        Header.BlockId = Normalize(e.Value?.ToString());
+        await Changed.InvokeAsync();
+    }
+
+    private async Task TitleChangedAsync(ChangeEventArgs e)
+    {
+        Header.TitleOverride = Normalize(e.Value?.ToString());
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SubtitleChangedAsync(ChangeEventArgs e)
+    {
+        Header.SubtitleOverride = Normalize(e.Value?.ToString());
+        await Changed.InvokeAsync();
+    }
+
+    private async Task ToggleLogoAsync(ChangeEventArgs e)
+    {
+        Header.ShowLogo = GetBool(e);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task LogoUrlChangedAsync(ChangeEventArgs e)
+    {
+        Header.LogoUrl = Normalize(e.Value?.ToString());
+        await Changed.InvokeAsync();
+    }
+
+    private static bool GetBool(ChangeEventArgs e) =>
+        e.Value is bool value && value;
+
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+}

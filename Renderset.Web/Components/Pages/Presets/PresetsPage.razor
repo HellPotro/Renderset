@@ -1,0 +1,323 @@
+@page "/presets"
+
+@using Renderset.Core.Configurations
+@using Renderset.Core.Persistence
+@using Renderset.Core.Reports
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject NavigationManager Navigation
+
+<PageTitle>Presets - RenderSet</PageTitle>
+
+<div class="page">
+
+    <header class="page-header">
+
+        <div>
+            <h1>Presets</h1>
+
+            <p>
+                Configuraciones reutilizables para adaptar un mismo report
+                a distintos clientes o contextos.
+            </p>
+        </div>
+
+    </header>
+
+
+    @if (_loading)
+    {
+        <div class="page-state">
+            Cargando presets...
+        </div>
+    }
+    else
+    {
+        <div class="toolbar">
+
+            <div class="toolbar-group">
+
+                <label>Report</label>
+
+                <select value="@_selectedReportId"
+                        @onchange="ReportFilterChanged">
+
+                    <option value="">
+                        Todos los reports
+                    </option>
+
+                    @foreach (var report in _reports)
+                    {
+                        <option value="@report.Id">
+                            @report.Name
+                        </option>
+                    }
+
+                </select>
+
+            </div>
+
+        </div>
+
+
+        @if (!FilteredGroups.Any())
+        {
+            <div class="empty-state">
+
+                <div class="empty-state-icon">
+                    <i class="fa-solid fa-sliders"></i>
+                </div>
+
+                <h2>No hay presets</h2>
+
+                <p>
+                    Los presets aparecerán aquí cuando crees configuraciones
+                    para tus reports.
+                </p>
+
+            </div>
+        }
+        else
+        {
+            <div class="preset-groups">
+
+                @foreach (var group in FilteredGroups)
+                {
+                    <section class="preset-group">
+
+                        <header class="preset-group-header">
+
+                            <div>
+
+                                <h2>
+                                    @group.Report.Name
+                                </h2>
+
+                                <code>
+                                    @group.Report.Id
+                                </code>
+
+                            </div>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="() => OpenReport(group.Report)">
+                                <i class="fa-solid fa-pen-ruler"></i>
+                                Abrir designer
+                            </button>
+
+                        </header>
+
+
+                        <div class="preset-list">
+
+                            @foreach (var preset in group.Presets)
+                            {
+                                <article class="preset-row">
+
+                                    <div class="preset-icon">
+                                        <i class="fa-solid fa-sliders"></i>
+                                    </div>
+
+                                    <div class="preset-info">
+
+                                        <div class="preset-title">
+
+                                            <strong>
+                                                @preset.Configuration.Name
+                                            </strong>
+
+                                            @if (IsDefaultPreset(
+                                                group.Report.Id,
+                                                preset.Id))
+                                            {
+                                                <span class="default-badge">
+                                                    Default
+                                                </span>
+                                            }
+
+                                        </div>
+
+                                        <code>
+                                            @preset.Id
+                                        </code>
+
+                                    </div>
+
+
+                                    <div class="preset-version">
+                                        v@(preset.Version)
+                                    </div>
+
+
+                                    <div class="preset-actions">
+
+                                        <button type="button"
+                                                class="icon-button"
+                                                title="Editar preset"
+                                                @onclick="() => EditPreset(
+                                                                                                    group.Report,
+                                                                                                    preset)">
+<i class="fa-solid fa-pen"></i>
+</button>
+
+                                    </div>
+
+                                </article>
+                            }
+
+                        </div>
+
+                    </section>
+                }
+
+            </div>
+        }
+    }
+
+</div>
+
+
+@code {
+
+    private IReadOnlyCollection<Report> _reports = [];
+
+    private IReadOnlyCollection<ReportPreset> _presets = [];
+
+    private readonly Dictionary<string, string?> _defaultPresets =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private string? _selectedReportId;
+
+    private bool _loading = true;
+
+
+    private IEnumerable<PresetGroup> FilteredGroups
+    {
+        get
+        {
+            var reports =
+                string.IsNullOrWhiteSpace(_selectedReportId)
+                    ? _reports
+                    : _reports.Where(x =>
+                        string.Equals(
+                            x.Id,
+                            _selectedReportId,
+                            StringComparison.OrdinalIgnoreCase));
+
+            foreach (var report in reports)
+            {
+                var presets =
+                    _presets
+                        .Where(x =>
+                            string.Equals(
+                                x.Configuration.ReportId,
+                                report.Id,
+                                StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(x =>
+                            x.Configuration.Name)
+                        .ToList();
+
+                if (presets.Count == 0)
+                    continue;
+
+                yield return new PresetGroup(
+                    report,
+                    presets);
+            }
+        }
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _reports =
+                await RenderSetApi.GetReportsAsync(
+                    CurrentTenant.Id);
+
+            _presets =
+                await RenderSetApi.GetPresetsAsync(
+                    CurrentTenant.Id);
+
+            foreach (var report in _reports)
+            {
+                await LoadDefaultPresetAsync(
+                    report.Id);
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+    private async Task LoadDefaultPresetAsync(
+        string reportId)
+    {
+        try
+        {
+            var assignment =
+                await RenderSetApi.GetDefaultAssignmentAsync(
+                    CurrentTenant.Id,
+                    reportId);
+
+            _defaultPresets[reportId] =
+                assignment?.PresetId;
+        }
+        catch
+        {
+            _defaultPresets[reportId] =
+                null;
+        }
+    }
+
+
+    private bool IsDefaultPreset(
+        string reportId,
+        string presetId)
+    {
+        return _defaultPresets.TryGetValue(
+                   reportId,
+                   out var defaultPresetId)
+               &&
+               string.Equals(
+                   defaultPresetId,
+                   presetId,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+
+    private void ReportFilterChanged(
+        ChangeEventArgs e)
+    {
+        _selectedReportId =
+            e.Value?.ToString();
+    }
+
+
+    private void OpenReport(
+        Report report)
+    {
+        Navigation.NavigateTo(
+            $"/reports/{Uri.EscapeDataString(report.Id)}/designer");
+    }
+
+
+    private void EditPreset(
+        Report report,
+        ReportPreset preset)
+    {
+        Navigation.NavigateTo(
+            $"/presets/{Uri.EscapeDataString(report.Id)}/{Uri.EscapeDataString(preset.Id)}");
+    }
+
+
+    private sealed record PresetGroup(
+        Report Report,
+        IReadOnlyCollection<ReportPreset> Presets);
+
+}

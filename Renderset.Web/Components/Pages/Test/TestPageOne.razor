@@ -1,0 +1,97 @@
+﻿@page "/reports/test"
+
+@using System.Text.Json
+@using Renderset.Core.Configurations
+@using Renderset.Core.Definitions
+@using Renderset.Core.Reports
+@using Renderset.Core.Reports.Inference
+@using Renderset.Core.Themes
+@using Renderset.Blazor.Components.Editor
+
+<h3>Report inference test</h3>
+
+<button class="btn btn-primary"
+        @onclick="BuildFromJson">
+    Generar desde JSON
+</button>
+
+@if (_definition is not null &&
+     _configuration is not null &&
+     _theme is not null)
+{
+    <ReportEditor Definition="_definition"
+                  @bind-Configuration="_configuration"
+                  @bind-Theme="_theme"
+                  Data="_data" />
+}
+
+@code {
+    private ReportDefinition? _definition;
+    private ReportConfiguration? _configuration;
+    private ReportTheme? _theme;
+    private ReportDataSchema? _schema;
+    private JsonElement _data;
+
+    private void BuildFromJson()
+    {
+        const string json = """
+        {
+          "customer": {
+            "code": "000762",
+            "name": "N.V. Van Wezel Autoparts",
+            "vat": "BE0458770012",
+            "active": true
+          },
+          "invoiceDate": "2026-09-13",
+          "createdAt": "2026-09-13T13:20:00Z",
+          "lines": [
+            {
+              "reference": "00104011",
+              "description": "Front Wing",
+              "quantity": 10,
+              "price": 28.70
+            },
+            {
+              "reference": "00111030",
+              "description": "Front Bonnet",
+              "quantity": 9,
+              "price": 50.61,
+              "discount": 5
+            }
+          ]
+        }
+        """;
+
+        using var document =
+            JsonDocument.Parse(json);
+
+        _data =
+            document.RootElement.Clone();
+
+        _schema =
+            JsonSchemaInferer.Infer(_data);
+
+        _definition =
+            ReportDefinitionFactory.Create(
+                reportId: "invoice-auto",
+                reportName: "Factura automática",
+                schema: _schema);
+
+        _configuration =
+            new ReportConfiguration
+            {
+                Id = "invoice-auto-default",
+                ReportId = "invoice-auto",
+                Name = "Default",
+                Version = 1,
+                Sections = []
+            };
+
+        _theme =
+            new ReportTheme
+            {
+                Id = "default",
+                Name = "Default"
+            };
+    }
+}

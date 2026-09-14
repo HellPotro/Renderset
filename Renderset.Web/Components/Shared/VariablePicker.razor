@@ -1,0 +1,78 @@
+﻿@using Renderset.Core.Variables
+
+<div class="variable-picker">
+
+    <button type="button"
+            class="variable-picker-button"
+            @onclick="Toggle">
+
+        <i class="fa-solid fa-code"></i>
+        Variable
+
+    </button>
+
+    @if (_open)
+    {
+        <div class="variable-picker-menu">
+
+            <div class="variable-picker-header">
+                Variables disponibles
+            </div>
+
+            @if (Variables.Count == 0)
+            {
+                <div class="variable-picker-empty">
+                    No hay variables definidas.
+                </div>
+            }
+            else
+            {
+                @foreach (var variable in Variables)
+                {
+                    <button type="button"
+                            class="variable-picker-item"
+                            @onclick="() => SelectAsync(variable)">
+
+                        <div class="variable-picker-key">
+                            @variable.Key
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(variable.Value))
+                        {
+                            <div class="variable-picker-value">
+                                @variable.Value
+                            </div>
+                        }
+
+                    </button>
+                }
+            }
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    [Parameter]
+    public IReadOnlyCollection<ReportVariable> Variables { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<ReportVariable> Selected { get; set; }
+
+    private bool _open;
+
+    private void Toggle()
+    {
+        _open = !_open;
+    }
+
+    private async Task SelectAsync(
+        ReportVariable variable)
+    {
+        _open = false;
+
+        await Selected.InvokeAsync(variable);
+    }
+}

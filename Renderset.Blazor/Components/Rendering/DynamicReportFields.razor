@@ -1,0 +1,117 @@
+﻿@using System.Text.Json
+@using Renderset.Core.Configurations
+@using Renderset.Core.Data
+@using Renderset.Core.Resolved
+
+@if (Section.Visible)
+{
+    var visibleFields = Section.Fields
+        .Where(x => x.Visible)
+        .OrderBy(x => x.Order)
+        .ToList();
+
+    @if (visibleFields.Count > 0)
+    {
+        @if (Section.Layout == ReportSectionLayout.List)
+        {
+            <div class="dynamic-report-fields">
+
+                @foreach (var field in visibleFields)
+                {
+                    <div class="dynamic-report-field">
+
+                        <div class="dynamic-report-field-label">
+                            @field.Label
+                        </div>
+
+                        <div class="dynamic-report-field-value">
+                            @FormatValue(field)
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+        }
+        else
+        {
+            <div class="@GetGridClass()">
+
+                @foreach (var field in visibleFields)
+                {
+                    <div class="dynamic-report-metric">
+
+                        <div class="dynamic-report-metric-label">
+                            @field.Label
+                        </div>
+
+                        <div class="dynamic-report-metric-value">
+                            @FormatValue(field)
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+        }
+    }
+}
+
+@code {
+
+    [Parameter, EditorRequired]
+    public ResolvedReportSection Section { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public JsonElement Data { get; set; }
+
+    private readonly IReportDataAccessor _dataAccessor =
+        new JsonReportDataAccessor();
+
+    private string GetGridClass()
+    {
+        var columns = Section.Layout switch
+        {
+            ReportSectionLayout.Columns2 => 2,
+            ReportSectionLayout.Columns3 => 3,
+            ReportSectionLayout.Columns4 => 4,
+            _ => 1
+        };
+
+        return $"dynamic-report-grid dynamic-report-grid-{columns}";
+    }
+
+    private string FormatValue(
+        ResolvedReportField field)
+    {
+        if (!_dataAccessor.TryGetValue(
+                Data,
+                field.DataPath,
+                out var value)
+            || value is null)
+        {
+            return string.Empty;
+        }
+
+        return field.Type switch
+        {
+            ReportFieldType.Date when value is DateTime date
+                => date.ToString("dd/MM/yyyy"),
+
+            ReportFieldType.Currency when value is decimal number
+                => number.ToString("N2"),
+
+            ReportFieldType.Number when value is decimal number
+                => number.ToString("N2"),
+
+            ReportFieldType.Percentage when value is decimal number
+                => $"{number:N2} %",
+
+            ReportFieldType.Boolean when value is bool boolean
+                => boolean ? "Sí" : "No",
+
+            _ =>
+                value.ToString() ?? string.Empty
+        };
+    }
+}

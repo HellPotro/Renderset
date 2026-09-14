@@ -1,0 +1,148 @@
+@using Renderset.Core.Blocks
+@using Renderset.Core.Configurations
+@using Renderset.Core.Definitions
+@using Renderset.Core.Resolved
+
+<div class="report-editor-section">
+
+    <div class="report-editor-section-header">
+
+        <label class="report-editor-toggle-row">
+
+            <input type="checkbox"
+                   class="report-editor-toggle-input"
+                   checked="@IsVisible"
+                   @onchange="ToggleVisibleAsync" />
+
+            <span class="report-editor-toggle">
+                <span></span>
+            </span>
+
+            <strong>Pie de página</strong>
+
+        </label>
+
+    </div>
+
+    @if (IsVisible)
+    {
+        <div class="report-editor-section-content">
+
+            @if (Blocks.Count > 0)
+            {
+                <div class="report-editor-property">
+                    <label>Bloque reutilizable</label>
+
+                    <select value="@Footer.BlockId"
+                            @onchange="BlockChangedAsync">
+
+                        <option value="">Sin bloque</option>
+
+                        @foreach (var block in Blocks)
+                        {
+                            <option value="@block.Id">
+                                @block.Name
+                            </option>
+                        }
+
+                    </select>
+                </div>
+            }
+
+            <div class="report-editor-property">
+                <label>Texto</label>
+
+                <textarea rows="3"
+                          value="@Resolved?.Text"
+                          @oninput="TextChangedAsync"
+                          placeholder="Texto legal, datos de contacto..."></textarea>
+            </div>
+
+            <label class="report-editor-toggle-row">
+
+                <input type="checkbox"
+                       class="report-editor-toggle-input"
+                       checked="@ShowGenerationDate"
+                       @onchange="GenerationDateChangedAsync" />
+
+                <span class="report-editor-toggle">
+                    <span></span>
+                </span>
+
+                <span>Mostrar fecha de generación</span>
+
+            </label>
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public ReportFooterDefinition Definition { get; set; } = default!;
+
+    [Parameter]
+    public ResolvedReportFooter? Resolved { get; set; }
+
+    [Parameter, EditorRequired]
+    public ReportConfiguration Configuration { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyCollection<ReportBlock> Blocks { get; set; } = [];
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private ReportFooterConfiguration Footer
+    {
+        get
+        {
+            Configuration.Footer ??= new ReportFooterConfiguration();
+            return Configuration.Footer;
+        }
+    }
+
+    private bool IsVisible =>
+        Resolved?.Visible
+        ?? Footer.Visible
+        ?? Definition.VisibleByDefault;
+
+    private bool ShowGenerationDate =>
+        Resolved?.ShowGenerationDate
+        ?? Footer.ShowGenerationDate
+        ?? Definition.ShowGenerationDate;
+
+    private async Task ToggleVisibleAsync(ChangeEventArgs e)
+    {
+        Footer.Visible = GetBool(e);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task BlockChangedAsync(ChangeEventArgs e)
+    {
+        Footer.BlockId = Normalize(e.Value?.ToString());
+        await Changed.InvokeAsync();
+    }
+
+    private async Task TextChangedAsync(ChangeEventArgs e)
+    {
+        Footer.TextOverride = Normalize(e.Value?.ToString());
+        await Changed.InvokeAsync();
+    }
+
+    private async Task GenerationDateChangedAsync(ChangeEventArgs e)
+    {
+        Footer.ShowGenerationDate = GetBool(e);
+        await Changed.InvokeAsync();
+    }
+
+    private static bool GetBool(ChangeEventArgs e) =>
+        e.Value is bool value && value;
+
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+}

@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="Renderset.ApiService/Renderset.ApiService.csproj" />
+  <Project Path="Renderset.AppHost/Renderset.AppHost.csproj" />
+  <Project Path="Renderset.Blazor/Renderset.Blazor.csproj" />
+  <Project Path="Renderset.Core/Renderset.Core.csproj" />
+  <Project Path="Renderset.Infraestructure/Renderset.Infrastructure.csproj" />
+  <Project Path="Renderset.ServiceDefaults/Renderset.ServiceDefaults.csproj" />
+  <Project Path="Renderset.Tests/Renderset.Tests.csproj" />
+  <Project Path="Renderset.Web/Renderset.Web.csproj" />
+</Solution>

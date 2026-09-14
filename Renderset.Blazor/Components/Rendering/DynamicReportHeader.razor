@@ -1,0 +1,38 @@
+﻿@using Renderset.Core.Resolved
+
+@if (Header is not null && Header.Visible)
+{
+    <div class="report-header">
+
+        @if (Header.ShowLogo &&
+             !string.IsNullOrWhiteSpace(Header.LogoUrl))
+        {
+            <div class="report-header-logo">
+                <img src="@Header.LogoUrl"
+                     alt="Logo" />
+            </div>
+        }
+
+        <div class="report-header-content">
+
+            @if (!string.IsNullOrWhiteSpace(Header.Title))
+            {
+                <h1>@Header.Title</h1>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(Header.Subtitle))
+            {
+                <div class="report-header-subtitle">
+                    @Header.Subtitle
+                </div>
+            }
+
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter]
+    public ResolvedReportHeader? Header { get; set; }
+}

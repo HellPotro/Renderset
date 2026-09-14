@@ -1,0 +1,247 @@
+@page "/blocks"
+
+@using Renderset.Core.Blocks
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject NavigationManager Navigation
+
+<PageTitle>Blocks - RenderSet</PageTitle>
+
+<div class="page">
+
+    <header class="page-header">
+
+        <div>
+            <h1>Blocks</h1>
+
+            <p>
+                Componentes reutilizables que puedes compartir
+                entre distintos reports.
+            </p>
+        </div>
+
+        <button type="button"
+                class="primary-button"
+                @onclick="CreateBlock">
+            <i class="fa-solid fa-plus"></i>
+            Nuevo bloque
+        </button>
+
+    </header>
+
+
+    @if (_loading)
+    {
+        <div class="page-state">
+            Cargando bloques...
+        </div>
+    }
+    else if (_blocks.Count == 0)
+    {
+        <div class="empty-state">
+
+            <div class="empty-state-icon">
+                <i class="fa-solid fa-cubes"></i>
+            </div>
+
+            <h2>No hay bloques</h2>
+
+            <p>
+                Crea una cabecera, un pie de página u otro
+                componente reutilizable.
+            </p>
+
+            <button type="button"
+                    class="primary-button"
+                    @onclick="CreateBlock">
+                Crear primer bloque
+            </button>
+
+        </div>
+    }
+    else
+    {
+        <div class="blocks-toolbar">
+
+            <button type="button"
+                    class="@GetFilterClass(null)"
+                    @onclick="() => SetFilter(null)">
+                Todos
+            </button>
+
+            <button type="button"
+                    class="@GetFilterClass(ReportBlockType.Header)"
+                    @onclick="() => SetFilter(ReportBlockType.Header)">
+                Cabeceras
+            </button>
+
+            <button type="button"
+                    class="@GetFilterClass(ReportBlockType.Footer)"
+                    @onclick="() => SetFilter(ReportBlockType.Footer)">
+                Pies
+            </button>
+
+        </div>
+
+
+        <div class="blocks-grid">
+
+            @foreach (var block in FilteredBlocks)
+            {
+                <article class="block-card">
+
+                    <div class="block-card-header">
+
+                        <div class="block-icon @GetBlockTypeClass(block.Type)">
+                            <i class="@GetBlockIcon(block.Type)"></i>
+                        </div>
+
+                        <div class="block-heading">
+
+                            <h2>@block.Name</h2>
+
+                            <code>@block.Id</code>
+
+                        </div>
+
+                        <span class="block-type">
+                            @block.Type
+                        </span>
+
+                    </div>
+
+
+                    <div class="block-content">
+
+                        <pre>@GetConfigurationPreview(block)</pre>
+
+                    </div>
+
+
+                    <footer class="block-card-footer">
+
+                        <button type="button"
+                                class="secondary-button"
+                                @onclick="() => EditBlock(block)">
+                            <i class="fa-solid fa-pen"></i>
+                            Editar
+                        </button>
+
+                    </footer>
+
+                </article>
+            }
+
+        </div>
+    }
+
+</div>
+
+
+@code {
+
+    private IReadOnlyCollection<ReportBlock> _blocks = [];
+
+    private ReportBlockType? _filter;
+
+    private bool _loading = true;
+
+
+    private IEnumerable<ReportBlock> FilteredBlocks =>
+        _filter is null
+            ? _blocks
+            : _blocks.Where(x => x.Type == _filter);
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _blocks =
+                await RenderSetApi.GetBlocksAsync(
+                    CurrentTenant.Id);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+    private void SetFilter(
+        ReportBlockType? type)
+    {
+        _filter = type;
+    }
+
+
+    private string GetFilterClass(
+        ReportBlockType? type)
+    {
+        return _filter == type
+            ? "filter-button active"
+            : "filter-button";
+    }
+
+
+    private void CreateBlock()
+    {
+        Navigation.NavigateTo("/blocks/new");
+    }
+
+
+    private void EditBlock(
+        ReportBlock block)
+    {
+        Navigation.NavigateTo(
+            $"/blocks/{Uri.EscapeDataString(block.Id)}");
+    }
+
+
+    private static string GetBlockIcon(
+        ReportBlockType type)
+    {
+        return type switch
+        {
+            ReportBlockType.Header =>
+                "fa-solid fa-heading",
+
+            ReportBlockType.Footer =>
+                "fa-solid fa-align-justify",
+
+            _ =>
+                "fa-solid fa-cube"
+        };
+    }
+
+
+    private static string GetBlockTypeClass(
+        ReportBlockType type)
+    {
+        return type switch
+        {
+            ReportBlockType.Header => "header",
+            ReportBlockType.Footer => "footer",
+            _ => ""
+        };
+    }
+
+
+    private static string GetConfigurationPreview(
+        ReportBlock block)
+    {
+        if (string.IsNullOrWhiteSpace(
+                block.ConfigurationJson))
+        {
+            return "Sin configuración";
+        }
+
+        const int maxLength = 180;
+
+        return block.ConfigurationJson.Length <= maxLength
+            ? block.ConfigurationJson
+            : block.ConfigurationJson[..maxLength] + "…";
+    }
+
+}

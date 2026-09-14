@@ -1,0 +1,538 @@
+@page "/blocks/new"
+@page "/blocks/{BlockId}"
+
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Renderset.Core.Blocks
+@using Renderset.Core.Configurations 
+@using Renderset.Core.Variables
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject NavigationManager Navigation
+
+<PageTitle>@PageTitleText - RenderSet</PageTitle>
+
+<div class="page">
+
+    <header class="page-header">
+
+        <div>
+            <button type="button"
+                    class="back-button"
+                    @onclick="GoBack">
+                <i class="fa-solid fa-arrow-left"></i>
+                Blocks
+            </button>
+
+            <h1>@PageTitleText</h1>
+
+            <p>
+                Configura un bloque reutilizable para usarlo en varios reports.
+            </p>
+        </div>
+
+        <div class="page-actions">
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="GoBack">
+                Cancelar
+            </button>
+
+            <button type="button"
+                    class="primary-button"
+                    @onclick="SaveAsync"
+                    disabled="@_saving">
+                <i class="fa-solid fa-floppy-disk"></i>
+                Guardar
+            </button>
+
+        </div>
+
+    </header>
+
+
+    @if (_loading)
+    {
+        <div class="page-state">
+            Cargando bloque...
+        </div>
+    }
+    else
+    {
+        <div class="editor-layout">
+
+            <section class="editor-card">
+
+                <div class="editor-card-header">
+                    <h2>General</h2>
+                </div>
+
+                <div class="editor-card-body">
+
+                    <div class="form-group">
+                        <label>Identificador</label>
+
+                        <input type="text"
+                               value="@_id"
+                               @oninput="e => _id = e.Value?.ToString() ?? string.Empty"
+                               disabled="@IsEditMode"
+                               placeholder="oran-default-header" />
+
+                        <small>
+                            Se usa internamente para referenciar el bloque.
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Nombre</label>
+
+                        <input type="text"
+                               value="@_name"
+                               @oninput="e => _name = e.Value?.ToString() ?? string.Empty"
+                               placeholder="Cabecera ORAN" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Tipo</label>
+
+                        <select value="@_type"
+                                @onchange="BlockTypeChanged"
+                                disabled="@IsEditMode">
+
+                            <option value="@ReportBlockType.Header">
+                                Cabecera
+                            </option>
+
+                            <option value="@ReportBlockType.Footer">
+                                Pie de página
+                            </option>
+
+                        </select>
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            @if (_type == ReportBlockType.Header)
+            {
+                <section class="editor-card">
+
+                    <div class="editor-card-header">
+                        <h2>Cabecera</h2>
+                    </div>
+
+                    <div class="editor-card-body">
+
+                        <div class="form-group">
+                            <label>Título</label>
+
+                            <input type="text"
+                                   value="@_header.TitleOverride"
+                                   @oninput="HeaderTitleChanged"
+                                   placeholder="Opcional" />
+                        </div>
+
+                        <div class="form-group">
+
+                            <label>Subtítulo</label>
+
+                            <div class="variable-input-row">
+
+                                <input type="text"
+                                       value="@_header.SubtitleOverride"
+                                       @oninput="HeaderSubtitleChanged"
+                                       placeholder="Talleres ORAN S.L.U." />
+
+                                <VariablePicker Variables="_variables"
+                                                Selected="InsertSubtitleVariableAsync" />
+
+                            </div>
+
+                        </div>
+
+                        <label class="toggle-row">
+
+                            <input type="checkbox"
+                                   checked="@(_header.ShowLogo ?? false)"
+                                   @onchange="HeaderShowLogoChanged" />
+
+                            <span>Mostrar logo</span>
+
+                        </label>
+
+                        @if (_header.ShowLogo == true)
+                        {
+                            <div class="form-group">
+
+                                <label>URL del logo</label>
+
+                                <div class="variable-input-row">
+
+                                    <input type="url"
+                                           value="@_header.LogoUrl"
+                                           @oninput="HeaderLogoUrlChanged"
+                                           placeholder="https://..." />
+
+                                    <VariablePicker Variables="_variables"
+                                                    Selected="InsertLogoVariableAsync" />
+
+                                </div>
+
+                            </div>
+                        }
+
+                    </div>
+
+                </section>
+            }
+
+
+            @if (_type == ReportBlockType.Footer)
+            {
+                <section class="editor-card">
+
+                    <div class="editor-card-header">
+                        <h2>Pie de página</h2>
+                    </div>
+
+                    <div class="editor-card-body">
+
+                        <div class="form-group">
+                            <label>Texto</label>
+
+                            <textarea rows="4"
+                                      value="@_footer.TextOverride"
+                                      @oninput="FooterTextChanged"
+                                      placeholder="Texto legal, dirección, contacto..."></textarea>
+                        </div>
+
+                        <label class="toggle-row">
+
+                            <input type="checkbox"
+                                   checked="@(_footer.ShowGenerationDate ?? false)"
+                                   @onchange="FooterGenerationDateChanged" />
+
+                            <span>Mostrar fecha de generación</span>
+
+                        </label>
+
+                        <label class="toggle-row">
+
+                            <input type="checkbox"
+                                   checked="@(_footer.ShowPageNumber ?? false)"
+                                   @onchange="FooterPageNumberChanged" />
+
+                            <span>Mostrar número de página</span>
+
+                        </label>
+
+                    </div>
+
+                </section>
+            }
+
+
+            <section class="editor-card">
+
+                <div class="editor-card-header">
+                    <h2>JSON resultante</h2>
+                </div>
+
+                <div class="editor-card-body">
+
+                    <pre class="json-preview">@ConfigurationJson</pre>
+
+                </div>
+
+            </section>
+
+        </div>
+    }
+
+</div>
+
+
+@code {
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
+    };
+
+    [Parameter]
+    public string? BlockId { get; set; }
+
+    private string _id = string.Empty;
+    private string _name = string.Empty;
+
+    private ReportBlockType _type =
+        ReportBlockType.Header;
+
+    private ReportHeaderConfiguration _header = new();
+
+    private ReportFooterConfiguration _footer = new();
+
+    private IReadOnlyCollection<ReportVariable> _variables = [];
+
+    private string? _activeVariableTarget;
+
+    private bool _loading;
+    private bool _saving;
+
+
+    private bool IsEditMode =>
+        !string.IsNullOrWhiteSpace(BlockId);
+
+    private string PageTitleText =>
+        IsEditMode
+            ? "Editar bloque"
+            : "Nuevo bloque";
+
+
+    private string ConfigurationJson
+    {
+        get
+        {
+            return _type switch
+            {
+                ReportBlockType.Header =>
+                    JsonSerializer.Serialize(
+                        _header,
+                        JsonOptions),
+
+                ReportBlockType.Footer =>
+                    JsonSerializer.Serialize(
+                        _footer,
+                        JsonOptions),
+
+                _ => "{}"
+            };
+        }
+    }
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!IsEditMode)
+        {
+            ResetNewBlock();
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            var block =
+                await RenderSetApi.GetBlockAsync(
+                    CurrentTenant.Id,
+                    BlockId!);
+
+            _id = block.Id;
+            _name = block.Name;
+            _type = block.Type;
+
+            if (_type == ReportBlockType.Header)
+            {
+                _header =
+                    JsonSerializer.Deserialize<ReportHeaderConfiguration>(
+                        block.ConfigurationJson,
+                        JsonOptions)
+                    ?? new ReportHeaderConfiguration();
+            }
+            else if (_type == ReportBlockType.Footer)
+            {
+                _footer =
+                    JsonSerializer.Deserialize<ReportFooterConfiguration>(
+                        block.ConfigurationJson,
+                        JsonOptions)
+                    ?? new ReportFooterConfiguration();
+            }
+
+            _variables = await RenderSetApi.GetVariablesAsync(CurrentTenant.Id);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+    private void ResetNewBlock()
+    {
+        _id = string.Empty;
+        _name = string.Empty;
+
+        _type =
+            ReportBlockType.Header;
+
+        _header =
+            new ReportHeaderConfiguration();
+
+        _footer =
+            new ReportFooterConfiguration();
+    }
+
+
+    private void BlockTypeChanged(
+        ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ReportBlockType>(
+                e.Value?.ToString(),
+                out var type))
+        {
+            _type = type;
+        }
+    }
+
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_id))
+            return;
+
+        if (string.IsNullOrWhiteSpace(_name))
+            return;
+
+        _saving = true;
+
+        try
+        {
+            var block =
+                new ReportBlock
+                {
+                    Id = _id.Trim(),
+                    Name = _name.Trim(),
+                    Type = _type,
+                    ConfigurationJson =
+                        ConfigurationJson
+                };
+
+            await RenderSetApi.SaveBlockAsync(
+                CurrentTenant.Id,
+                block.Id,
+                block);
+
+            Navigation.NavigateTo(
+                "/blocks");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo(
+            "/blocks");
+    }
+
+
+    private void HeaderTitleChanged(
+        ChangeEventArgs e)
+    {
+        _header.TitleOverride =
+            Normalize(
+                e.Value?.ToString());
+    }
+
+
+    private void HeaderSubtitleChanged(
+        ChangeEventArgs e)
+    {
+        _header.SubtitleOverride =
+            Normalize(
+                e.Value?.ToString());
+    }
+
+
+    private void HeaderShowLogoChanged(
+        ChangeEventArgs e)
+    {
+        _header.ShowLogo =
+            e.Value is bool value &&
+            value;
+    }
+
+
+    private void HeaderLogoUrlChanged(
+        ChangeEventArgs e)
+    {
+        _header.LogoUrl =
+            Normalize(
+                e.Value?.ToString());
+    }
+
+
+    private void FooterTextChanged(
+        ChangeEventArgs e)
+    {
+        _footer.TextOverride =
+            Normalize(
+                e.Value?.ToString());
+    }
+
+
+    private void FooterGenerationDateChanged(
+        ChangeEventArgs e)
+    {
+        _footer.ShowGenerationDate =
+            e.Value is bool value &&
+            value;
+    }
+
+
+    private void FooterPageNumberChanged(
+        ChangeEventArgs e)
+    {
+        _footer.ShowPageNumber =
+            e.Value is bool value &&
+            value;
+    }
+
+    private Task InsertSubtitleVariableAsync(
+    ReportVariable variable)
+    {
+        _header.SubtitleOverride =
+            $"{{{{{variable.Key}}}}}";
+
+        return Task.CompletedTask;
+    }
+
+    private Task InsertLogoVariableAsync(
+        ReportVariable variable)
+    {
+        _header.LogoUrl =
+            $"{{{{{variable.Key}}}}}";
+
+        return Task.CompletedTask;
+    }
+
+
+    private static string? Normalize(
+        string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+    }
+
+}

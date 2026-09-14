@@ -1,0 +1,232 @@
+﻿.page {
+    max-width: 1150px;
+    margin: 0 auto;
+    padding: 36px 40px 60px;
+}
+
+.page-header {
+    margin-bottom: 28px;
+}
+
+    .page-header h1 {
+        margin: 0;
+        color: #172b35;
+        font-size: 26px;
+        font-weight: 700;
+    }
+
+    .page-header p {
+        margin: 7px 0 0;
+        color: #74858d;
+        font-size: 13px;
+    }
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    margin-bottom: 22px;
+    padding: 12px;
+    border: 1px solid #e0e7ea;
+    border-radius: 9px;
+    background: #fff;
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+    .toolbar-group label {
+        color: #6b7c84;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .toolbar-group select {
+        min-width: 220px;
+        padding: 7px 9px;
+        border: 1px solid #d8e1e5;
+        border-radius: 6px;
+        background: #fafcfc;
+        color: #344b55;
+        font-size: 11px;
+    }
+
+.preset-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.preset-group {
+    overflow: hidden;
+    border: 1px solid #dde5e8;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.preset-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 16px 18px;
+    border-bottom: 1px solid #e9eef0;
+}
+
+    .preset-group-header h2 {
+        margin: 0 0 3px;
+        color: #203740;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .preset-group-header code {
+        color: #89979d;
+        font-size: 10px;
+    }
+
+.preset-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.preset-row {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 64px;
+    padding: 11px 18px;
+    border-bottom: 1px solid #edf1f3;
+}
+
+    .preset-row:last-child {
+        border-bottom: 0;
+    }
+
+    .preset-row:hover {
+        background: #fafcfc;
+    }
+
+.preset-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 7px;
+    background: #edf3f5;
+    color: #54717d;
+    font-size: 12px;
+}
+
+.preset-info {
+    min-width: 0;
+}
+
+.preset-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 3px;
+}
+
+    .preset-title strong {
+        color: #2c424b;
+        font-size: 12px;
+    }
+
+.preset-info code {
+    color: #929fa5;
+    font-size: 9px;
+}
+
+.default-badge {
+    padding: 3px 6px;
+    border-radius: 5px;
+    background: #e6f2eb;
+    color: #347352;
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.preset-version {
+    color: #87969c;
+    font-size: 10px;
+}
+
+.preset-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 31px;
+    height: 31px;
+    border: 1px solid #dbe3e7;
+    border-radius: 6px;
+    background: #fff;
+    color: #61757e;
+    cursor: pointer;
+}
+
+    .icon-button:hover {
+        background: #f1f5f6;
+        color: #173d4f;
+    }
+
+.secondary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 7px 11px;
+    border: 1px solid #d8e1e5;
+    border-radius: 7px;
+    background: #fff;
+    color: #455b65;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .secondary-button:hover {
+        background: #f5f8f9;
+    }
+
+.page-state,
+.empty-state {
+    padding: 60px 30px;
+    text-align: center;
+    color: #778990;
+}
+
+.empty-state {
+    border: 1px dashed #d8e1e5;
+    border-radius: 10px;
+    background: #fafcfc;
+}
+
+.empty-state-icon {
+    margin-bottom: 14px;
+    color: #82979f;
+    font-size: 26px;
+}
+
+.empty-state h2 {
+    margin: 0 0 6px;
+    color: #334d58;
+    font-size: 16px;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 12px;
+}
