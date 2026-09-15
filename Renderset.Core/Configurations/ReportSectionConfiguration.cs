@@ -16,7 +16,11 @@ public sealed class ReportSectionConfiguration
 
     public ReportSectionLayout? Layout { get; set; }
 
+    public List<ReportSectionConfiguration> Sections { get; set; } = [];
+
     public List<ReportFieldConfiguration> Fields { get; set; } = [];
 
     public ReportTableConfiguration? Table { get; set; }
+
+    public bool? ShowName { get; set; }
 }

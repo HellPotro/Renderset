@@ -173,12 +173,13 @@
 .renderset-main {
     min-width: 0;
     min-height: 0;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .renderset-content {
     min-width: 0;
-    min-height: 100%;
+    min-height: 0;
 }
 
 @media (max-width: 800px) {

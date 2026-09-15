@@ -1,0 +1,83 @@
+@using System.Text.Json
+@using Renderset.Core.Data
+@using Renderset.Core.Resolved
+
+@if (Section.Visible)
+{
+    @if (string.IsNullOrWhiteSpace(Section.DataPath))
+    {
+        @RenderOnce(Data)
+    }
+    else
+    {
+        @foreach (var item in Items)
+        {
+            <div class="dynamic-report-repeat-item">
+                @RenderOnce(item)
+            </div>
+        }
+    }
+}
+
+@code {
+
+    private readonly IReportDataAccessor _dataAccessor =
+        new JsonReportDataAccessor();
+
+    [Parameter, EditorRequired]
+    public ResolvedReportSection Section { get; set; } = default!;
+
+    [Parameter]
+    public JsonElement Data { get; set; }
+
+    /// <summary>
+    /// Anidamiento visual, para que un albarán dentro de una factura se vea
+    /// como algo contenido y no como otra sección suelta.
+    /// </summary>
+    [Parameter]
+    public int Depth { get; set; }
+
+    private IReadOnlyList<JsonElement> Items =>
+        _dataAccessor.GetCollection(
+            Data,
+            Section.DataPath!);
+
+    /// <summary>
+    /// Se pinta igual repita o no; lo único que cambia es qué elemento hace
+    /// de contexto de datos. Los DataPath de dentro son relativos a él, así
+    /// que no hay que concatenar rutas en ningún sitio.
+    /// </summary>
+    private RenderFragment RenderOnce(
+        JsonElement context) =>
+        @<section class="dynamic-report-section @($"is-depth-{Math.Min(Depth, 3)}")">
+
+            @if (Section.ShowName && !string.IsNullOrWhiteSpace(Section.Name))
+            {
+                <div class="dynamic-report-section-title">
+                    @Section.Name
+                </div>
+            }
+
+            @if (Section.Fields.Any(x => x.Visible))
+            {
+                <DynamicReportFields Section="@Section"
+                                     Data="@context" />
+            }
+
+            @if (Section.Table is not null)
+            {
+                <DynamicReportTable Table="@Section.Table"
+                                    Data="@context" />
+            }
+
+            @foreach (var child in Section.Sections
+                                          .Where(x => x.Visible)
+                                          .OrderBy(x => x.Order))
+            {
+                <DynamicReportSection Section="@child"
+                                      Data="@context"
+                                      Depth="@(Depth + 1)" />
+            }
+
+        </section>;
+}

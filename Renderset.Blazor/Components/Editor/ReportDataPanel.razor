@@ -1,0 +1,222 @@
+@using System.Text.Json
+
+@if (Visible)
+{
+    <div class="rdp-backdrop" @onclick="Closed"></div>
+
+    <aside class="rdp">
+
+        <header class="rdp-head">
+
+            <div>
+                <h2>Datos</h2>
+                <p>
+                    El dataset con el que se está pintando la vista previa.
+                </p>
+            </div>
+
+            <button type="button"
+                    class="rdp-close"
+                    title="Cerrar"
+                    @onclick="Closed">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </header>
+
+        <div class="rdp-stats">
+
+            <div>
+                <strong>@_fieldCount</strong>
+                <span>campos raíz</span>
+            </div>
+
+            <div>
+                <strong>@_collectionCount</strong>
+                <span>colecciones</span>
+            </div>
+
+            <div>
+                <strong>@_itemCount</strong>
+                <span>elementos</span>
+            </div>
+
+        </div>
+
+        <textarea class="rdp-editor"
+                  spellcheck="false"
+                  value="@_draft"
+                  @onchange="DraftChanged"></textarea>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="rdp-error">
+                @_error
+            </div>
+        }
+
+        <footer class="rdp-foot">
+
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@(!_dirty)"
+                    @onclick="Revert">
+                Descartar cambios
+            </button>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@(!_dirty || _error is not null)"
+                    @onclick="ApplyAsync">
+                <i class="fa-solid fa-check"></i>
+                Aplicar
+            </button>
+
+        </footer>
+
+    </aside>
+}
+
+@code {
+
+    private static readonly JsonSerializerOptions Pretty =
+        new() { WriteIndented = true };
+
+    [Parameter]
+    public bool Visible { get; set; }
+
+    [Parameter]
+    public JsonElement Data { get; set; }
+
+    [Parameter]
+    public EventCallback<JsonElement> DataChanged { get; set; }
+
+    [Parameter]
+    public EventCallback Closed { get; set; }
+
+    private string _draft = string.Empty;
+    private string _original = string.Empty;
+    private string? _error;
+    private bool _dirty;
+
+    private int _fieldCount;
+    private int _collectionCount;
+    private int _itemCount;
+
+
+    /// <summary>
+    /// El borrador se regenera desde los datos sólo cuando el panel está
+    /// cerrado o no hay cambios pendientes: si no, escribir aquí y que
+    /// cualquier repintado del diseñador te borrara lo escrito sería
+    /// insufrible.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        var serialized =
+            Data.ValueKind == JsonValueKind.Undefined
+                ? "{}"
+                : JsonSerializer.Serialize(Data, Pretty);
+
+        if (serialized == _original)
+            return;
+
+        if (_dirty && Visible)
+            return;
+
+        _original = serialized;
+        _draft = serialized;
+        _dirty = false;
+        _error = null;
+
+        CountShape();
+    }
+
+
+    private void DraftChanged(
+        ChangeEventArgs e)
+    {
+        _draft = e.Value?.ToString() ?? string.Empty;
+        _dirty = _draft != _original;
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_draft))
+            return;
+
+        // Se valida mientras se escribe para no dejar pulsar Aplicar con un
+        // JSON roto, que dejaría el preview en blanco sin explicación.
+        try
+        {
+            using var _ = JsonDocument.Parse(_draft);
+        }
+        catch (JsonException exception)
+        {
+            _error = $"JSON no válido: {exception.Message}";
+        }
+    }
+
+
+    private async Task ApplyAsync()
+    {
+        if (_error is not null)
+            return;
+
+        try
+        {
+            using var document = JsonDocument.Parse(_draft);
+
+            var data = document.RootElement.Clone();
+
+            _original = JsonSerializer.Serialize(data, Pretty);
+            _draft = _original;
+            _dirty = false;
+
+            CountShape();
+
+            await DataChanged.InvokeAsync(data);
+        }
+        catch (JsonException exception)
+        {
+            _error = $"JSON no válido: {exception.Message}";
+        }
+    }
+
+
+    private void Revert()
+    {
+        _draft = _original;
+        _dirty = false;
+        _error = null;
+    }
+
+
+    /// <summary>
+    /// Cifras de la forma del dato. Sirven para ver de un vistazo si el
+    /// dataset trae lo que crees: "1 colección, 2 elementos" te dice que
+    /// estás probando con un solo albarán.
+    /// </summary>
+    private void CountShape()
+    {
+        _fieldCount = 0;
+        _collectionCount = 0;
+        _itemCount = 0;
+
+        if (Data.ValueKind != JsonValueKind.Object)
+            return;
+
+        foreach (var property in Data.EnumerateObject())
+        {
+            if (property.Value.ValueKind == JsonValueKind.Array)
+            {
+                _collectionCount++;
+                _itemCount += property.Value.GetArrayLength();
+
+                continue;
+            }
+
+            if (property.Value.ValueKind == JsonValueKind.Object)
+                continue;
+
+            _fieldCount++;
+        }
+    }
+}

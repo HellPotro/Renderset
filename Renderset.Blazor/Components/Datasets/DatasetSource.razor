@@ -1,8 +1,11 @@
 @using System.Text.Json
+@using Microsoft.JSInterop
 @using Renderset.Core.DataSources
 @using Renderset.Core.Mapping
 @using Renderset.Core.Reports
 @using Renderset.Core.Reports.Inference
+@inject IJSRuntime JS
+
 
 <div class="dsrc">
 
@@ -208,8 +211,8 @@
                         {
                             <button type="button"
                                     class="dsrc-link"
-                                    @onclick="() => _showPreview = !_showPreview">
-                                <i class="@(_showPreview ? "fa-solid fa-chevron-up" : "fa-solid fa-code")"></i>
+                                    @onclick="OpenPreviewModal">
+                                <i class="fa-solid fa-code"></i>
                                 Ver modelo
                             </button>
                         }
@@ -223,73 +226,176 @@
 
                 @if (_showColumns)
                 {
-                    <div class="dsrc-scroll">
+                    <div class="dsrc-column-designer is-simplified">
 
-                        <table class="dsrc-mapping">
+                        <div class="dsrc-column-toolbar is-simplified">
 
-                            <thead>
-                                <tr>
-                                    <th>Columna</th>
-                                    <th>Nivel</th>
-                                    <th>Nombre en el modelo</th>
-                                    <th>Tipo</th>
-                                </tr>
-                            </thead>
+                            <div class="dsrc-column-search">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="search"
+                                       value="@_columnSearch"
+                                       @oninput="ColumnSearchChanged"
+                                       placeholder="Buscar columnas..." />
+                            </div>
 
-                            <tbody>
-                                @for (var i = 0; i < _payload.Columns.Count; i++)
+                            <div class="dsrc-column-sort">
+                                <label>Orden</label>
+                                <select value="@_columnSort"
+                                        @onchange="ColumnSortChanged">
+                                    <option value="@ColumnSortMode.Original">Original</option>
+                                    <option value="@ColumnSortMode.Alphabetical">A-Z</option>
+                                    <option value="@ColumnSortMode.Type">Tipo</option>
+                                </select>
+                            </div>
+
+                            <label class="dsrc-compact-toggle">
+                                <input type="checkbox"
+                                       checked="@_compactColumns"
+                                       @onchange="e => _compactColumns = GetBool(e.Value)" />
+                                Compacto
+                            </label>
+
+                        </div>
+
+                        <div class="dsrc-bulkbar is-simplified">
+
+                            <div class="dsrc-selection-summary">
+                                <strong>@_selectedColumns.Count</strong>
+                                seleccionada@(_selectedColumns.Count == 1 ? "" : "s")
+
+                                @if (TotalVisibleColumns != _payload.Columns.Count)
                                 {
-                                    var ordinal = i;
-                                    var column = _payload.Columns[ordinal];
-                                    var assignment = _assignments[ordinal];
-
-                                    <tr class="@(assignment.LevelPath == IgnorePath ? "is-ignored" : "")">
-
-                                        <td>
-                                            <code>@column.Name</code>
-
-                                            @if (IsKeyColumn(ordinal))
-                                            {
-                                                <span class="dsrc-key">clave</span>
-                                            }
-                                        </td>
-
-                                        <td>
-                                            <select value="@assignment.LevelPath"
-                                                    @onchange="e => LevelAssigned(ordinal, e)">
-
-                                                @foreach (var level in _levels)
-                                                {
-                                                    <option value="@level.Path">
-                                                        @(level.Depth == 0 ? "Documento" : level.Path)
-                                                    </option>
-                                                }
-
-                                                <option value="@IgnorePath">
-                                                    Ignorar
-                                                </option>
-
-                                            </select>
-                                        </td>
-
-                                        <td>
-                                            <input value="@assignment.Name"
-                                                   disabled="@(assignment.LevelPath == IgnorePath)"
-                                                   @onchange="e => NameChanged(ordinal, e)" />
-                                        </td>
-
-                                        <td>
-                                            <em>@column.Type</em>
-                                        </td>
-
-                                    </tr>
+                                    <span>
+                                        · @TotalVisibleColumns visible@((TotalVisibleColumns == 1) ? "" : "s")
+                                    </span>
                                 }
-                            </tbody>
+                            </div>
 
-                        </table>
+                            <div class="dsrc-bulk-actions">
+
+                                <button type="button"
+                                        class="dsrc-mini-button"
+                                        disabled="@(TotalVisibleColumns == 0)"
+                                        @onclick="SelectVisibleColumns">
+                                    Seleccionar visibles
+                                </button>
+
+                                <button type="button"
+                                        class="dsrc-mini-button"
+                                        disabled="@(_selectedColumns.Count == 0)"
+                                        @onclick="ClearSelectedColumns">
+                                    Limpiar
+                                </button>
+
+                                <button type="button"
+                                        class="dsrc-assign-button"
+                                        disabled="@(_selectedColumns.Count == 0)"
+                                        @onclick="OpenMoveColumnsModal">
+                                    <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                                    Mover a nivel
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <div class="dsrc-column-groups">
+                            @foreach (var group in GetColumnGroups())
+                            {
+                                <section class="@GetColumnGroupClass(group)"
+                                         @key="group.Path">
+
+                                    <header class="dsrc-column-group-head">
+
+                                        <div class="dsrc-column-group-title">
+                                            <span class="dsrc-column-group-icon">
+                                                <i class="@group.Icon"></i>
+                                            </span>
+
+                                            <div>
+                                                <strong>@group.Label</strong>
+                                                <span>@GetGroupDescription(group)</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="dsrc-column-group-actions">
+                                            <span>@group.Ordinals.Count columna@(group.Ordinals.Count == 1 ? "" : "s")</span>
+
+                                            <button type="button"
+                                                    disabled="@(group.Ordinals.Count == 0)"
+                                                    @onclick="() => SelectGroupColumns(group)">
+                                                Seleccionar
+                                            </button>
+                                        </div>
+
+                                    </header>
+
+                                    @if (group.Ordinals.Count == 0)
+                                    {
+                                        <div class="dsrc-column-empty">
+                                            No hay columnas en este nivel con el filtro actual.
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="@GetColumnGridClass()">
+                                            @foreach (var ordinal in group.Ordinals)
+                                            {
+                                                var column = _payload.Columns[ordinal];
+                                                var assignment = _assignments[ordinal];
+
+                                                <article class="@GetColumnCardClass(ordinal)"
+                                                         @key="ordinal">
+
+                                                    <label class="dsrc-column-check"
+                                                           title="Seleccionar columna">
+                                                        <input type="checkbox"
+                                                               checked="@_selectedColumns.Contains(ordinal)"
+                                                               @onchange="e => ToggleColumnSelection(ordinal, GetBool(e.Value))" />
+                                                        <span></span>
+                                                    </label>
+
+                                                    <div class="dsrc-column-card-main">
+
+                                                        <div class="dsrc-column-card-top">
+                                                            <code title="@column.Name">@column.Name</code>
+
+                                                            @if (IsKeyColumn(ordinal))
+                                                            {
+                                                                <span class="dsrc-key">clave</span>
+                                                            }
+
+                                                            <em>@column.Type</em>
+                                                        </div>
+
+                                                        <div class="dsrc-column-card-meta">
+                                                            <span>Modelo</span>
+                                                            <strong title="@assignment.Name">@assignment.Name</strong>
+                                                        </div>
+
+                                                    </div>
+
+                                                    <div class="dsrc-column-card-actions">
+                                                        <button type="button"
+                                                                class="dsrc-icon-button"
+                                                                title="Editar nombre o nivel"
+                                                                @onclick="() => OpenColumnEditor(ordinal)">
+                                                            <i class="fa-solid fa-pen"></i>
+                                                        </button>
+                                                    </div>
+
+                                                </article>
+                                            }
+                                        </div>
+                                    }
+
+                                </section>
+                            }
+                        </div>
 
                     </div>
                 }
+
 
             </div>
         }
@@ -304,44 +410,191 @@
     }
 
 
-    @if (ShowPreview && _showPreview && _documents.Count > 0)
-    {
-        @if (_kind == DatasetSourceKind.Json)
-        {
-            <button type="button"
-                    class="dsrc-link"
-                    @onclick="() => _showPreview = false">
-                <i class="fa-solid fa-chevron-up"></i>
-                Ocultar modelo
-            </button>
-        }
-
-        @if (_documents.Count > 1)
-        {
-            <div class="dsrc-doc-tabs">
-                @for (var i = 0; i < Math.Min(_documents.Count, 12); i++)
-                {
-                    var index = i;
-
-                    <button type="button"
-                            class="@(index == _selected ? "is-on" : "")"
-                            @onclick="() => _selected = index">
-                        @(index + 1)
-                    </button>
-                }
-            </div>
-        }
-
-        <pre class="dsrc-json">@Pretty(_documents[_selected])</pre>
-    }
-    else if (ShowPreview && _kind == DatasetSourceKind.Json && _documents.Count > 0)
+    @if (ShowPreview && _kind == DatasetSourceKind.Json && _documents.Count > 0)
     {
         <button type="button"
-                class="dsrc-link"
-                @onclick="() => _showPreview = true">
+                class="dsrc-link dsrc-preview-open"
+                @onclick="OpenPreviewModal">
             <i class="fa-solid fa-code"></i>
             Ver modelo resultante
         </button>
+    }
+
+
+    @if (_showPreview && ShowPreview && _documents.Count > 0)
+    {
+        <div class="dsrc-modal-backdrop"
+             @onclick="ClosePreviewModal">
+
+            <section class="dsrc-modal dsrc-preview-modal"
+                     @onclick:stopPropagation="true">
+
+                <header class="dsrc-modal-head">
+                    <div>
+                        <strong>Modelo generado</strong>
+                        <span>Previsualización del JSON que recibirá el diseñador.</span>
+                    </div>
+
+                    <button type="button"
+                            class="dsrc-modal-close"
+                            @onclick="ClosePreviewModal">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </header>
+
+                @if (_documents.Count > 1)
+                {
+                    <div class="dsrc-doc-tabs">
+                        @for (var i = 0; i < Math.Min(_documents.Count, 12); i++)
+                        {
+                            var index = i;
+
+                            <button type="button"
+                                    class="@(index == _selected ? "is-on" : "")"
+                                    @onclick="() => _selected = index">
+                                @(index + 1)
+                            </button>
+                        }
+                    </div>
+                }
+
+                <pre class="dsrc-json dsrc-json-modal">@Pretty(_documents[SafeSelectedIndex])</pre>
+
+                <footer class="dsrc-modal-actions">
+                    <button type="button"
+                            class="dsrc-mini-button"
+                            @onclick="CopyCurrentPreviewAsync">
+                        <i class="fa-solid fa-copy"></i>
+                        Copiar JSON
+                    </button>
+
+                    <button type="button"
+                            class="dsrc-assign-button"
+                            @onclick="ClosePreviewModal">
+                        Cerrar
+                    </button>
+                </footer>
+
+            </section>
+
+        </div>
+    }
+
+
+    @if (_showMoveModal)
+    {
+        <div class="dsrc-modal-backdrop"
+             @onclick="CloseMoveColumnsModal">
+
+            <section class="dsrc-modal dsrc-move-modal"
+                     @onclick:stopPropagation="true">
+
+                <header class="dsrc-modal-head">
+                    <div>
+                        <strong>Mover columnas</strong>
+                        <span>@_selectedColumns.Count columna@(_selectedColumns.Count == 1 ? "" : "s") seleccionada@(_selectedColumns.Count == 1 ? "" : "s")</span>
+                    </div>
+
+                    <button type="button"
+                            class="dsrc-modal-close"
+                            @onclick="CloseMoveColumnsModal">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </header>
+
+                <div class="dsrc-target-grid">
+                    @foreach (var target in AssignmentTargets())
+                    {
+                        <button type="button"
+                                class="@GetTargetCardClass(target)"
+                                @onclick="() => AssignSelectedFromModal(target.Path)">
+                            <i class="@target.Icon"></i>
+                            <strong>@target.Label</strong>
+                            <span>@GetTargetDescription(target)</span>
+                        </button>
+                    }
+                </div>
+
+            </section>
+
+        </div>
+    }
+
+
+    @if (_editingColumnOrdinal is not null &&
+         _payload is not null &&
+         _editingColumnOrdinal.Value >= 0 &&
+         _editingColumnOrdinal.Value < _payload.Columns.Count)
+    {
+        var editingOrdinal = _editingColumnOrdinal.Value;
+        var editingColumn = _payload.Columns[editingOrdinal];
+
+        <div class="dsrc-modal-backdrop"
+             @onclick="CloseColumnEditor">
+
+            <section class="dsrc-modal dsrc-column-edit-modal"
+                     @onclick:stopPropagation="true">
+
+                <header class="dsrc-modal-head">
+                    <div>
+                        <strong>Configurar columna</strong>
+                        <span>@editingColumn.Name · @editingColumn.Type</span>
+                    </div>
+
+                    <button type="button"
+                            class="dsrc-modal-close"
+                            @onclick="CloseColumnEditor">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </header>
+
+                <div class="dsrc-edit-form">
+
+                    <label>
+                        Nombre en el modelo
+                        <input value="@_editingColumnName"
+                               @oninput="e => _editingColumnName = e.Value?.ToString() ?? string.Empty" />
+                    </label>
+
+                    <label>
+                        Nivel
+                        <select value="@_editingColumnLevelPath"
+                                @onchange="e => _editingColumnLevelPath = e.Value?.ToString() ?? string.Empty">
+                            @foreach (var target in AssignmentTargets())
+                            {
+                                <option value="@target.Path">
+                                    @target.Label
+                                </option>
+                            }
+                        </select>
+                    </label>
+
+                    @if (IsKeyColumn(editingOrdinal))
+                    {
+                        <div class="dsrc-warn is-compact">
+                            Esta columna se está usando como clave de agrupación. Si la mueves a otro nivel, revisa la estructura.
+                        </div>
+                    }
+
+                </div>
+
+                <footer class="dsrc-modal-actions">
+                    <button type="button"
+                            class="dsrc-mini-button"
+                            @onclick="CloseColumnEditor">
+                        Cancelar
+                    </button>
+
+                    <button type="button"
+                            class="dsrc-assign-button"
+                            @onclick="SaveColumnEditor">
+                        Guardar cambios
+                    </button>
+                </footer>
+
+            </section>
+
+        </div>
     }
 
 
@@ -419,6 +672,28 @@
     private bool _showColumns;
     private bool _showPreview;
 
+    private readonly HashSet<int> _selectedColumns = [];
+    private string _columnSearch = string.Empty;
+    private ColumnSortMode _columnSort = ColumnSortMode.Original;
+    private bool _compactColumns;
+    private string _targetLevelPath = string.Empty;
+    private bool _showMoveModal;
+    private int? _editingColumnOrdinal;
+    private string _editingColumnName = string.Empty;
+    private string _editingColumnLevelPath = string.Empty;
+
+
+    private int TotalVisibleColumns =>
+        _payload is null
+            ? 0
+            : GetVisibleColumnOrdinals().Count;
+
+
+
+    private int SafeSelectedIndex =>
+        _documents.Count == 0
+            ? 0
+            : Math.Clamp(_selected, 0, _documents.Count - 1);
 
     private bool CanContinue =>
         _documents.Count > 0 &&
@@ -620,6 +895,9 @@
                     Name = DataMappingSuggester.ToCamelCase(name)
                 };
         }
+
+        _targetLevelPath = _levels.LastOrDefault()?.Path ?? string.Empty;
+        _selectedColumns.Clear();
     }
 
 
@@ -639,6 +917,10 @@
                 : DataMappingSuggester.ToCamelCase(value.Trim());
 
         RepathAssignments(previousPath, level);
+
+        if (_targetLevelPath == previousPath)
+            _targetLevelPath = level.Path;
+
         Build();
     }
 
@@ -669,6 +951,8 @@
                 Name = $"nivel{parent.Depth + 1}"
             });
 
+        _targetLevelPath = _levels[^1].Path;
+
         Build();
     }
 
@@ -692,6 +976,11 @@
             if (assignment.LevelPath == removed.Path)
                 assignment.LevelPath = parent.Path;
         }
+
+        if (_targetLevelPath == removed.Path)
+            _targetLevelPath = parent.Path;
+
+        _selectedColumns.Clear();
 
         Build();
     }
@@ -717,6 +1006,491 @@
 
         Build();
     }
+
+
+    // ------------------------------------------------------------- columnas
+
+    private void ColumnSearchChanged(
+        ChangeEventArgs e)
+    {
+        _columnSearch = e.Value?.ToString() ?? string.Empty;
+
+        PruneSelectedColumns();
+    }
+
+
+    private void ColumnSortChanged(
+        ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ColumnSortMode>(
+                e.Value?.ToString(),
+                out var mode))
+        {
+            _columnSort = mode;
+        }
+    }
+
+
+    private void TargetLevelChanged(
+        ChangeEventArgs e)
+    {
+        _targetLevelPath = e.Value?.ToString() ?? string.Empty;
+
+        EnsureValidTargetLevel();
+    }
+
+
+    private void ToggleColumnSelection(
+        int ordinal,
+        bool selected)
+    {
+        if (selected)
+            _selectedColumns.Add(ordinal);
+        else
+            _selectedColumns.Remove(ordinal);
+    }
+
+
+    private void SelectVisibleColumns()
+    {
+        foreach (var ordinal in GetVisibleColumnOrdinals())
+            _selectedColumns.Add(ordinal);
+    }
+
+
+    private void SelectGroupColumns(
+        ColumnGroup group)
+    {
+        foreach (var ordinal in group.Ordinals)
+            _selectedColumns.Add(ordinal);
+    }
+
+
+    private void ClearSelectedColumns()
+    {
+        _selectedColumns.Clear();
+    }
+
+
+    private void AssignSelectedToTarget()
+    {
+        AssignSelectedTo(_targetLevelPath);
+    }
+
+
+    private void AssignSelectedTo(
+        string levelPath)
+    {
+        if (_selectedColumns.Count == 0)
+            return;
+
+        if (!AssignmentTargets().Any(x => x.Path == levelPath))
+            levelPath = string.Empty;
+
+        foreach (var ordinal in _selectedColumns.ToList())
+        {
+            if (!_assignments.TryGetValue(ordinal, out var assignment))
+                continue;
+
+            assignment.LevelPath = levelPath;
+        }
+
+        _targetLevelPath = levelPath;
+        _selectedColumns.Clear();
+
+        Build();
+    }
+
+
+
+
+    private void OpenPreviewModal()
+    {
+        if (_documents.Count == 0)
+            return;
+
+        _showPreview = true;
+    }
+
+
+    private void ClosePreviewModal()
+    {
+        _showPreview = false;
+    }
+
+
+    private async Task CopyCurrentPreviewAsync()
+    {
+        if (_documents.Count == 0)
+            return;
+
+        await JS.InvokeVoidAsync(
+            "navigator.clipboard.writeText",
+            Pretty(_documents[SafeSelectedIndex]));
+    }
+
+
+    private void OpenMoveColumnsModal()
+    {
+        if (_selectedColumns.Count == 0)
+            return;
+
+        EnsureValidTargetLevel();
+
+        _showMoveModal = true;
+    }
+
+
+    private void CloseMoveColumnsModal()
+    {
+        _showMoveModal = false;
+    }
+
+
+    private void AssignSelectedFromModal(
+        string levelPath)
+    {
+        AssignSelectedTo(levelPath);
+
+        _showMoveModal = false;
+    }
+
+
+    private void OpenColumnEditor(
+        int ordinal)
+    {
+        if (_payload is null ||
+            !_assignments.TryGetValue(ordinal, out var assignment))
+        {
+            return;
+        }
+
+        _editingColumnOrdinal = ordinal;
+        _editingColumnName = assignment.Name;
+        _editingColumnLevelPath = assignment.LevelPath;
+    }
+
+
+    private void CloseColumnEditor()
+    {
+        _editingColumnOrdinal = null;
+        _editingColumnName = string.Empty;
+        _editingColumnLevelPath = string.Empty;
+    }
+
+
+    private void SaveColumnEditor()
+    {
+        if (_payload is null || _editingColumnOrdinal is null)
+            return;
+
+        var ordinal = _editingColumnOrdinal.Value;
+
+        if (!_assignments.TryGetValue(ordinal, out var assignment))
+            return;
+
+        assignment.Name = string.IsNullOrWhiteSpace(_editingColumnName)
+            ? DataMappingSuggester.ToCamelCase(_payload.Columns[ordinal].Name)
+            : _editingColumnName.Trim();
+
+        assignment.LevelPath = AssignmentTargets().Any(x => x.Path == _editingColumnLevelPath)
+            ? _editingColumnLevelPath
+            : string.Empty;
+
+        CloseColumnEditor();
+
+        Build();
+    }
+    private void EnsureValidTargetLevel()
+    {
+        if (AssignmentTargets().Any(x => x.Path == _targetLevelPath))
+            return;
+
+        _targetLevelPath = _levels.LastOrDefault()?.Path ?? string.Empty;
+    }
+
+
+    private void PruneSelectedColumns()
+    {
+        if (_payload is null)
+        {
+            _selectedColumns.Clear();
+            return;
+        }
+
+        var visible =
+            GetVisibleColumnOrdinals()
+                .ToHashSet();
+
+        _selectedColumns.RemoveWhere(x => !visible.Contains(x));
+    }
+
+
+    private List<int> GetVisibleColumnOrdinals()
+    {
+        if (_payload is null)
+            return [];
+
+        return SortColumnOrdinals(
+                Enumerable.Range(0, _payload.Columns.Count)
+                    .Where(ColumnMatchesSearch))
+            .ToList();
+    }
+
+
+    private List<int> GetVisibleColumnOrdinalsForPath(
+        string path)
+    {
+        return SortColumnOrdinals(
+                _assignments
+                    .Where(x => x.Value.LevelPath == path)
+                    .Select(x => x.Key)
+                    .Where(ColumnMatchesSearch))
+            .ToList();
+    }
+
+
+    private IEnumerable<int> SortColumnOrdinals(
+        IEnumerable<int> ordinals)
+    {
+        if (_payload is null)
+            return [];
+
+        return _columnSort switch
+        {
+            ColumnSortMode.Alphabetical =>
+                ordinals
+                    .OrderBy(x => _payload.Columns[x].Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(x => x),
+
+            ColumnSortMode.Type =>
+                ordinals
+                    .OrderBy(x => _payload.Columns[x].Type.ToString(), StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(x => _payload.Columns[x].Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(x => x),
+
+            _ =>
+                ordinals.OrderBy(x => x)
+        };
+    }
+
+
+    private bool ColumnMatchesSearch(
+        int ordinal)
+    {
+        if (_payload is null)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(_columnSearch))
+            return true;
+
+        var search = _columnSearch.Trim();
+
+        var column = _payload.Columns[ordinal];
+        var assignment = _assignments[ordinal];
+        var level = FindLevelByPath(assignment.LevelPath);
+
+        return Contains(column.Name, search) ||
+               Contains(assignment.Name, search) ||
+               Contains(column.Type.ToString(), search) ||
+               Contains(level is null ? "Ignorar" : GetLevelDisplayName(level), search);
+    }
+
+
+    private List<ColumnGroup> GetColumnGroups()
+    {
+        var groups = new List<ColumnGroup>();
+
+        foreach (var level in _levels)
+        {
+            groups.Add(
+                new ColumnGroup
+                {
+                    Path = level.Path,
+                    Label = GetLevelDisplayName(level),
+                    Icon = GetLevelIcon(level),
+                    Depth = level.Depth,
+                    IsIgnored = false,
+                    Ordinals = GetVisibleColumnOrdinalsForPath(level.Path)
+                });
+        }
+
+        var ignored =
+            GetVisibleColumnOrdinalsForPath(IgnorePath);
+
+        if (ignored.Count > 0 || _assignments.Values.Any(x => x.LevelPath == IgnorePath))
+        {
+            groups.Add(
+                new ColumnGroup
+                {
+                    Path = IgnorePath,
+                    Label = "Ignorar",
+                    Icon = "fa-solid fa-eye-slash",
+                    Depth = _levels.Count,
+                    IsIgnored = true,
+                    Ordinals = ignored
+                });
+        }
+
+        return groups;
+    }
+
+
+    private IReadOnlyList<AssignmentTarget> AssignmentTargets()
+    {
+        var targets =
+            _levels
+                .Select(level =>
+                    new AssignmentTarget
+                    {
+                        Path = level.Path,
+                        Label = GetLevelDisplayName(level),
+                        Icon = GetLevelIcon(level),
+                        IsIgnored = false
+                    })
+                .ToList();
+
+        targets.Add(
+            new AssignmentTarget
+            {
+                Path = IgnorePath,
+                Label = "Ignorar",
+                Icon = "fa-solid fa-eye-slash",
+                IsIgnored = true
+            });
+
+        return targets;
+    }
+
+
+    private LevelState? FindLevelByPath(
+        string path) =>
+        _levels.FirstOrDefault(x => x.Path == path);
+
+
+    private string GetLevelDisplayName(
+        LevelState level) =>
+        level.Depth == 0
+            ? "Documento"
+            : level.Name;
+
+
+    private static string GetLevelIcon(
+        LevelState level) =>
+        level.Depth switch
+        {
+            0 => "fa-solid fa-file-lines",
+            1 => "fa-solid fa-box-archive",
+            _ => "fa-solid fa-list-ul"
+        };
+
+
+    private static string GetGroupDescription(
+        ColumnGroup group)
+    {
+        if (group.IsIgnored)
+            return "No se incluirán en el modelo generado";
+
+        return group.Depth switch
+        {
+            0 => "Campos únicos del documento",
+            1 => "Primera colección agrupada",
+            _ => "Colección anidada de detalle"
+        };
+    }
+
+
+    private static string GetColumnGroupClass(
+        ColumnGroup group)
+    {
+        var css = "dsrc-column-group";
+
+        if (group.IsIgnored)
+            css += " is-ignored";
+        else if (group.Depth == 0)
+            css += " is-root";
+        else if (group.Depth == 1)
+            css += " is-level-one";
+        else
+            css += " is-level-deep";
+
+        return css;
+    }
+
+
+    private string GetColumnGridClass() =>
+        _compactColumns
+            ? "dsrc-column-grid is-compact"
+            : "dsrc-column-grid";
+
+
+    private string GetColumnCardClass(
+        int ordinal)
+    {
+        var css = "dsrc-column-card";
+
+        if (_selectedColumns.Contains(ordinal))
+            css += " is-selected";
+
+        if (_assignments.TryGetValue(ordinal, out var assignment) &&
+            assignment.LevelPath == IgnorePath)
+        {
+            css += " is-ignored";
+        }
+
+        if (IsKeyColumn(ordinal))
+            css += " is-key";
+
+        return css;
+    }
+
+
+    private static string GetQuickTargetClass(
+        AssignmentTarget target)
+    {
+        var css = "dsrc-quick-target";
+
+        if (target.IsIgnored)
+            css += " is-ignore";
+
+        return css;
+    }
+
+
+
+
+    private static string GetTargetCardClass(
+        AssignmentTarget target)
+    {
+        var css = "dsrc-target-card";
+
+        if (target.IsIgnored)
+            css += " is-ignore";
+
+        return css;
+    }
+
+
+    private static string GetTargetDescription(
+        AssignmentTarget target)
+    {
+        if (target.IsIgnored)
+            return "Excluir del modelo";
+
+        return target.Label == "Documento"
+            ? "Campo único de cabecera"
+            : "Colección del modelo";
+    }
+    private static bool Contains(
+        string? source,
+        string value) =>
+        !string.IsNullOrWhiteSpace(source) &&
+        source.Contains(value, StringComparison.OrdinalIgnoreCase);
+
+
+    private static bool GetBool(
+        object? value) =>
+        value is bool boolean && boolean;
 
 
     private void RepathAssignments(
@@ -928,6 +1702,12 @@
         _payload = null;
         _levels.Clear();
         _assignments.Clear();
+        _selectedColumns.Clear();
+        _targetLevelPath = string.Empty;
+        _showMoveModal = false;
+        _editingColumnOrdinal = null;
+        _editingColumnName = string.Empty;
+        _editingColumnLevelPath = string.Empty;
         _selected = 0;
     }
 
@@ -964,5 +1744,41 @@
         public string LevelPath { get; set; } = string.Empty;
 
         public string Name { get; set; } = string.Empty;
+    }
+
+
+    private enum ColumnSortMode
+    {
+        Original,
+        Alphabetical,
+        Type
+    }
+
+
+    private sealed class AssignmentTarget
+    {
+        public required string Path { get; init; }
+
+        public required string Label { get; init; }
+
+        public required string Icon { get; init; }
+
+        public bool IsIgnored { get; init; }
+    }
+
+
+    private sealed class ColumnGroup
+    {
+        public required string Path { get; init; }
+
+        public required string Label { get; init; }
+
+        public required string Icon { get; init; }
+
+        public required int Depth { get; init; }
+
+        public required bool IsIgnored { get; init; }
+
+        public required List<int> Ordinals { get; init; }
     }
 }

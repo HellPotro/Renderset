@@ -2,7 +2,6 @@
 
 @using System.Globalization
 @using System.Text
-@using System.Text.Json
 @using Renderset.Core.Configurations
 @using Renderset.Core.DataSources
 @using Renderset.Core.Localization
@@ -19,24 +18,33 @@
 
 <PageTitle>Nuevo report - RenderSet</PageTitle>
 
-<div class="page">
+<div class="page new-report-page">
 
-    <header class="page-header">
+    <header class="page-header new-report-header">
 
         <div>
             <h1>Nuevo report</h1>
 
             <p>
-                Pega un JSON de ejemplo y RenderSet infiere el esquema, la
-                estructura y las claves del diccionario.
+                Pega un JSON de ejemplo o un resultado tabular de SQL/CSV.
+                RenderSet inferirá el esquema y generará el report base.
             </p>
         </div>
 
-        <button type="button"
-                class="secondary-button"
-                @onclick="Cancel">
-            Cancelar
-        </button>
+        <div class="new-report-header-actions">
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="OpenCreationSummary">
+                <i class="fa-solid fa-circle-info"></i>
+                Qué se crea
+            </button>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="Cancel">
+                Cancelar
+            </button>
+        </div>
 
     </header>
 
@@ -49,168 +57,229 @@
     }
 
 
-    <div class="new-layout">
+    <div class="new-shell">
 
-        <section class="new-form">
+        <section class="new-setup-card">
 
-            <div class="new-row">
+            <div class="new-setup-main">
 
-                <div class="form-group">
-                    <label>Nombre</label>
+                <div class="new-row">
 
-                    <input value="@_name"
-                           @oninput="NameChanged"
-                           placeholder="Factura cliente" />
+                    <div class="form-group">
+                        <label>Nombre</label>
+
+                        <input value="@_name"
+                               @oninput="NameChanged"
+                               placeholder="Factura cliente" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            Identificador
+                            <small>se usa desde la API</small>
+                        </label>
+
+                        <input value="@_reportId"
+                               @oninput="e => _reportId = Slug(e.Value?.ToString())"
+                               placeholder="invoice" />
+                    </div>
+
                 </div>
 
-                <div class="form-group">
-                    <label>
-                        Identificador
-                        <small>se usa desde la API</small>
-                    </label>
+                <div class="new-flow-hint">
+                    <span>
+                        <i class="fa-solid fa-database"></i>
+                        Dataset
+                    </span>
 
-                    <input value="@_reportId"
-                           @oninput="e => _reportId = Slug(e.Value?.ToString())"
-                           placeholder="invoice" />
+                    <i class="fa-solid fa-arrow-right-long"></i>
+
+                    <span>
+                        <i class="fa-solid fa-sitemap"></i>
+                        Esquema
+                    </span>
+
+                    <i class="fa-solid fa-arrow-right-long"></i>
+
+                    <span>
+                        <i class="fa-solid fa-file-lines"></i>
+                        Report
+                    </span>
+
+                    <i class="fa-solid fa-arrow-right-long"></i>
+
+                    <span>
+                        <i class="fa-solid fa-palette"></i>
+                        Preset default
+                    </span>
                 </div>
 
             </div>
-                       
-            <DatasetSource OnDatasetReady="DatasetReady"
-                           ContinueText="Crear y abrir designer" />
+
+            <aside class="new-setup-summary">
+                <strong>Creación automática</strong>
+
+                <span>
+                    Se guardará el report, un preset inicial y una muestra de
+                    datos para abrir directamente el designer.
+                </span>
+
+                <button type="button"
+                        @onclick="OpenCreationSummary">
+                    Ver detalle
+                </button>
+            </aside>
 
         </section>
 
 
-        <aside class="new-preview">
+        <section class="new-dataset-card">
 
-            <header>
-                <h2>Qué se va a crear</h2>
+            <header class="new-dataset-head">
+                <div>
+                    <h2>Origen de datos</h2>
+
+                    <p>
+                        Configura aquí la estructura del dataset. Esta zona
+                        necesita todo el ancho disponible, por eso el resumen se
+                        ha movido a un panel independiente.
+                    </p>
+                </div>
             </header>
 
-            @if (_preview is null)
-            {
-                <div class="new-preview-state @(string.IsNullOrWhiteSpace(_jsonError) ? "" : "is-error")">
-                    @(_jsonError ?? "Escribe un JSON válido para ver la estructura.")
-                </div>
-            }
-            else
-            {
-                <div class="new-preview-stats">
+            <DatasetSource OnDatasetReady="DatasetReady"
+                           ContinueText="Crear y abrir designer"
+                           Rows="10">
+                @if (_saving)
+                {
+                    <span class="new-saving-inline">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        Creando report...
+                    </span>
+                }
+            </DatasetSource>
 
-                    <div>
-                        <strong>@_preview.Sections.Count</strong>
-                        <span>secciones</span>
-                    </div>
-
-                    <div>
-                        <strong>@_preview.Sections.Sum(x => x.Fields.Count)</strong>
-                        <span>campos</span>
-                    </div>
-
-                    <div>
-                        <strong>@_preview.Sections.Sum(x => x.Table?.Columns.Count ?? 0)</strong>
-                        <span>columnas</span>
-                    </div>
-
-                </div>
-
-                <div class="new-preview-tree">
-
-                    @foreach (var section in _preview.Sections.OrderBy(x => x.Order))
-                    {
-                        <div class="new-section">
-
-                            <div class="new-section-head">
-
-                                @if (section.Table is not null)
-                                {
-                                    <i class="fa-solid fa-table-list"></i>
-                                }
-                                else
-                                {
-                                    <i class="fa-solid fa-list"></i>
-                                }
-
-                                <strong>@section.Name</strong>
-                                <code>@section.Id</code>
-
-                            </div>
-
-                            @foreach (var field in section.Fields.OrderBy(x => x.Order))
-                            {
-                                <div class="new-item">
-                                    <span>@field.Label</span>
-                                    <em>@field.Type</em>
-                                </div>
-                            }
-
-                            @if (section.Table is not null)
-                            {
-                                @foreach (var column in section.Table.Columns.OrderBy(x => x.Order))
-                                {
-                                    <div class="new-item is-column">
-                                        <span>@column.Label</span>
-                                        <em>@column.Type</em>
-                                    </div>
-                                }
-                            }
-
-                        </div>
-                    }
-
-                </div>
-
-                <div class="new-preview-dict">
-
-                    @if (_cultures.Count == 0)
-                    {
-                        <span class="is-warn">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            No hay idiomas configurados, así que no se creará
-                            ninguna clave de diccionario.
-                            <a href="/idiomas">Configúralos antes</a>.
-                        </span>
-                    }
-                    else
-                    {
-                        <span>
-                            <i class="fa-solid fa-language"></i>
-                            Se crearán <strong>@KeyCount</strong> claves en
-                            <strong>@BaseCultureName</strong>, y las mismas
-                            pendientes en @(_cultures.Count - 1) idioma@(_cultures.Count - 1 == 1 ? "" : "s") más.
-                        </span>
-                    }
-
-                </div>
-            }
-
-            <div class="new-preview-actions">
-
-                <button type="button"
-                        class="primary-button"
-                        disabled="@(!CanCreate || _saving)"
-                        @onclick="CreateReportAsync">
-
-                    @if (_saving)
-                    {
-                        <span>Creando...</span>
-                    }
-                    else
-                    {
-                        <span>
-                            <i class="fa-solid fa-check"></i>
-                            Crear y abrir designer
-                        </span>
-                    }
-
-                </button>
-
-            </div>
-
-        </aside>
+        </section>
 
     </div>
+
+
+    @if (_showCreationSummary)
+    {
+        <div class="new-summary-backdrop"
+             @onclick="CloseCreationSummary">
+
+            <section class="new-summary-modal"
+                     @onclick:stopPropagation="true">
+
+                <header class="new-summary-modal-head">
+                    <div>
+                        <span>Resumen</span>
+                        <h2>Qué se va a crear</h2>
+                    </div>
+
+                    <button type="button"
+                            class="new-summary-close"
+                            title="Cerrar"
+                            @onclick="CloseCreationSummary">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </header>
+
+                <div class="new-summary-list">
+
+                    <article class="new-summary-item">
+                        <span class="new-summary-icon">
+                            <i class="fa-solid fa-file-lines"></i>
+                        </span>
+
+                        <div>
+                            <strong>Report</strong>
+
+                            <p>
+                                Se creará un <em>ReportDefinition</em> inferido
+                                desde el dataset configurado.
+                            </p>
+
+                            <code>@ReportIdentifierPreview</code>
+                        </div>
+                    </article>
+
+                    <article class="new-summary-item">
+                        <span class="new-summary-icon">
+                            <i class="fa-solid fa-layer-group"></i>
+                        </span>
+
+                        <div>
+                            <strong>Esquema y muestra</strong>
+
+                            <p>
+                                Se guardará el esquema de datos y el primer
+                                documento generado como muestra para el editor.
+                            </p>
+                        </div>
+                    </article>
+
+                    <article class="new-summary-item">
+                        <span class="new-summary-icon">
+                            <i class="fa-solid fa-palette"></i>
+                        </span>
+
+                        <div>
+                            <strong>Preset inicial</strong>
+
+                            <p>
+                                Se creará un preset llamado <em>Default</em> y se
+                                asignará al report sin contexto específico.
+                            </p>
+
+                            <code>@DefaultPresetIdPreview</code>
+                        </div>
+                    </article>
+
+                    <article class="new-summary-item">
+                        <span class="new-summary-icon">
+                            <i class="fa-solid fa-language"></i>
+                        </span>
+
+                        <div>
+                            <strong>Diccionario</strong>
+
+                            @if (_cultures.Count == 0)
+                            {
+                                <p class="is-warn">
+                                    No hay idiomas configurados. No se sembrarán
+                                    claves de diccionario automáticamente.
+                                </p>
+
+                                <a href="/idiomas">Configurar idiomas</a>
+                            }
+                            else
+                            {
+                                <p>
+                                    El servidor sembrará las claves base para
+                                    <strong>@BaseCultureName</strong> y dejará
+                                    pendientes las traducciones del resto de
+                                    idiomas configurados.
+                                </p>
+                            }
+                        </div>
+                    </article>
+
+                </div>
+
+                <footer class="new-summary-modal-foot">
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="CloseCreationSummary">
+                        Entendido
+                    </button>
+                </footer>
+
+            </section>
+
+        </div>
+    }
 
 </div>
 
@@ -220,39 +289,11 @@
     private string _name = string.Empty;
     private string _reportId = string.Empty;
 
-    private string _json =
-        """
-        {
-          "customer": {
-            "code": "000762",
-            "name": "Customer name"
-          },
-          "lines": [
-            {
-              "reference": "001",
-              "description": "Product",
-              "quantity": 1,
-              "price": 10.50
-            }
-          ]
-        }
-        """;
-
     private string? _error;
-    private string? _jsonError;
     private bool _saving;
-
-    private ReportDefinition? _preview;
-    private ReportDataSchema? _schema;
-    private JsonElement _data;
+    private bool _showCreationSummary;
 
     private IReadOnlyCollection<TenantCulture> _cultures = [];
-
-
-    private bool CanCreate =>
-        !string.IsNullOrWhiteSpace(_name) &&
-        !string.IsNullOrWhiteSpace(_reportId) &&
-        _preview is not null;
 
 
     private string BaseCultureName =>
@@ -262,29 +303,16 @@
         ?? string.Empty;
 
 
-    /// <summary>
-    /// Mismo recuento que hará <see cref="ReportResourceSeeder"/> en el
-    /// servidor, para que la cifra que se anuncia sea la real.
-    /// </summary>
-    private int KeyCount
-    {
-        get
-        {
-            if (_preview is null)
-                return 0;
+    private string ReportIdentifierPreview =>
+        string.IsNullOrWhiteSpace(_reportId)
+            ? "report-id"
+            : _reportId;
 
-            var baseCulture =
-                _cultures.FirstOrDefault(x => x.IsDefault)
-                ?? _cultures.FirstOrDefault();
 
-            if (baseCulture is null)
-                return 0;
-
-            return ReportResourceSeeder
-                .Build(_preview, baseCulture.Culture)
-                .Count;
-        }
-    }
+    private string DefaultPresetIdPreview =>
+        string.IsNullOrWhiteSpace(_reportId)
+            ? "report-id-default"
+            : $"{_reportId}-default";
 
 
     protected override async Task OnInitializedAsync()
@@ -292,8 +320,6 @@
         _cultures =
             await RenderSetApi.GetCulturesAsync(
                 CurrentTenant.Id);
-
-        RefreshPreview();
     }
 
 
@@ -302,110 +328,21 @@
     {
         _name = e.Value?.ToString() ?? string.Empty;
         _reportId = Slug(_name);
-
-        RefreshPreview();
     }
 
-
-    private void JsonChanged(
-        ChangeEventArgs e)
-    {
-        _json = e.Value?.ToString() ?? string.Empty;
-
-        RefreshPreview();
-    }
 
     private async Task DatasetReady(
         DatasetResult dataset)
     {
+        if (_saving)
+            return;
+
         if (string.IsNullOrWhiteSpace(_name) ||
             string.IsNullOrWhiteSpace(_reportId))
         {
             Toasts.Warning("Pon antes un nombre al report.");
             return;
         }
-
-        var definition =
-            ReportDefinitionFactory.Create(
-                _reportId,
-                _name,
-                dataset.Schema);
-
-        var report =
-            new Report
-            {
-                Id = _reportId,
-                Name = _name,
-                Version = 1,
-                Definition = definition,
-                DataSchema = dataset.Schema,
-                SampleData = dataset.SampleData
-            };
-
-        var result = await Toasts.RunAsync(
-            () => RenderSetApi.SaveReportAsync(CurrentTenant.Id, _reportId, report),
-            success: "Report creado");
-
-        if (!result.IsSuccessStatusCode) return;
-
-        await CreateDefaultPresetAsync();
-
-        // Cuando exista la persistencia de mappings, aquí es donde se guarda
-        // dataset.Mapping y se enlaza con el report. Sin eso, un report
-        // creado desde SQL no sabe cómo interpretar las filas planas que le
-        // manden luego por API.
-        Navigation.NavigateTo($"/reports/{Uri.EscapeDataString(_reportId)}/designer");
-    }
-
-
-    /// <summary>
-    /// La inferencia es barata y no toca base de datos, así que se ejecuta al
-    /// vuelo: ves la estructura antes de crear nada.
-    /// </summary>
-    private void RefreshPreview()
-    {
-        _jsonError = null;
-        _preview = null;
-        _schema = null;
-
-        if (string.IsNullOrWhiteSpace(_json))
-            return;
-
-        try
-        {
-            using var document =
-                JsonDocument.Parse(_json);
-
-            _data = document.RootElement.Clone();
-
-            _schema =
-                JsonSchemaInferer.Infer(_data);
-
-            _preview =
-                ReportDefinitionFactory.Create(
-                    string.IsNullOrWhiteSpace(_reportId)
-                        ? "preview"
-                        : _reportId,
-                    string.IsNullOrWhiteSpace(_name)
-                        ? "Preview"
-                        : _name,
-                    _schema);
-        }
-        catch (JsonException exception)
-        {
-            _jsonError = $"El JSON no es válido: {exception.Message}";
-        }
-        catch (Exception exception)
-        {
-            _jsonError = exception.Message;
-        }
-    }
-
-
-    private async Task CreateReportAsync()
-    {
-        if (!CanCreate || _schema is null)
-            return;
 
         _error = null;
         _saving = true;
@@ -416,7 +353,7 @@
                 ReportDefinitionFactory.Create(
                     _reportId,
                     _name,
-                    _schema);
+                    dataset.Schema);
 
             var report =
                 new Report
@@ -424,24 +361,24 @@
                     Id = _reportId,
                     Name = _name,
                     Version = 1,
-
                     Definition = definition,
-                    DataSchema = _schema,
-
-                    SampleData = _data
+                    DataSchema = dataset.Schema,
+                    SampleData = dataset.SampleData
                 };
 
-            // El servidor siembra el diccionario al guardar el report, así
-            // que aquí no hay que hacer nada más para las traducciones.
-            await RenderSetApi.SaveReportAsync(
-                CurrentTenant.Id,
-                _reportId,
-                report);
+            var result = await Toasts.RunAsync(
+                () => RenderSetApi.SaveReportAsync(CurrentTenant.Id, _reportId, report),
+                success: "Report creado");
+
+            if (!result.IsSuccessStatusCode)
+                return;
 
             await CreateDefaultPresetAsync();
 
-            Navigation.NavigateTo(
-                $"/reports/{Uri.EscapeDataString(_reportId)}/designer");
+            // Cuando exista persistencia de mappings, aquí se guardará
+            // dataset.Mapping y se enlazará con el report. Sin eso, un report
+            // creado desde SQL no sabrá interpretar filas planas enviadas por API.
+            Navigation.NavigateTo($"/reports/{Uri.EscapeDataString(_reportId)}/designer");
         }
         catch (Exception exception)
         {
@@ -497,6 +434,14 @@
                 PresetId = presetId
             });
     }
+
+
+    private void OpenCreationSummary() =>
+        _showCreationSummary = true;
+
+
+    private void CloseCreationSummary() =>
+        _showCreationSummary = false;
 
 
     private void Cancel() =>

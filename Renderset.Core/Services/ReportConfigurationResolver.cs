@@ -135,7 +135,8 @@ public sealed class ReportConfigurationResolver
             Layout = configuration.Layout ?? ReportSectionLayout.List,
             Order = configuration.Order ?? 0,
             Fields = fields,
-            Table = null
+            Table = null,
+            ShowName = configuration?.ShowName ?? true,
         };
     }
 
@@ -167,6 +168,18 @@ public sealed class ReportConfigurationResolver
                 definition.Table,
                 sectionConfiguration?.Table);
 
+        var childSections =
+            definition.Sections
+                .Select(child => ResolveSection(
+                    texts,
+                    child,
+                    reportDefinition,
+                    // Las subsecciones se configuran dentro de su padre, no
+                    // en la lista plana del report.
+                    ChildConfiguration(sectionConfiguration)))
+                .OrderBy(x => x.Order)
+                .ToList();
+
         return new ResolvedReportSection
         {
             Id = definition.Id,
@@ -180,8 +193,30 @@ public sealed class ReportConfigurationResolver
                 ? ReportSectionLayout.List
                 : sectionConfiguration?.Layout ?? ReportSectionLayout.List,
             Order = sectionConfiguration?.Order ?? definition.Order,
+            DataPath = definition.DataPath,
             Fields = fields,
-            Table = table
+            Table = table,
+            Sections = childSections,
+            ShowName = sectionConfiguration?.ShowName ?? true,
+        };
+    }
+
+    /// <summary>
+    /// Envuelve las subsecciones de una sección en una configuración
+    /// temporal, para poder reutilizar ResolveSection tal cual.
+    /// </summary>
+    private static ReportConfiguration? ChildConfiguration(
+        ReportSectionConfiguration? parent)
+    {
+        if (parent is null || parent.Sections.Count == 0)
+            return null;
+
+        return new ReportConfiguration
+        {
+            Id = "child",
+            ReportId = "child",
+            Name = "child",
+            Sections = parent.Sections
         };
     }
 

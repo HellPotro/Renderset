@@ -13,30 +13,8 @@
         @if (item.Type == ReportBodyItemType.Section &&
              item.Section is not null)
         {
-            var section = item.Section;
-
-            <section class="dynamic-report-section">
-
-                @if (!string.IsNullOrWhiteSpace(section.Name))
-                {
-                    <div class="dynamic-report-section-title">
-                        @section.Name
-                    </div>
-                }
-
-                @if (section.Fields.Any(x => x.Visible))
-                {
-                    <DynamicReportFields Section="@section"
-                                         Data="@Data" />
-                }
-
-                @if (section.Table is not null)
-                {
-                    <DynamicReportTable Table="@section.Table"
-                                        Data="@Data" />
-                }
-
-            </section>
+            <DynamicReportSection Section="@item.Section"
+                                  Data="@Data" />
         }
         else if (item.Type == ReportBodyItemType.Block &&
                  item.Block is not null)

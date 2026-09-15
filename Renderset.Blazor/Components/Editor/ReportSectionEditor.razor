@@ -54,6 +54,16 @@
     {
         <div class="report-editor-section-content">
 
+            <label class="report-editor-section-option">
+
+                <input type="checkbox"
+                       checked="@(Configuration is null || ShowsName)"
+                       @onchange="ToggleShowNameAsync" />
+
+                <span>Mostrar el título de la sección</span>
+
+            </label>
+
             @if (Definition.Table is null &&
                 Definition.Fields.Count > 0)
             {
@@ -320,6 +330,16 @@
     private async Task SetSectionVisibleAsync(bool visible)
     {
         GetOrCreateSectionConfiguration().Visible = visible;
+        await Changed.InvokeAsync();
+    }
+
+    private bool ShowsName => GetOrCreateSectionConfiguration()?.ShowName ?? true;
+
+    private async Task ToggleShowNameAsync(ChangeEventArgs e)
+    {
+        GetOrCreateSectionConfiguration().ShowName =
+            e.Value is bool value && value;
+
         await Changed.InvokeAsync();
     }
 

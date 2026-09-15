@@ -62,6 +62,13 @@
                 }
 
                 <button type="button"
+                        class="secondary-button"
+                        @onclick="() => _showData = !_showData">
+                    <i class="fa-solid fa-database"></i>
+                    Datos
+                </button>
+
+                <button type="button"
                         class="report-editor-action-button"
                         @onclick="ExportPresetAsync">
                     Exportar JSON
@@ -288,6 +295,15 @@
 
                                             </button>
 
+                                            <button type="button"
+                                                    class="icon-button"
+                                                    title="@(IsCollapsed(item.Id) ? "Desplegar" : "Plegar")"
+                                                    @onclick="() => ToggleCollapsed(item.Id)">
+                                                <i class="@(IsCollapsed(item.Id)
+                                                    ? "fa-solid fa-chevron-down"
+                                                    : "fa-solid fa-chevron-up")"></i>
+                                            </button>
+
                                         </div>
 
                                     </div>
@@ -300,12 +316,9 @@
 
                                             <input type="text"
                                                    value="@GetSectionName(sectionConfiguration)"
-                                                   @onchange="e => SetCustomSectionNameAsync(
-                                                                              sectionConfiguration,
-                                                                              e.Value?.ToString())"
-       placeholder="Nombre de la sección" />
-
-</div>
+                                                   @onchange="e => SetCustomSectionNameAsync(sectionConfiguration, e.Value?.ToString())"
+                                                    placeholder="Nombre de la sección" />
+                                        </div>
 
                                         <div class="report-editor-section-layout">
 
@@ -316,7 +329,7 @@
                                                                                 sectionConfiguration,
                                                                                 e)">
 
-<option value="@ReportSectionLayout.List">
+                                                <option value="@ReportSectionLayout.List">
                                                     Lista
                                                 </option>
 
@@ -526,11 +539,21 @@
                                 Cancelled="CloseSectionComposer" />
 }
 
+<ReportDataPanel Visible="_showData"
+                 Data="Data"
+                 DataChanged="DataChanged"
+                 Closed="() => _showData = false" />
+
 @code {
     private const string StructureTab = "structure";
     private const string HeaderFooterTab = "header-footer";
     private const string ThemeTab = "theme";
     private const long MaxPresetFileSize = 1024 * 1024;
+
+    [Parameter]
+    public EventCallback<JsonElement> DataChanged { get; set; }
+
+    private bool _showData;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -611,6 +634,17 @@
             .Where(x => x.Type is ReportBlockType.Text or ReportBlockType.Image or ReportBlockType.Fields)
             .OrderBy(x => x.Name)
             .ToList();
+
+    private readonly HashSet<string> _collapsedItems = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool IsCollapsed(string itemId) =>
+        _collapsedItems.Contains(itemId);
+
+    private void ToggleCollapsed(string itemId)
+    {
+        if (!_collapsedItems.Remove(itemId))
+            _collapsedItems.Add(itemId);
+    }
 
     protected override void OnParametersSet()
     {
@@ -695,12 +729,7 @@
     private IReadOnlyList<ReportBodyItemConfiguration> GetOrderedBodyItems()
     {
         if (Configuration.Body.Count > 0)
-        {
-            return Configuration.Body
-                .OrderBy(x => x.Order)
-                .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
+            return Configuration.Body.ToList();
 
         return Definition.Sections
             .OrderBy(GetSectionOrder)
@@ -933,21 +962,14 @@
 
     private void NormalizeBodyOrders()
     {
-        var ordered =
-            Configuration.Body
-                .OrderBy(x => x.Order)
-                .ToList();
+        var ordered = Configuration.Body;
 
         for (var i = 0; i < ordered.Count; i++)
         {
-            var order =
-                (i + 1) * 10;
+            var order = (i + 1) * 10;
+            var item = ordered[i];
 
-            var item =
-                ordered[i];
-
-            item.Order =
-                order;
+            item.Order = order;
 
             if (item.Type == ReportBodyItemType.Section &&
                 !string.IsNullOrWhiteSpace(item.SectionId))

@@ -1,0 +1,123 @@
+.rdp-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    background: rgba(23, 43, 53, .28);
+}
+
+.rdp {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 901;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 520px;
+    max-width: 100vw;
+    padding: 22px;
+    background: #fff;
+    box-shadow: -8px 0 32px rgba(23, 43, 53, .16);
+}
+
+.rdp-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #eef3f5;
+}
+
+    .rdp-head h2 {
+        margin: 0;
+        color: #172b35;
+        font-size: 16px;
+        font-weight: 700;
+    }
+
+    .rdp-head p {
+        margin: 5px 0 0;
+        color: #8a99a1;
+        font-size: 11.5px;
+    }
+
+.rdp-close {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #dfe7ea;
+    border-radius: 7px;
+    background: #fff;
+    color: #7c8b93;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+    .rdp-close:hover {
+        border-color: #173d4f;
+        color: #173d4f;
+    }
+
+.rdp-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+    .rdp-stats div {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .rdp-stats strong {
+        color: #172b35;
+        font-size: 17px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+    }
+
+    .rdp-stats span {
+        color: #8a99a1;
+        font-size: 10.5px;
+    }
+
+.rdp-editor {
+    flex: 1;
+    min-height: 0;
+    padding: 13px 15px;
+    border: 1px solid #d8e1e5;
+    border-radius: 8px;
+    background: #fbfdfd;
+    color: #23333c;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 11.5px;
+    line-height: 1.6;
+    white-space: pre;
+    overflow: auto;
+    resize: none;
+}
+
+    .rdp-editor:focus {
+        border-color: #173d4f;
+        background: #fff;
+        outline: none;
+    }
+
+.rdp-error {
+    padding: 10px 13px;
+    border: 1px solid #e6c3c3;
+    border-radius: 7px;
+    background: #fdf4f4;
+    color: #8c3a3a;
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.rdp-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+}
