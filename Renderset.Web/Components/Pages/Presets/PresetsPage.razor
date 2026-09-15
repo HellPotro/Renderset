@@ -372,6 +372,13 @@
     private readonly Dictionary<string, string?> _defaultPresets =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Permite llegar filtrado desde la ficha del report:
+    /// /presets?report=invoice
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "report")]
+    public string? ReportFromQuery { get; set; }
+
     private string? _selectedReportId;
 
     private bool _loading = true;
@@ -451,6 +458,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!string.IsNullOrWhiteSpace(ReportFromQuery))
+            _selectedReportId = ReportFromQuery;
+
         await LoadAsync();
     }
 

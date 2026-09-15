@@ -4,6 +4,7 @@
 @using Renderset.Blazor.Components.Editor
 @using Renderset.Core.Blocks
 @using Renderset.Core.Configurations
+@using Renderset.Core.DataSources
 @using Renderset.Core.Definitions
 @using Renderset.Core.Reports
 @using Renderset.Core.Reports.Inference
@@ -25,7 +26,7 @@
             </span>
 
             <h1>
-                Convierte JSON en un report configurable
+                Convierte tus datos en un report configurable
             </h1>
 
             <p>
@@ -35,37 +36,11 @@
 
         </div>
 
-        <div class="playground-input-card">
+        <div class="playground-dataset">
 
-            <div class="playground-input-header">
-                <span>JSON dataset</span>
-            </div>
-
-            <textarea @bind="_json"
-                      class="playground-json-input"
-                      spellcheck="false">
-            </textarea>
-
-            @if (!string.IsNullOrWhiteSpace(_error))
-            {
-                <div class="playground-error">
-                    @_error
-                </div>
-            }
-
-            <div class="playground-actions">
-
-                <button type="button"
-                        class="primary-button"
-                        @onclick="GenerateReport">
-
-                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-
-                    Generar report
-
-                </button>
-
-            </div>
+            <DatasetSource OnDatasetReady="GenerateFromDataset"
+                           ContinueText="Diseñar report"
+                           Rows="14" />
 
         </div>
 
@@ -130,24 +105,6 @@ else
 
 @code {
 
-    private string _json = """
-{
-  "customer": {
-    "code": "000762",
-    "name": "N.V. Van Wezel Autoparts"
-  },
-  "lines": [
-    {
-      "reference": "15004521",
-      "description": "Soporte parachoques delantero",
-      "quantity": 120
-    }
-  ]
-}
-""";
-
-    private string? _error;
-
     private ReportDataSchema? _schema;
     private ReportDefinition? _definition;
     private ReportConfiguration? _configuration;
@@ -201,77 +158,34 @@ else
         return resolved;
     }
 
-    private void GenerateReport()
+    private void GenerateFromDataset(
+        DatasetResult dataset)
     {
-        _error = null;
+        var reportId = $"playground-{Guid.NewGuid():N}";
 
-        try
-        {
-            using var document =
-                JsonDocument.Parse(_json);
+        _definition =
+            ReportDefinitionFactory.Create(
+                reportId,
+                "Playground report",
+                dataset.Schema);
 
-            if (document.RootElement.ValueKind !=
-                JsonValueKind.Object)
+        _data = dataset.SampleData;
+
+        _configuration =
+            new ReportConfiguration
             {
-                _error =
-                    "El JSON raíz debe ser un objeto.";
+                Id = reportId,
+                ReportId = reportId,
+                Name = "Playground",
+                Version = 1
+            };
 
-                return;
-            }
-
-            /*
-             * Clone() es importante porque JsonDocument
-             * se destruye al salir del using.
-             */
-            _data =
-                document.RootElement.Clone();
-
-            _schema =
-                JsonSchemaInferer.Infer(
-                    _data);
-
-            /*
-             * Este ID se genera UNA SOLA VEZ
-             * por cada report creado en Playground.
-             */
-            var reportId =
-                $"playground-{Guid.NewGuid():N}";
-
-            _definition =
-                ReportDefinitionFactory.Create(
-                    reportId,
-                    "Playground report",
-                    _schema);
-
-            /*
-             * La configuración nace vacía.
-             *
-             * A partir de este momento NO debe volver
-             * a recrearse mientras el usuario esté
-             * trabajando en este report.
-             */
-            _configuration =
-                new ReportConfiguration
-                {
-                    Id = $"{reportId}-default",
-                    ReportId = reportId,
-                    Name = "Playground",
-                    Version = 1,
-                    Sections = []
-                };
-
-            _theme =
-                new ReportTheme
-                {
-                    Id = $"{reportId}-theme",
-                    Name = "Default"
-                };
-        }
-        catch (JsonException ex)
-        {
-            _error =
-                $"JSON no válido: {ex.Message}";
-        }
+        _theme =
+            new ReportTheme
+            {
+                Id = "default",
+                Name = "Default"
+            };
     }
 
     private Task ConfigurationChangedAsync(
@@ -310,7 +224,5 @@ else
         _theme = null;
 
         _data = default;
-
-        _error = null;
     }
 }

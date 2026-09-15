@@ -1,89 +1,195 @@
 @page "/reports/new"
 
+@using System.Globalization
+@using System.Text
 @using System.Text.Json
 @using Renderset.Core.Configurations
+@using Renderset.Core.DataSources
+@using Renderset.Core.Localization
 @using Renderset.Core.Persistence
 @using Renderset.Core.Presets
 @using Renderset.Core.Reports
 @using Renderset.Core.Reports.Inference
 @using Renderset.Core.Themes
 
-@inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
+@inject IRenderSetApi RenderSetApi
+@inject IToastService Toasts
 @inject NavigationManager Navigation
 
 <PageTitle>Nuevo report - RenderSet</PageTitle>
 
-<div class="container py-4">
+<div class="page">
 
-    <div class="mb-4">
-        <h1 class="h3 mb-1">
-            Nuevo report
-        </h1>
+    <header class="page-header">
 
-        <div class="text-muted">
-            Pega un JSON de ejemplo y RenderSet generará
-            automáticamente la estructura inicial.
+        <div>
+            <h1>Nuevo report</h1>
+
+            <p>
+                Pega un JSON de ejemplo y RenderSet infiere el esquema, la
+                estructura y las claves del diccionario.
+            </p>
         </div>
-    </div>
 
-    <div class="row">
+        <button type="button"
+                class="secondary-button"
+                @onclick="Cancel">
+            Cancelar
+        </button>
 
-        <div class="col-lg-8">
+    </header>
 
-            <div class="mb-3">
 
-                <label class="form-label">
-                    Nombre
-                </label>
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="new-error">
+            @_error
+        </div>
+    }
 
-                <input class="form-control"
-                       @bind="_name"
-                       placeholder="Factura cliente" />
 
-            </div>
+    <div class="new-layout">
 
-            <div class="mb-3">
+        <section class="new-form">
 
-                <label class="form-label">
-                    Identificador
-                </label>
+            <div class="new-row">
 
-                <input class="form-control"
-                       @bind="_reportId"
-                       placeholder="invoice" />
+                <div class="form-group">
+                    <label>Nombre</label>
 
-                <div class="form-text">
-                    Identificador utilizado posteriormente
-                    desde la API.
+                    <input value="@_name"
+                           @oninput="NameChanged"
+                           placeholder="Factura cliente" />
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        Identificador
+                        <small>se usa desde la API</small>
+                    </label>
+
+                    <input value="@_reportId"
+                           @oninput="e => _reportId = Slug(e.Value?.ToString())"
+                           placeholder="invoice" />
                 </div>
 
             </div>
+                       
+            <DatasetSource OnDatasetReady="DatasetReady"
+                           ContinueText="Crear y abrir designer" />
 
-            <div class="mb-3">
+        </section>
 
-                <label class="form-label">
-                    JSON de ejemplo
-                </label>
 
-                <textarea class="form-control font-monospace"
-                          rows="22"
-                          @bind="_json">
-                </textarea>
+        <aside class="new-preview">
 
-            </div>
+            <header>
+                <h2>Qué se va a crear</h2>
+            </header>
 
-            @if (!string.IsNullOrWhiteSpace(_error))
+            @if (_preview is null)
             {
-                <div class="alert alert-danger">
-                    @_error
+                <div class="new-preview-state @(string.IsNullOrWhiteSpace(_jsonError) ? "" : "is-error")">
+                    @(_jsonError ?? "Escribe un JSON válido para ver la estructura.")
+                </div>
+            }
+            else
+            {
+                <div class="new-preview-stats">
+
+                    <div>
+                        <strong>@_preview.Sections.Count</strong>
+                        <span>secciones</span>
+                    </div>
+
+                    <div>
+                        <strong>@_preview.Sections.Sum(x => x.Fields.Count)</strong>
+                        <span>campos</span>
+                    </div>
+
+                    <div>
+                        <strong>@_preview.Sections.Sum(x => x.Table?.Columns.Count ?? 0)</strong>
+                        <span>columnas</span>
+                    </div>
+
+                </div>
+
+                <div class="new-preview-tree">
+
+                    @foreach (var section in _preview.Sections.OrderBy(x => x.Order))
+                    {
+                        <div class="new-section">
+
+                            <div class="new-section-head">
+
+                                @if (section.Table is not null)
+                                {
+                                    <i class="fa-solid fa-table-list"></i>
+                                }
+                                else
+                                {
+                                    <i class="fa-solid fa-list"></i>
+                                }
+
+                                <strong>@section.Name</strong>
+                                <code>@section.Id</code>
+
+                            </div>
+
+                            @foreach (var field in section.Fields.OrderBy(x => x.Order))
+                            {
+                                <div class="new-item">
+                                    <span>@field.Label</span>
+                                    <em>@field.Type</em>
+                                </div>
+                            }
+
+                            @if (section.Table is not null)
+                            {
+                                @foreach (var column in section.Table.Columns.OrderBy(x => x.Order))
+                                {
+                                    <div class="new-item is-column">
+                                        <span>@column.Label</span>
+                                        <em>@column.Type</em>
+                                    </div>
+                                }
+                            }
+
+                        </div>
+                    }
+
+                </div>
+
+                <div class="new-preview-dict">
+
+                    @if (_cultures.Count == 0)
+                    {
+                        <span class="is-warn">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            No hay idiomas configurados, así que no se creará
+                            ninguna clave de diccionario.
+                            <a href="/idiomas">Configúralos antes</a>.
+                        </span>
+                    }
+                    else
+                    {
+                        <span>
+                            <i class="fa-solid fa-language"></i>
+                            Se crearán <strong>@KeyCount</strong> claves en
+                            <strong>@BaseCultureName</strong>, y las mismas
+                            pendientes en @(_cultures.Count - 1) idioma@(_cultures.Count - 1 == 1 ? "" : "s") más.
+                        </span>
+                    }
+
                 </div>
             }
 
-            <div class="d-flex gap-2">
+            <div class="new-preview-actions">
 
-                <button class="btn btn-primary"
-                        disabled="@_saving"
+                <button type="button"
+                        class="primary-button"
+                        disabled="@(!CanCreate || _saving)"
                         @onclick="CreateReportAsync">
 
                     @if (_saving)
@@ -92,31 +198,27 @@
                     }
                     else
                     {
-                        <span>Crear report</span>
+                        <span>
+                            <i class="fa-solid fa-check"></i>
+                            Crear y abrir designer
+                        </span>
                     }
 
                 </button>
 
-                <button class="btn btn-outline-secondary"
-                        @onclick="Cancel">
-                    Cancelar
-                </button>
-
             </div>
 
-        </div>
+        </aside>
 
     </div>
 
 </div>
 
+
 @code {
 
-    private string _name =
-        string.Empty;
-
-    private string _reportId =
-        string.Empty;
+    private string _name = string.Empty;
+    private string _reportId = string.Empty;
 
     private string _json =
         """
@@ -137,47 +239,184 @@
         """;
 
     private string? _error;
-
+    private string? _jsonError;
     private bool _saving;
 
-    private async Task CreateReportAsync()
+    private ReportDefinition? _preview;
+    private ReportDataSchema? _schema;
+    private JsonElement _data;
+
+    private IReadOnlyCollection<TenantCulture> _cultures = [];
+
+
+    private bool CanCreate =>
+        !string.IsNullOrWhiteSpace(_name) &&
+        !string.IsNullOrWhiteSpace(_reportId) &&
+        _preview is not null;
+
+
+    private string BaseCultureName =>
+        (_cultures.FirstOrDefault(x => x.IsDefault)
+         ?? _cultures.FirstOrDefault())
+        ?.DisplayName
+        ?? string.Empty;
+
+
+    /// <summary>
+    /// Mismo recuento que hará <see cref="ReportResourceSeeder"/> en el
+    /// servidor, para que la cifra que se anuncia sea la real.
+    /// </summary>
+    private int KeyCount
     {
-        _error = null;
-
-        if (string.IsNullOrWhiteSpace(_name))
+        get
         {
-            _error =
-                "Introduce un nombre para el report.";
+            if (_preview is null)
+                return 0;
 
+            var baseCulture =
+                _cultures.FirstOrDefault(x => x.IsDefault)
+                ?? _cultures.FirstOrDefault();
+
+            if (baseCulture is null)
+                return 0;
+
+            return ReportResourceSeeder
+                .Build(_preview, baseCulture.Culture)
+                .Count;
+        }
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cultures =
+            await RenderSetApi.GetCulturesAsync(
+                CurrentTenant.Id);
+
+        RefreshPreview();
+    }
+
+
+    private void NameChanged(
+        ChangeEventArgs e)
+    {
+        _name = e.Value?.ToString() ?? string.Empty;
+        _reportId = Slug(_name);
+
+        RefreshPreview();
+    }
+
+
+    private void JsonChanged(
+        ChangeEventArgs e)
+    {
+        _json = e.Value?.ToString() ?? string.Empty;
+
+        RefreshPreview();
+    }
+
+    private async Task DatasetReady(
+        DatasetResult dataset)
+    {
+        if (string.IsNullOrWhiteSpace(_name) ||
+            string.IsNullOrWhiteSpace(_reportId))
+        {
+            Toasts.Warning("Pon antes un nombre al report.");
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_reportId))
-        {
-            _error =
-                "Introduce un identificador para el report.";
+        var definition =
+            ReportDefinitionFactory.Create(
+                _reportId,
+                _name,
+                dataset.Schema);
 
+        var report =
+            new Report
+            {
+                Id = _reportId,
+                Name = _name,
+                Version = 1,
+                Definition = definition,
+                DataSchema = dataset.Schema,
+                SampleData = dataset.SampleData
+            };
+
+        var result = await Toasts.RunAsync(
+            () => RenderSetApi.SaveReportAsync(CurrentTenant.Id, _reportId, report),
+            success: "Report creado");
+
+        if (!result.IsSuccessStatusCode) return;
+
+        await CreateDefaultPresetAsync();
+
+        // Cuando exista la persistencia de mappings, aquí es donde se guarda
+        // dataset.Mapping y se enlaza con el report. Sin eso, un report
+        // creado desde SQL no sabe cómo interpretar las filas planas que le
+        // manden luego por API.
+        Navigation.NavigateTo($"/reports/{Uri.EscapeDataString(_reportId)}/designer");
+    }
+
+
+    /// <summary>
+    /// La inferencia es barata y no toca base de datos, así que se ejecuta al
+    /// vuelo: ves la estructura antes de crear nada.
+    /// </summary>
+    private void RefreshPreview()
+    {
+        _jsonError = null;
+        _preview = null;
+        _schema = null;
+
+        if (string.IsNullOrWhiteSpace(_json))
             return;
-        }
 
         try
         {
-            _saving = true;
-
             using var document =
                 JsonDocument.Parse(_json);
 
-            var data =
-                document.RootElement.Clone();
+            _data = document.RootElement.Clone();
 
-            var schema =
-                JsonSchemaInferer.Infer(data);
+            _schema =
+                JsonSchemaInferer.Infer(_data);
 
+            _preview =
+                ReportDefinitionFactory.Create(
+                    string.IsNullOrWhiteSpace(_reportId)
+                        ? "preview"
+                        : _reportId,
+                    string.IsNullOrWhiteSpace(_name)
+                        ? "Preview"
+                        : _name,
+                    _schema);
+        }
+        catch (JsonException exception)
+        {
+            _jsonError = $"El JSON no es válido: {exception.Message}";
+        }
+        catch (Exception exception)
+        {
+            _jsonError = exception.Message;
+        }
+    }
+
+
+    private async Task CreateReportAsync()
+    {
+        if (!CanCreate || _schema is null)
+            return;
+
+        _error = null;
+        _saving = true;
+
+        try
+        {
             var definition =
                 ReportDefinitionFactory.Create(
                     _reportId,
                     _name,
-                    schema);
+                    _schema);
 
             var report =
                 new Report
@@ -187,11 +426,13 @@
                     Version = 1,
 
                     Definition = definition,
-                    DataSchema = schema,
+                    DataSchema = _schema,
 
-                    SampleData = data
+                    SampleData = _data
                 };
 
+            // El servidor siembra el diccionario al guardar el report, así
+            // que aquí no hay que hacer nada más para las traducciones.
             await RenderSetApi.SaveReportAsync(
                 CurrentTenant.Id,
                 _reportId,
@@ -200,17 +441,11 @@
             await CreateDefaultPresetAsync();
 
             Navigation.NavigateTo(
-                $"/reports/{_reportId}/designer");
+                $"/reports/{Uri.EscapeDataString(_reportId)}/designer");
         }
-        catch (JsonException ex)
+        catch (Exception exception)
         {
-            _error =
-                $"El JSON no es válido: {ex.Message}";
-        }
-        catch (Exception ex)
-        {
-            _error =
-                ex.Message;
+            _error = exception.Message;
         }
         finally
         {
@@ -218,10 +453,10 @@
         }
     }
 
+
     private async Task CreateDefaultPresetAsync()
     {
-        var presetId =
-            $"{_reportId}-default";
+        var presetId = $"{_reportId}-default";
 
         var preset =
             new ReportPreset
@@ -257,17 +492,55 @@
             new ReportPresetAssignment
             {
                 ReportId = _reportId,
-
                 ContextType = null,
                 ContextKey = null,
-
                 PresetId = presetId
             });
     }
 
-    private void Cancel()
+
+    private void Cancel() =>
+        Navigation.NavigateTo("/reports");
+
+
+    private static string Slug(
+        string? value)
     {
-        Navigation.NavigateTo(
-            "/reports");
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized =
+            value
+                .Trim()
+                .ToLowerInvariant()
+                .Normalize(NormalizationForm.FormD);
+
+        var builder = new StringBuilder();
+        var lastWasSeparator = false;
+
+        foreach (var character in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) ==
+                UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(character);
+                lastWasSeparator = false;
+
+                continue;
+            }
+
+            if (lastWasSeparator || builder.Length == 0)
+                continue;
+
+            builder.Append('-');
+            lastWasSeparator = true;
+        }
+
+        return builder.ToString().Trim('-');
     }
 }

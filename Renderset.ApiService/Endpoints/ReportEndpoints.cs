@@ -1,3 +1,4 @@
+using Renderset.Core.Localization;
 using Renderset.Core.Reports;
 
 namespace Renderset.Api.Endpoints;
@@ -65,6 +66,8 @@ public static class ReportEndpoints
         string reportId,
         Report report,
         IReportRepository repository,
+        ITenantCultureRepository cultures,
+        IReportResourceRepository resources,
         CancellationToken cancellationToken)
     {
         if (!string.Equals(
@@ -90,7 +93,60 @@ public static class ReportEndpoints
             report,
             cancellationToken);
 
+        await SeedDictionaryAsync(
+            tenantId,
+            report,
+            cultures,
+            resources,
+            cancellationToken);
+
         return Results.NoContent();
+    }
+
+
+    /// <summary>
+    /// Siembra el diccionario con las claves de la definición: el idioma base
+    /// con los labels inferidos y el resto de idiomas como pendientes.
+    ///
+    /// Se hace aquí y no en la página para que valga igual cuando el report
+    /// se crea desde la API. Y se ejecuta también al actualizar, con
+    /// semántica de "sólo rellenar huecos": si mañana añades un campo a la
+    /// definición, su clave aparece sola y no se pisa ninguna traducción.
+    /// </summary>
+    private static async Task SeedDictionaryAsync(
+        string tenantId,
+        Report report,
+        ITenantCultureRepository cultures,
+        IReportResourceRepository resources,
+        CancellationToken cancellationToken)
+    {
+        var tenantCultures =
+            await cultures.GetAllAsync(
+                tenantId,
+                cancellationToken);
+
+        if (tenantCultures.Count == 0)
+            return;
+
+        var baseCulture =
+            tenantCultures.FirstOrDefault(x => x.IsDefault)
+            ?? tenantCultures.First();
+
+        var seeds =
+            ReportResourceSeeder.Build(
+                report.Definition,
+                baseCulture.Culture,
+                tenantCultures
+                    .Select(x => x.Culture)
+                    .ToList());
+
+        if (seeds.Count == 0)
+            return;
+
+        await resources.SeedMissingAsync(
+            tenantId,
+            seeds,
+            cancellationToken);
     }
 
     private static async Task<IResult> DeleteAsync(

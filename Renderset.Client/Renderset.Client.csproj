@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      netstandard2.0 es lo que permite instalar el paquete en un WinForms de
+      .NET Framework 4.6.1 en adelante, que es el escenario real. Compilar
+      sólo contra net8 haría que Visual Studio lo rechace en esos proyectos.
+
+      El target de net8.0 se añade para que en proyectos modernos se use la
+      versión con HttpClient y sockets más nuevos.
+    -->
+    <TargetFrameworks>netstandard2.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <PackageId>Renderset.Client</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Renderset</Authors>
+    <Description>
+      Cliente para generar documentos con RenderSet desde cualquier
+      aplicación .NET. Envía directamente el resultado de un IDataReader o
+      un DataTable, sin transformar los datos.
+    </Description>
+    <PackageTags>renderset;pdf;reporting;documents</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!--
+    Sin PackageReference a propósito. Arrastrar System.Text.Json a un
+    WinForms antiguo significa pelearse con binding redirects y con la
+    versión de System.Memory que ya tuviera el proyecto. Para el poco JSON
+    que se escribe, no compensa: un paquete que no se instala sin una tarde
+    de redirects no lo instala nadie.
+  -->
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <Reference Include="System.Data" />
+  </ItemGroup>
+
+</Project>

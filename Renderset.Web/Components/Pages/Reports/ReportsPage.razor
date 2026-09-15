@@ -1,6 +1,9 @@
 @page "/reports"
 
+@using Renderset.Core.Localization
+@using Renderset.Core.Persistence
 @using Renderset.Core.Reports
+@using Renderset.Core.Resources
 
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
@@ -8,139 +11,307 @@
 
 <PageTitle>Reports - RenderSet</PageTitle>
 
-<div class="container py-4">
+<div class="page">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <header class="page-header">
 
         <div>
-            <h1 class="h3 mb-1">Reports</h1>
-            <div class="text-muted">
-                Gestiona tus informes y configuraciones.
-            </div>
+            <h1>Reports</h1>
+
+            <p>
+                La estructura de cada documento: secciones, campos y tablas
+                inferidas del JSON de origen.
+            </p>
         </div>
 
-        <button class="btn btn-primary"
+        <button type="button"
+                class="primary-button"
                 @onclick="CreateReport">
-            + Nuevo report
+            <i class="fa-solid fa-plus"></i>
+            Nuevo report
         </button>
 
-    </div>
+    </header>
+
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <div class="alert alert-danger">
+        <div class="report-error">
             @_error
         </div>
     }
 
-    @if (_reportToDelete is not null)
-    {
-        <div class="alert alert-warning d-flex justify-content-between align-items-start gap-3">
-            <div>
-                <strong>¿Borrar report @_reportToDelete.Name?</strong>
-                <div class="small mt-1">
-                    Se desactivará el report y también sus presets,
-                    assignments y traducciones asociadas al report/presets.
-                </div>
-            </div>
-
-            <div class="d-flex gap-2">
-                <button type="button"
-                        class="btn btn-sm btn-outline-secondary"
-                        @onclick="CancelDelete">
-                    Cancelar
-                </button>
-
-                <button type="button"
-                        class="btn btn-sm btn-danger"
-                        disabled="@_deleting"
-                        @onclick="ConfirmDeleteAsync">
-                    Borrar
-                </button>
-            </div>
-        </div>
-    }
 
     @if (_loading)
     {
-        <p>Cargando reports...</p>
+        <div class="page-state">
+            Cargando reports...
+        </div>
     }
     else if (_reports.Count == 0)
     {
-        <div class="alert alert-light border">
-            Todavía no hay reports creados.
+        <div class="empty-state">
+
+            <div class="empty-state-icon">
+                <i class="fa-solid fa-file-lines"></i>
+            </div>
+
+            <h2>Todavía no hay reports</h2>
+
+            <p>
+                Pega un JSON de ejemplo y RenderSet genera la estructura
+                inicial por ti.
+            </p>
+
+            <button type="button"
+                    class="primary-button"
+                    @onclick="CreateReport">
+                <i class="fa-solid fa-plus"></i>
+                Crear el primero
+            </button>
+
         </div>
     }
     else
     {
-        <div class="table-responsive">
+        <div class="report-search">
 
-            <table class="table table-hover align-middle">
+            <i class="fa-solid fa-magnifying-glass"></i>
 
-                <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>Id</th>
-                        <th>Versión</th>
-                        <th></th>
-                    </tr>
-                </thead>
+            <input value="@_search"
+                   @oninput="e => _search = e.Value?.ToString() ?? string.Empty"
+                   placeholder="Buscar por nombre, id, sección o campo" />
 
-                <tbody>
-
-                    @foreach (var report in _reports)
-                    {
-                        <tr>
-                            <td>
-                                <strong>@report.Name</strong>
-                            </td>
-
-                            <td>
-                                <code>@report.Id</code>
-                            </td>
-
-                            <td>
-                                @report.Version
-                            </td>
-
-                            <td class="text-end">
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-primary"
-                                            @onclick="() => OpenDesigner(report.Id)">
-                                        Diseñar
-                                    </button>
-
-                                    <button class="btn btn-outline-danger"
-                                            @onclick="() => AskDelete(report)">
-                                        Borrar
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-
-                </tbody>
-
-            </table>
+            @if (!string.IsNullOrWhiteSpace(_search))
+            {
+                <button type="button"
+                        class="report-search-clear"
+                        title="Limpiar"
+                        @onclick="() => _search = string.Empty">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            }
 
         </div>
+        
+        @if (!FilteredReports.Any())
+        {
+            <div class="page-state">
+                Ningún report coincide con «@_search».
+            </div>
+        }
+        else
+        {
+
+            <div class="report-grid">
+
+                @foreach (var report in FilteredReports)
+                {
+                    var stats = Stats(report);
+
+                    <article class="report-card" @key="report.Id">
+
+                        <header>
+
+                            <div class="report-card-title">
+                                <h2>@report.Name</h2>
+                                <code>@report.Id</code>
+                            </div>
+
+                            <span class="report-version">
+                                v@(report.Version)
+                            </span>
+
+                        </header>
+
+
+                        <div class="report-stats">
+
+                            <div>
+                                <strong>@stats.Sections</strong>
+                                <span>secciones</span>
+                            </div>
+
+                            <div>
+                                <strong>@stats.Fields</strong>
+                                <span>campos</span>
+                            </div>
+
+                            <div>
+                                <strong>@stats.Columns</strong>
+                                <span>columnas</span>
+                            </div>
+
+                            <div>
+                                <strong>@PresetCount(report.Id)</strong>
+                                <span>presets</span>
+                            </div>
+
+                        </div>
+
+
+                        @if (!stats.HasSampleData)
+                        {
+                            <div class="report-warn">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                Sin datos de ejemplo: el preview del designer
+                                saldrá vacío.
+                            </div>
+                        }
+
+
+                        <div class="report-langs">
+
+                            @if (_cultures.Count == 0)
+                            {
+                                <a class="report-langs-empty"
+                                   href="/idiomas">
+                                    Sin idiomas configurados
+                                </a>
+                            }
+                            else
+                            {
+                                @foreach (var culture in _cultures)
+                                {
+                                    var percentage = CoverageOf(report.Id, culture.Culture);
+
+                                    <span class="@LangClass(percentage)"
+                                          title="@culture.DisplayName">
+                                        <code>@culture.Culture</code>
+                                        <strong>@percentage%</strong>
+                                    </span>
+                                }
+                            }
+
+                        </div>
+
+
+                        <footer class="report-actions">
+
+                            <button type="button"
+                                    class="primary-button"
+                                    @onclick="() => OpenDesigner(report.Id)">
+                                <i class="fa-solid fa-pen-ruler"></i>
+                                Diseñar
+                            </button>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="() => OpenPresets(report.Id)">
+                                <i class="fa-solid fa-sliders"></i>
+                                Presets
+                            </button>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="() => OpenDictionary(report.Id)">
+                                <i class="fa-solid fa-language"></i>
+                                Diccionario
+                            </button>
+
+                            <button type="button"
+                                    class="icon-button danger"
+                                    title="Borrar report"
+                                    @onclick="() => AskDelete(report)">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+
+                        </footer>
+
+
+                        @if (_reportToDelete?.Id == report.Id)
+                        {
+                            <div class="report-delete">
+
+                                <div>
+                                    <strong>¿Borrar @report.Name?</strong>
+                                    <small>
+                                        Se desactiva el report y con él sus
+                                        presets, assignments y traducciones.
+                                    </small>
+                                </div>
+
+                                <div class="report-delete-actions">
+
+                                    <button type="button"
+                                            class="secondary-button"
+                                            @onclick="CancelDelete">
+                                        Cancelar
+                                    </button>
+
+                                    <button type="button"
+                                            class="danger-button"
+                                            disabled="@_deleting"
+                                            @onclick="ConfirmDeleteAsync">
+                                        Borrar
+                                    </button>
+
+                                </div>
+
+                            </div>
+                        }
+
+                    </article>
+                }
+
+            </div>
+            
+        }
+
     }
 
 </div>
+
 
 @code {
 
     private bool _loading = true;
     private bool _deleting;
     private string? _error;
+    private string _search = string.Empty;
+
     private Report? _reportToDelete;
 
     private IReadOnlyCollection<Report> _reports = [];
+    private IReadOnlyCollection<ReportPreset> _presets = [];
+    private IReadOnlyCollection<TenantCulture> _cultures = [];
+    private IReadOnlyCollection<ReportResourceCoverageDto> _coverage = [];
+
+
+    private IEnumerable<Report> FilteredReports =>
+        _reports
+            .Where(Matches)
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Busca también dentro de la estructura: con la definición ya cargada en
+    /// cliente, poder encontrar un report por uno de sus campos sale gratis.
+    /// </summary>
+    private bool Matches(Report report)
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+            return true;
+
+        if (Contains(report.Name) || Contains(report.Id))
+            return true;
+
+        if (report.Definition.Header?.Fields.Any(x => Contains(x.Label)) == true)
+            return true;
+
+        return report.Definition.Sections.Any(section =>
+            Contains(section.Name) ||
+            section.Fields.Any(x => Contains(x.Label)) ||
+            section.Table?.Columns.Any(x => Contains(x.Label)) == true);
+    }
+
+    private bool Contains(string? value) => value?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true;
+
 
     protected override async Task OnInitializedAsync()
     {
         await ReloadAsync();
     }
+
 
     private async Task ReloadAsync()
     {
@@ -152,10 +323,22 @@
             _reports =
                 await RenderSetApi.GetReportsAsync(
                     CurrentTenant.Id);
+
+            _presets =
+                await RenderSetApi.GetPresetsAsync(
+                    CurrentTenant.Id);
+
+            _cultures =
+                await RenderSetApi.GetCulturesAsync(
+                    CurrentTenant.Id);
+
+            _coverage =
+                await RenderSetApi.GetResourceCoverageAsync(
+                    CurrentTenant.Id);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            _error = ex.Message;
+            _error = exception.Message;
         }
         finally
         {
@@ -163,18 +346,90 @@
         }
     }
 
-    private void CreateReport()
+
+    /// <summary>
+    /// El endpoint ya devuelve la definición completa, así que las cifras
+    /// salen en cliente sin llamadas extra.
+    /// </summary>
+    private static ReportStats Stats(
+        Report report)
     {
-        Navigation.NavigateTo(
-            "/reports/new");
+        var sections = report.Definition.Sections;
+
+        return new ReportStats(
+            Sections: sections.Count,
+
+            Fields:
+                sections.Sum(x => x.Fields.Count) +
+                (report.Definition.Header?.Fields.Count ?? 0),
+
+            Columns:
+                sections.Sum(x => x.Table?.Columns.Count ?? 0),
+
+            HasSampleData:
+                report.SampleData.HasValue);
     }
 
-    private void OpenDesigner(
-        string reportId)
+
+    private int PresetCount(
+        string reportId) =>
+        _presets.Count(x =>
+            string.Equals(
+                x.Configuration.ReportId,
+                reportId,
+                StringComparison.OrdinalIgnoreCase));
+
+
+    private int CoverageOf(
+        string reportId,
+        string culture)
     {
+        var item =
+            _coverage.FirstOrDefault(x =>
+                string.Equals(x.Scope, reportId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(x.Culture, culture, StringComparison.OrdinalIgnoreCase));
+
+        return item is null
+            ? 0
+            : (int)Math.Round(item.Percentage);
+    }
+
+
+    private static string LangClass(
+        int percentage) =>
+        percentage switch
+        {
+            100 => "report-lang is-done",
+            0   => "report-lang is-none",
+            _   => "report-lang is-partial"
+        };
+
+
+    // ---------------------------------------------------------- navegación
+
+    private void CreateReport() =>
+        Navigation.NavigateTo("/reports/new");
+
+
+    private void OpenDesigner(
+        string reportId) =>
         Navigation.NavigateTo(
             $"/reports/{Uri.EscapeDataString(reportId)}/designer");
-    }
+
+
+    private void OpenPresets(
+        string reportId) =>
+        Navigation.NavigateTo(
+            $"/presets?report={Uri.EscapeDataString(reportId)}");
+
+
+    private void OpenDictionary(
+        string reportId) =>
+        Navigation.NavigateTo(
+            $"/resources?scope={Uri.EscapeDataString(reportId)}");
+
+
+    // ---------------------------------------------------------------- borrado
 
     private void AskDelete(
         Report report)
@@ -183,10 +438,12 @@
         _error = null;
     }
 
+
     private void CancelDelete()
     {
         _reportToDelete = null;
     }
+
 
     private async Task ConfirmDeleteAsync()
     {
@@ -206,13 +463,20 @@
 
             await ReloadAsync();
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            _error = ex.Message;
+            _error = exception.Message;
         }
         finally
         {
             _deleting = false;
         }
     }
+
+
+    private sealed record ReportStats(
+        int Sections,
+        int Fields,
+        int Columns,
+        bool HasSampleData);
 }

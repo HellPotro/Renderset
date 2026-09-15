@@ -8,6 +8,7 @@
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
 @inject IJSRuntime JS
+@inject IToastService Toasts
 
 <PageTitle>Diccionario - RenderSet</PageTitle>
 
@@ -67,22 +68,6 @@
         </div>
 
     </header>
-
-
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <div class="dict-error">
-            @_error
-        </div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(_notice))
-    {
-        <div class="dict-notice">
-            @_notice
-        </div>
-    }
-
 
     @if (_showNewKey)
     {
@@ -392,10 +377,15 @@
 
 @code {
 
+    /// <summary>
+    /// Permite entrar directamente al diccionario de un report desde la
+    /// ficha del report: /resources?scope=invoice
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "scope")]
+    public string? ScopeFromQuery { get; set; }
+
     private bool _loading = true;
     private bool _isBusy;
-    private string? _error;
-    private string? _notice;
 
     private string _scope = ReportResourceScope.Global;
     private string _search = string.Empty;
@@ -508,6 +498,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!string.IsNullOrWhiteSpace(ScopeFromQuery))
+            _scope = ScopeFromQuery;
+
         await LoadAsync();
     }
 
@@ -515,7 +508,6 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _error = null;
 
         try
         {
@@ -548,7 +540,7 @@
         }
         catch (Exception exception)
         {
-            _error = exception.Message;
+            Toasts.Error(exception.Message);
         }
         finally
         {
@@ -596,7 +588,6 @@
             return;
 
         _scope = e.Value?.ToString() ?? ReportResourceScope.Global;
-        _notice = null;
 
         await LoadScopeAsync();
     }
@@ -816,7 +807,6 @@
             return;
 
         _isBusy = true;
-        _error = null;
 
         try
         {
@@ -852,13 +842,13 @@
                 CurrentTenant.Id,
                 resources);
 
-            _notice = $"{resources.Count} entradas guardadas.";
+            Toasts.Success($"{resources.Count} entradas guardadas.");
 
             await LoadScopeAsync();
         }
         catch (Exception exception)
         {
-            _error = exception.Message;
+            Toasts.Error(exception.Message);
         }
         finally
         {
@@ -870,7 +860,6 @@
     private void DiscardChanges()
     {
         _dirty.Clear();
-        _notice = null;
     }
 
 
@@ -905,7 +894,8 @@
         if (_matrix.Any(x =>
                 string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase)))
         {
-            _error = $"La clave '{key}' ya existe en este ámbito.";
+
+            Toasts.Error($"La clave '{key}' ya existe en este ámbito.");
             return;
         }
 
@@ -924,7 +914,6 @@
                     StringComparer.OrdinalIgnoreCase)
             });
 
-        _error = null;
         ToggleNewKey();
     }
 
@@ -960,8 +949,7 @@
 
         try
         {
-            var result =
-                await RenderSetApi.CopyMissingResourcesAsync(
+            var result = await RenderSetApi.CopyMissingResourcesAsync(
                     CurrentTenant.Id,
                     new CopyMissingReportResourcesRequest
                     {
@@ -971,15 +959,16 @@
                         CopyValue = true
                     });
 
-            _notice =
+            Toasts.Success(
                 $"Copiadas {result.Created} claves de {sourceCulture} " +
-                $"a {targetCulture} ({result.Skipped} ya tenían texto).";
+                $"a {targetCulture} ({result.Skipped} ya tenían texto)."
+            );
 
             await LoadScopeAsync();
         }
         catch (Exception exception)
         {
-            _error = exception.Message;
+            Toasts.Error(exception.Message);
         }
         finally
         {
@@ -1010,19 +999,19 @@
                         IncludeEmptyValues = true,
                         OverwriteExistingValues = false
                     });
-
-            _notice =
-                $"Traducidas {result.Translated} claves con {result.Provider}. " +
-                $"Revisa las marcadas como automáticas.";
+                    
+                Toasts.Success(
+                    $"Traducidas {result.Translated} claves con {result.Provider}. " +
+                    $"Revisa las marcadas como automáticas.");
 
             if (result.Failed > 0)
-                _notice += $" {result.Failed} fallaron.";
+                Toasts.Warning($" {result.Failed} fallaron.");
 
             await LoadScopeAsync();
         }
         catch (Exception exception)
         {
-            _error = exception.Message;
+            Toasts.Error( exception.Message);
         }
         finally
         {

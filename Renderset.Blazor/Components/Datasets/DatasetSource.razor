@@ -1,0 +1,968 @@
+@using System.Text.Json
+@using Renderset.Core.DataSources
+@using Renderset.Core.Mapping
+@using Renderset.Core.Reports
+@using Renderset.Core.Reports.Inference
+
+<div class="dsrc">
+
+    <div class="dsrc-head">
+
+        <div class="dsrc-segmented">
+
+            <button type="button"
+                    class="@(_kind == DatasetSourceKind.Json ? "is-on" : "")"
+                    @onclick="() => SwitchTo(DatasetSourceKind.Json)">
+                <i class="fa-solid fa-code"></i>
+                JSON
+            </button>
+
+            <button type="button"
+                    class="@(_kind == DatasetSourceKind.Tabular ? "is-on" : "")"
+                    @onclick="() => SwitchTo(DatasetSourceKind.Tabular)">
+                <i class="fa-solid fa-table"></i>
+                SQL / CSV
+            </button>
+
+        </div>
+
+        <p class="dsrc-hint">
+            @(_kind == DatasetSourceKind.Json
+                ? "Pega un documento de ejemplo con la estructura que ya usa tu sistema."
+                : "Pega el resultado de tu consulta tal cual. Desde SSMS, copia la rejilla con cabeceras.")
+        </p>
+
+        <button type="button"
+                class="dsrc-example"
+                @onclick="LoadExample">
+            <i class="fa-solid fa-flask"></i>
+            Ejemplo
+        </button>
+
+    </div>
+
+
+    @if (_kind == DatasetSourceKind.Json)
+    {
+        <textarea class="dsrc-input"
+                  rows="@Rows"
+                  spellcheck="false"
+                  value="@_json"
+                  @onchange="JsonChanged"></textarea>
+    }
+    else
+    {
+        <textarea class="dsrc-input"
+                  rows="@Rows"
+                  spellcheck="false"
+                  value="@_raw"
+                  @onchange="RawChanged"
+                  placeholder="Factura&#9;Cliente&#9;Albaran_codigo&#9;Articulo&#9;Cantidad"></textarea>
+
+        @if (_payload is not null && _payload.Rows.Count > 0)
+        {
+            <div class="dsrc-panel">
+
+                <div class="dsrc-panel-head">
+
+                    <span class="dsrc-metric">
+                        <strong>@_payload.Rows.Count</strong> filas
+                    </span>
+
+                    <span class="dsrc-metric">
+                        <strong>@_payload.Columns.Count</strong> columnas
+                    </span>
+
+                    <i class="fa-solid fa-arrow-right-long"></i>
+
+                    <span class="dsrc-metric is-result">
+                        <strong>@_documents.Count</strong>
+                        documento@(_documents.Count == 1 ? "" : "s")
+                    </span>
+
+                    @if (_levels.Count > 1)
+                    {
+                        <span class="dsrc-metric">
+                            <strong>@(_levels.Count - 1)</strong>
+                            nivel@(_levels.Count - 1 == 1 ? "" : "es") anidado@(_levels.Count - 1 == 1 ? "" : "s")
+                        </span>
+                    }
+
+                </div>
+
+
+                @* ---------------------------------------- estructura ----- *@
+
+                <div class="dsrc-field">
+
+                    <label>Estructura</label>
+
+                    <div class="dsrc-levels">
+
+                        @foreach (var level in _levels)
+                        {
+                            <div class="dsrc-level"
+                                 style="@Indent(level)">
+
+                                <span class="dsrc-level-icon">
+                                    @if (level.Depth == 0)
+                                    {
+                                        <i class="fa-solid fa-file-lines"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-solid fa-layer-group"></i>
+                                    }
+                                </span>
+
+                                @if (level.Depth == 0)
+                                {
+                                    <span class="dsrc-level-name is-root">
+                                        Documento
+                                    </span>
+                                }
+                                else
+                                {
+                                    <input class="dsrc-level-name"
+                                           value="@level.Name"
+                                           @onchange="e => LevelNameChanged(level, e)" />
+
+                                    <span class="dsrc-level-tag">array</span>
+                                }
+
+                                <span class="dsrc-level-key">
+                                    <label>Agrupar por</label>
+
+                                    <select value="@(level.KeyColumn?.ToString() ?? "")"
+                                            @onchange="e => LevelKeyChanged(level, e)">
+
+                                        <option value="">
+                                            @(level.Depth == 0
+                                                ? "— (un solo documento)"
+                                                : "— (una fila = un elemento)")
+                                        </option>
+
+                                        @foreach (var ordinal in ColumnsOf(level))
+                                        {
+                                            <option value="@ordinal">
+                                                @_payload.Columns[ordinal].Name
+                                            </option>
+                                        }
+
+                                    </select>
+                                </span>
+
+                                <span class="dsrc-level-count">
+                                    @ColumnsOf(level).Count col.
+                                </span>
+
+                                @if (level.Depth > 0 && level == _levels[^1])
+                                {
+                                    <button type="button"
+                                            class="dsrc-level-remove"
+                                            title="Quitar este nivel y subir sus columnas"
+                                            @onclick="RemoveDeepestLevel">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                }
+
+                            </div>
+                        }
+
+                        <button type="button"
+                                class="dsrc-level-add"
+                                @onclick="AddLevel">
+                            <i class="fa-solid fa-plus"></i>
+                            Añadir nivel dentro de @(_levels[^1].Depth == 0 ? "el documento" : _levels[^1].Name)
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                @if (!string.IsNullOrWhiteSpace(_structureWarning))
+                {
+                    <div class="dsrc-warn">
+                        @_structureWarning
+                    </div>
+                }
+
+
+                <div class="dsrc-panel-foot">
+
+                    <span class="dsrc-reason">
+                        @_reason
+                    </span>
+
+                    <div class="dsrc-links">
+
+                        <button type="button"
+                                class="dsrc-link"
+                                @onclick="() => _showColumns = !_showColumns">
+                            <i class="@(_showColumns ? "fa-solid fa-chevron-up" : "fa-solid fa-sliders")"></i>
+                            Asignar columnas
+                        </button>
+
+                        @if (ShowPreview && _documents.Count > 0)
+                        {
+                            <button type="button"
+                                    class="dsrc-link"
+                                    @onclick="() => _showPreview = !_showPreview">
+                                <i class="@(_showPreview ? "fa-solid fa-chevron-up" : "fa-solid fa-code")"></i>
+                                Ver modelo
+                            </button>
+                        }
+
+                    </div>
+
+                </div>
+
+
+                @* ---------------------------------------- columnas ------- *@
+
+                @if (_showColumns)
+                {
+                    <div class="dsrc-scroll">
+
+                        <table class="dsrc-mapping">
+
+                            <thead>
+                                <tr>
+                                    <th>Columna</th>
+                                    <th>Nivel</th>
+                                    <th>Nombre en el modelo</th>
+                                    <th>Tipo</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @for (var i = 0; i < _payload.Columns.Count; i++)
+                                {
+                                    var ordinal = i;
+                                    var column = _payload.Columns[ordinal];
+                                    var assignment = _assignments[ordinal];
+
+                                    <tr class="@(assignment.LevelPath == IgnorePath ? "is-ignored" : "")">
+
+                                        <td>
+                                            <code>@column.Name</code>
+
+                                            @if (IsKeyColumn(ordinal))
+                                            {
+                                                <span class="dsrc-key">clave</span>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            <select value="@assignment.LevelPath"
+                                                    @onchange="e => LevelAssigned(ordinal, e)">
+
+                                                @foreach (var level in _levels)
+                                                {
+                                                    <option value="@level.Path">
+                                                        @(level.Depth == 0 ? "Documento" : level.Path)
+                                                    </option>
+                                                }
+
+                                                <option value="@IgnorePath">
+                                                    Ignorar
+                                                </option>
+
+                                            </select>
+                                        </td>
+
+                                        <td>
+                                            <input value="@assignment.Name"
+                                                   disabled="@(assignment.LevelPath == IgnorePath)"
+                                                   @onchange="e => NameChanged(ordinal, e)" />
+                                        </td>
+
+                                        <td>
+                                            <em>@column.Type</em>
+                                        </td>
+
+                                    </tr>
+                                }
+                            </tbody>
+
+                        </table>
+
+                    </div>
+                }
+
+            </div>
+        }
+    }
+
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="dsrc-error">
+            @_error
+        </div>
+    }
+
+
+    @if (ShowPreview && _showPreview && _documents.Count > 0)
+    {
+        @if (_kind == DatasetSourceKind.Json)
+        {
+            <button type="button"
+                    class="dsrc-link"
+                    @onclick="() => _showPreview = false">
+                <i class="fa-solid fa-chevron-up"></i>
+                Ocultar modelo
+            </button>
+        }
+
+        @if (_documents.Count > 1)
+        {
+            <div class="dsrc-doc-tabs">
+                @for (var i = 0; i < Math.Min(_documents.Count, 12); i++)
+                {
+                    var index = i;
+
+                    <button type="button"
+                            class="@(index == _selected ? "is-on" : "")"
+                            @onclick="() => _selected = index">
+                        @(index + 1)
+                    </button>
+                }
+            </div>
+        }
+
+        <pre class="dsrc-json">@Pretty(_documents[_selected])</pre>
+    }
+    else if (ShowPreview && _kind == DatasetSourceKind.Json && _documents.Count > 0)
+    {
+        <button type="button"
+                class="dsrc-link"
+                @onclick="() => _showPreview = true">
+            <i class="fa-solid fa-code"></i>
+            Ver modelo resultante
+        </button>
+    }
+
+
+    <div class="dsrc-actions">
+
+        @ChildContent
+
+        <button type="button"
+                class="primary-button"
+                disabled="@(!CanContinue)"
+                @onclick="EmitAsync">
+            <i class="fa-solid fa-arrow-right"></i>
+            @ContinueText
+        </button>
+
+    </div>
+
+</div>
+
+
+@code {
+
+    private const string IgnorePath = "\u0000ignore";
+
+    private static readonly JsonSerializerOptions PrettyOptions =
+        new() { WriteIndented = true };
+
+    [Parameter, EditorRequired]
+    public EventCallback<DatasetResult> OnDatasetReady { get; set; }
+
+    [Parameter]
+    public string ContinueText { get; set; } = "Continuar";
+
+    [Parameter]
+    public int Rows { get; set; } = 8;
+
+    [Parameter]
+    public bool ShowPreview { get; set; } = true;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private DatasetSourceKind _kind = DatasetSourceKind.Json;
+
+    private string _json = string.Empty;
+    private string _raw = string.Empty;
+    private string? _error;
+    private string? _structureWarning;
+    private string _reason = string.Empty;
+
+    private TabularPayload? _payload;
+
+    /// <summary>
+    /// Cadena lineal de niveles: documento → albaran → lines. Cada uno es
+    /// hijo del anterior.
+    ///
+    /// El modelo (DataMappingNode) admite hermanos, pero la pantalla no los
+    /// ofrece todavía: el caso de "líneas sueltas además de albaranes" hay
+    /// que montarlo a mano por ahora.
+    /// </summary>
+    private readonly List<LevelState> _levels = [];
+
+    /// <summary>
+    /// Indexado por POSICIÓN de columna, no por nombre. Una consulta con
+    /// JOINs trae nombres repetidos (Referencia del pedido y Referencia del
+    /// artículo) y un diccionario por nombre los machaca.
+    /// </summary>
+    private readonly Dictionary<int, Assignment> _assignments = [];
+
+    private List<JsonElement> _documents = [];
+    private ReportDataSchema? _schema;
+    private DataMapping? _mapping;
+
+    private int _selected;
+    private bool _showColumns;
+    private bool _showPreview;
+
+
+    private bool CanContinue =>
+        _documents.Count > 0 &&
+        _schema is not null;
+
+
+    // -------------------------------------------------------------- entrada
+
+    private void SwitchTo(
+        DatasetSourceKind kind)
+    {
+        _kind = kind;
+        _error = null;
+
+        Reset();
+
+        if (kind == DatasetSourceKind.Json)
+            AnalyzeJson();
+        else
+            AnalyzeTabular();
+    }
+
+
+    private void JsonChanged(
+        ChangeEventArgs e)
+    {
+        _json = e.Value?.ToString() ?? string.Empty;
+
+        AnalyzeJson();
+    }
+
+
+    private void RawChanged(
+        ChangeEventArgs e)
+    {
+        _raw = e.Value?.ToString() ?? string.Empty;
+
+        AnalyzeTabular();
+    }
+
+
+    private void LoadExample()
+    {
+        if (_kind == DatasetSourceKind.Json)
+        {
+            _json =
+                """
+                {
+                  "number": "10001",
+                  "customer": { "code": "000123", "name": "Ford España" },
+                  "lines": [
+                    { "reference": "A001", "quantity": 5, "price": 20.00 }
+                  ]
+                }
+                """;
+
+            AnalyzeJson();
+
+            return;
+        }
+
+        // Dos albaranes dentro de una factura: el caso de dos niveles.
+        _raw =
+            "Factura\tCliente\tNombre\tAlbaran_codigo\tAlbaran_fecha\tArticulo\tDescripcion\tCantidad\tPrecio\n" +
+            "060098\t002532\tGestamp Esmar\t001148\t2026-06-03\tGBA02101\tSill Inner LH.\t56\t33,3562\n" +
+            "060098\t002532\tGestamp Esmar\t001148\t2026-06-03\tGBA02102\tSill Inner RH.\t56\t33,3562\n" +
+            "060098\t002532\tGestamp Esmar\t001310\t2026-06-17\tGBA01101\tAssy Cantrail LH.\t240\t13,739\n" +
+            "060098\t002532\tGestamp Esmar\t001310\t2026-06-17\tGBA01102\tAssy Cantrail RH.\t240\t13,739";
+
+        AnalyzeTabular();
+    }
+
+
+    // ------------------------------------------------------------- análisis
+
+    private void AnalyzeJson()
+    {
+        Reset();
+
+        if (string.IsNullOrWhiteSpace(_json))
+            return;
+
+        try
+        {
+            using var document = JsonDocument.Parse(_json);
+
+            var data = document.RootElement.Clone();
+
+            _schema = JsonSchemaInferer.Infer(data);
+            _documents = [data];
+            _mapping = null;
+        }
+        catch (JsonException exception)
+        {
+            _error = $"El JSON no es válido: {exception.Message}";
+        }
+    }
+
+
+    private void AnalyzeTabular()
+    {
+        Reset();
+
+        if (string.IsNullOrWhiteSpace(_raw))
+            return;
+
+        try
+        {
+            _payload = DelimitedTextParser.Parse(_raw);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+
+            return;
+        }
+
+        if (_payload.Rows.Count == 0)
+        {
+            _error = "No se ha encontrado ninguna fila de datos.";
+
+            return;
+        }
+
+        var schema = _payload.ToSchema();
+
+        var rows =
+            _payload.Rows
+                .Select(row => row.ToArray())
+                .ToList();
+
+        var suggestion =
+            DataMappingSuggester.Suggest(schema, rows);
+
+        _reason = suggestion.Reason;
+
+        ApplySuggestion(schema, suggestion);
+
+        Build();
+    }
+
+
+    /// <summary>
+    /// Traduce los niveles sugeridos al estado editable de la pantalla.
+    /// </summary>
+    private void ApplySuggestion(
+        DataSetSchema schema,
+        DataMappingSuggestion suggestion)
+    {
+        _levels.Clear();
+        _assignments.Clear();
+
+        var depth = 0;
+
+        foreach (var level in suggestion.Levels)
+        {
+            _levels.Add(
+                new LevelState
+                {
+                    Depth = depth,
+                    Name = level.Name,
+
+                    KeyColumn = level.KeyColumn is null
+                        ? null
+                        : schema.IndexOf(level.KeyColumn)
+                });
+
+            depth++;
+        }
+
+        if (_levels.Count == 0)
+        {
+            _levels.Add(
+                new LevelState
+                {
+                    Depth = 0,
+                    Name = string.Empty
+                });
+        }
+
+        // Asignación por defecto: cada columna al nivel donde el sugeridor la
+        // dejó constante.
+        for (var ordinal = 0; ordinal < schema.Columns.Count; ordinal++)
+        {
+            var name = schema.Columns[ordinal].Name;
+
+            var levelIndex =
+                suggestion.Levels
+                    .Select((level, index) => (level, index))
+                    .Where(x => x.level.Columns.Contains(name))
+                    .Select(x => x.index)
+                    .DefaultIfEmpty(_levels.Count - 1)
+                    .First();
+
+            _assignments[ordinal] =
+                new Assignment
+                {
+                    LevelPath = _levels[Math.Min(levelIndex, _levels.Count - 1)].Path,
+                    Name = DataMappingSuggester.ToCamelCase(name)
+                };
+        }
+    }
+
+
+    // -------------------------------------------------------------- niveles
+
+    private void LevelNameChanged(
+        LevelState level,
+        ChangeEventArgs e)
+    {
+        var previousPath = level.Path;
+
+        var value = e.Value?.ToString();
+
+        level.Name =
+            string.IsNullOrWhiteSpace(value)
+                ? level.Name
+                : DataMappingSuggester.ToCamelCase(value.Trim());
+
+        RepathAssignments(previousPath, level);
+        Build();
+    }
+
+
+    private void LevelKeyChanged(
+        LevelState level,
+        ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        level.KeyColumn =
+            string.IsNullOrWhiteSpace(value)
+                ? null
+                : int.Parse(value);
+
+        Build();
+    }
+
+
+    private void AddLevel()
+    {
+        var parent = _levels[^1];
+
+        _levels.Add(
+            new LevelState
+            {
+                Depth = parent.Depth + 1,
+                Name = $"nivel{parent.Depth + 1}"
+            });
+
+        Build();
+    }
+
+
+    /// <summary>
+    /// Al quitar el nivel más profundo, sus columnas suben al padre en vez de
+    /// perderse.
+    /// </summary>
+    private void RemoveDeepestLevel()
+    {
+        if (_levels.Count <= 1)
+            return;
+
+        var removed = _levels[^1];
+        var parent = _levels[^2];
+
+        _levels.RemoveAt(_levels.Count - 1);
+
+        foreach (var assignment in _assignments.Values)
+        {
+            if (assignment.LevelPath == removed.Path)
+                assignment.LevelPath = parent.Path;
+        }
+
+        Build();
+    }
+
+
+    private void LevelAssigned(
+        int ordinal,
+        ChangeEventArgs e)
+    {
+        _assignments[ordinal].LevelPath =
+            e.Value?.ToString() ?? _levels[0].Path;
+
+        Build();
+    }
+
+
+    private void NameChanged(
+        int ordinal,
+        ChangeEventArgs e)
+    {
+        _assignments[ordinal].Name =
+            e.Value?.ToString() ?? string.Empty;
+
+        Build();
+    }
+
+
+    private void RepathAssignments(
+        string previousPath,
+        LevelState level)
+    {
+        // Renombrar un nivel cambia su ruta y la de sus descendientes, así
+        // que hay que reapuntar lo que colgaba de ellos.
+        var newPath = level.Path;
+
+        foreach (var assignment in _assignments.Values)
+        {
+            if (assignment.LevelPath == previousPath)
+                assignment.LevelPath = newPath;
+        }
+    }
+
+
+    private List<int> ColumnsOf(
+        LevelState level) =>
+        _assignments
+            .Where(x => x.Value.LevelPath == level.Path)
+            .Select(x => x.Key)
+            .OrderBy(x => x)
+            .ToList();
+
+
+    private bool IsKeyColumn(
+        int ordinal) =>
+        _levels.Any(x => x.KeyColumn == ordinal);
+
+
+    private static string Indent(
+        LevelState level) =>
+        $"margin-left:{level.Depth * 22}px";
+
+
+    // ---------------------------------------------------------- construcción
+
+    private void Build()
+    {
+        _error = null;
+        _structureWarning = null;
+        _documents = [];
+        _schema = null;
+        _selected = 0;
+
+        if (_payload is null || _payload.Rows.Count == 0)
+            return;
+
+        ValidateStructure();
+
+        _mapping = BuildMapping();
+
+        try
+        {
+            var builder = new HierarchyBuilder();
+            var reader = new TabularPayloadDataSet(_payload);
+            var documents = new List<JsonElement>();
+
+            var task = Task.Run(async () =>
+            {
+                await foreach (var document in builder.BuildAsync(reader, _mapping))
+                    documents.Add(document);
+            });
+
+            task.GetAwaiter().GetResult();
+
+            _documents = documents;
+            _schema = DataMappingSchemaFactory.Create(_mapping);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+    }
+
+
+    /// <summary>
+    /// Avisos de estructura que no impiden construir pero casi siempre
+    /// significan que algo está mal puesto.
+    /// </summary>
+    private void ValidateStructure()
+    {
+        var problems = new List<string>();
+
+        foreach (var level in _levels)
+        {
+            if (level.KeyColumn is null)
+                continue;
+
+            var assigned = ColumnsOf(level);
+
+            if (!assigned.Contains(level.KeyColumn.Value))
+            {
+                var name =
+                    _payload!.Columns[level.KeyColumn.Value].Name;
+
+                problems.Add(
+                    $"La columna '{name}' agrupa " +
+                    $"{(level.Depth == 0 ? "el documento" : level.Name)} " +
+                    "pero está asignada a otro nivel.");
+            }
+        }
+
+        var empty =
+            _levels
+                .Where(x => x.Depth > 0 && ColumnsOf(x).Count == 0)
+                .Select(x => x.Name)
+                .ToList();
+
+        if (empty.Count > 0)
+        {
+            problems.Add(
+                $"Sin columnas asignadas: {string.Join(", ", empty)}.");
+        }
+
+        _structureWarning =
+            problems.Count == 0
+                ? null
+                : string.Join(" ", problems);
+    }
+
+
+    private DataMapping BuildMapping()
+    {
+        DataMappingNode? root = null;
+        DataMappingNode? parent = null;
+
+        foreach (var level in _levels)
+        {
+            var node =
+                new DataMappingNode
+                {
+                    Name = level.Depth == 0 ? string.Empty : level.Name,
+
+                    Kind = level.Depth == 0
+                        ? DataMappingNodeKind.Object
+                        : DataMappingNodeKind.Collection,
+
+                    KeyColumns =
+                        level.KeyColumn is null
+                            ? []
+                            : [_payload!.Columns[level.KeyColumn.Value].Name],
+
+                    Fields =
+                        ColumnsOf(level)
+                            .Select(ordinal =>
+                            {
+                                var column = _payload!.Columns[ordinal];
+
+                                return new DataMappingField
+                                {
+                                    Name = _assignments[ordinal].Name,
+                                    SourceColumn = column.Name,
+                                    Type = column.Type,
+                                    Nullable = column.Nullable
+                                };
+                            })
+                            .ToList()
+                };
+
+            if (root is null)
+                root = node;
+            else
+                parent!.Children.Add(node);
+
+            parent = node;
+        }
+
+        return new DataMapping
+        {
+            Id = "draft",
+            Name = "Mapping",
+            Root = root!
+        };
+    }
+
+
+    private async Task EmitAsync()
+    {
+        if (!CanContinue)
+            return;
+
+        await OnDatasetReady.InvokeAsync(
+            new DatasetResult
+            {
+                Kind = _kind,
+                Schema = _schema!,
+                SampleData = _documents[0],
+                Documents = _documents,
+                Mapping = _mapping,
+
+                RawInput = _kind == DatasetSourceKind.Json
+                    ? _json
+                    : _raw
+            });
+    }
+
+
+    private void Reset()
+    {
+        _error = null;
+        _structureWarning = null;
+        _reason = string.Empty;
+        _documents = [];
+        _schema = null;
+        _mapping = null;
+        _payload = null;
+        _levels.Clear();
+        _assignments.Clear();
+        _selected = 0;
+    }
+
+
+    private static string Pretty(
+        JsonElement element) =>
+        JsonSerializer.Serialize(element, PrettyOptions);
+
+
+    private sealed class LevelState
+    {
+        public required int Depth { get; init; }
+
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Posición de la columna que agrupa este nivel. Nula significa que
+        /// cada fila es un elemento.
+        /// </summary>
+        public int? KeyColumn { get; set; }
+
+        /// <summary>
+        /// Ruta en el modelo. La raíz es cadena vacía.
+        /// </summary>
+        public string Path =>
+            Depth == 0
+                ? string.Empty
+                : Name;
+    }
+
+
+    private sealed class Assignment
+    {
+        public string LevelPath { get; set; } = string.Empty;
+
+        public string Name { get; set; } = string.Empty;
+    }
+}

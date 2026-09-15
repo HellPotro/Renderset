@@ -3,10 +3,12 @@
 
 @using System.Text.Json
 @using System.Text.Json.Serialization
+@using Renderset.Blazor.Components.Blocks
 @using Renderset.Core.Blocks
 @using Renderset.Core.Configurations 
 @using Renderset.Core.Localization
-@using Renderset.Core.Variables
+@using Renderset.Core.Variables 
+@using Renderset.Core.Themes
 
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
@@ -217,7 +219,13 @@
                                 </div>
 
                             </div>
-                        }
+                        }                                              
+
+                        <BlockPreview Type="ReportBlockType.Header"
+                                      Header="_header"
+                                      Texts="_texts"
+                                      Variables="_variables"
+                                      Theme="_theme" />
 
                     </div>
 
@@ -267,6 +275,12 @@
                             <span>Mostrar número de página</span>
 
                         </label>
+
+                        <BlockPreview Type="ReportBlockType.Footer"
+                                      Footer="_footer"
+                                      Texts="_texts"
+                                      Variables="_variables"
+                                      Theme="_theme" />
 
                     </div>
 
@@ -328,14 +342,11 @@
                             </select>
                         </div>
 
-                        <div class="text-block-preview @GetTextPreviewClass()">
-                            @if (!string.IsNullOrWhiteSpace(TextBlockTitleValue))
-                            {
-                                <strong>@TextBlockTitleValue</strong>
-                            }
-
-                            <div>@(TextBlockTextValue.Length == 0 ? "Vista previa del bloque de texto" : TextBlockTextValue)</div>
-                        </div>
+                        <BlockPreview Type="ReportBlockType.Text"
+                                      Text="_text"
+                                      Texts="_texts"
+                                      Variables="_variables"
+                                      Theme="_theme" />
 
                     </div>
 
@@ -394,6 +405,8 @@
     private IReadOnlyCollection<ReportVariable> _variables = [];
 
     private IReadOnlyCollection<TenantCulture> _cultures = [];
+
+    private readonly ReportTheme _theme = new();
 
     private string? _selectedCulture;
 
@@ -866,15 +879,6 @@
 
         return Task.CompletedTask;
     }
-
-    private string GetTextPreviewClass() =>
-        _text.Style switch
-        {
-            ReportTextBlockStyle.Information => "information",
-            ReportTextBlockStyle.Warning => "warning",
-            ReportTextBlockStyle.Success => "success",
-            _ => "default"
-        };
 
     private static string AppendVariable(string? current, string key)
     {

@@ -1,4 +1,5 @@
 using Refit;
+using Renderset.Blazor.Components.Toasts;
 using Renderset.Core.Services;
 using Renderset.Core.Tenancy;
 using Renderset.Web;
@@ -16,6 +17,7 @@ builder.Services
 builder.Services.AddOutputCache();
 
 builder.Services.AddScoped<ICurrentTenant, ConfiguredCurrentTenant>();
+builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddSingleton<IReportConfigurationComposer, ReportConfigurationComposer>();
 
 var reportingApiBaseAddress =

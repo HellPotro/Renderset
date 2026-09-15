@@ -1,0 +1,307 @@
+.report-error {
+    margin-bottom: 16px;
+    padding: 11px 14px;
+    border: 1px solid #e6c3c3;
+    border-radius: 7px;
+    background: #fdf4f4;
+    color: #8c3a3a;
+    font-size: 12.5px;
+}
+
+.report-search {
+    position: relative;
+    max-width: 380px;
+    margin-bottom: 18px;
+}
+
+    .report-search i {
+        position: absolute;
+        top: 50%;
+        left: 12px;
+        transform: translateY(-50%);
+        color: #9aa9b1;
+        font-size: 12px;
+    }
+
+    .report-search input {
+        width: 100%;
+        height: 36px;
+        padding: 0 12px 0 32px;
+        padding-right: 34px;
+        border: 1px solid #d8e1e5;
+        border-radius: 7px;
+        background: #fff;
+        font-size: 12.5px;
+    }
+
+.report-search-clear {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #9aa9b1;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+    .report-search-clear:hover {
+        background: #eef3f5;
+        color: #23333c;
+    }
+
+.report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 16px;
+}
+
+.report-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+    padding: 18px 20px;
+    border: 1px solid #dfe7ea;
+    border-radius: 10px;
+    background: #fff;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+    .report-card:hover {
+        border-color: #c3d2d8;
+        box-shadow: 0 6px 20px rgba(23, 43, 53, .07);
+    }
+
+    .report-card > header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+.report-card-title h2 {
+    margin: 0;
+    color: #172b35;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.report-card-title code {
+    display: block;
+    margin-top: 4px;
+    color: #8a99a1;
+    font-size: 11.5px;
+}
+
+.report-version {
+    padding: 3px 9px;
+    border: 1px solid #dfe7ea;
+    border-radius: 999px;
+    color: #7c8b93;
+    font-size: 10.5px;
+    font-weight: 700;
+}
+
+/* ------------------------------------------------------------ cifras */
+
+.report-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 12px 0;
+    border-top: 1px solid #eef3f5;
+    border-bottom: 1px solid #eef3f5;
+}
+
+    .report-stats div {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .report-stats strong {
+        color: #172b35;
+        font-size: 17px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+    }
+
+    .report-stats span {
+        color: #8a99a1;
+        font-size: 10.5px;
+    }
+
+.report-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 9px 11px;
+    border: 1px solid #ead9b6;
+    border-radius: 7px;
+    background: #fdfaf2;
+    color: #8a6d2e;
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+/* ----------------------------------------------------------- idiomas */
+
+.report-langs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.report-lang {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px;
+    border: 1px solid #dfe7ea;
+    border-radius: 999px;
+    font-size: 10.5px;
+}
+
+    .report-lang code {
+        color: #7c8b93;
+        font-size: 10px;
+    }
+
+    .report-lang strong {
+        font-variant-numeric: tabular-nums;
+    }
+
+    .report-lang.is-done {
+        border-color: #b9d4c4;
+        background: #f2f8f4;
+    }
+
+        .report-lang.is-done strong {
+            color: #2b6a48;
+        }
+
+    .report-lang.is-partial {
+        border-color: #ead9b6;
+        background: #fdfaf2;
+    }
+
+        .report-lang.is-partial strong {
+            color: #8a6d2e;
+        }
+
+    .report-lang.is-none {
+        background: #f7fafb;
+    }
+
+        .report-lang.is-none strong {
+            color: #9aa9b1;
+        }
+
+.report-langs-empty {
+    color: #8a6d2e;
+    font-size: 11.5px;
+    text-decoration: underline;
+}
+
+/* ---------------------------------------------------------- acciones */
+
+.report-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 34px;
+    align-items: center;
+    gap: 6px;
+    margin-top: auto;
+}
+
+    .report-actions .primary-button i,
+    .report-actions .secondary-button i {
+        font-size: 10px;
+    }
+
+    .report-actions .icon-button.danger {
+        width: 34px;
+        height: 34px;
+        color: #9aa9b1;
+    }
+
+        .report-actions .icon-button.danger:hover {
+            border-color: #e6c3c3;
+            background: #fdf4f4;
+            color: #8c3a3a;
+        }
+
+.danger-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 8px 13px;
+    border: 1px solid #b44545;
+    border-radius: 7px;
+    background: #b44545;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .danger-button:hover:not(:disabled) {
+        background: #9c3a3a;
+    }
+
+    .danger-button:disabled {
+        opacity: .55;
+        cursor: default;
+    }
+
+.report-delete {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid #e6c3c3;
+    border-radius: 8px;
+    background: #fdf4f4;
+}
+
+    .report-delete strong {
+        display: block;
+        color: #8c3a3a;
+        font-size: 12.5px;
+    }
+
+    .report-delete small {
+        display: block;
+        margin-top: 3px;
+        color: #a56666;
+        font-size: 11px;
+        line-height: 1.45;
+    }
+
+.report-delete-actions {
+    display: flex;
+    gap: 7px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 620px) {
+
+    .report-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .report-actions {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .report-delete {
+        flex-direction: column;
+    }
+}

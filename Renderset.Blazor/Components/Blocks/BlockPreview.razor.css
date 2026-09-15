@@ -1,0 +1,64 @@
+.blkprev {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.blkprev-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #7c8b93;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+}
+
+    .blkprev-head i {
+        margin-right: 5px;
+        font-size: 10px;
+    }
+
+.blkprev-warn {
+    margin-left: auto;
+    padding: 3px 9px;
+    border: 1px solid #ead9b6;
+    border-radius: 999px;
+    background: #fdfaf2;
+    color: #8a6d2e;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    cursor: help;
+}
+
+/* La hoja imita el papel: fondo gris alrededor y blanco dentro, para que se
+   lea como un documento y no como otra sección del formulario. */
+.blkprev-sheet {
+    padding: 22px;
+    border: 1px solid #dfe7ea;
+    border-radius: 9px;
+    background:
+        repeating-linear-gradient(
+            45deg,
+            #f4f7f8,
+            #f4f7f8 10px,
+            #f1f5f6 10px,
+            #f1f5f6 20px);
+}
+
+    .blkprev-sheet .dynamic-report {
+        padding: 20px 24px;
+        border-radius: 4px;
+        background: var(--report-background, #fff);
+        box-shadow: 0 2px 10px rgba(23, 43, 53, .10);
+    }
+
+.blkprev-empty {
+    margin: 0;
+    color: #9aa9b1;
+    font-size: 11.5px;
+    text-align: center;
+    font-style: italic;
+}

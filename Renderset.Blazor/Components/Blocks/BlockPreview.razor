@@ -1,0 +1,269 @@
+@using Renderset.Core.Blocks
+@using Renderset.Core.Configurations
+@using Renderset.Core.Localization
+@using Renderset.Core.Resolved
+@using Renderset.Core.Themes
+@using Renderset.Core.Variables
+@using Renderset.Blazor.Components.Rendering
+
+<div class="blkprev">
+
+    <div class="blkprev-head">
+
+        <span>
+            <i class="fa-solid fa-eye"></i>
+            Vista previa
+        </span>
+
+        @if (UnresolvedVariables.Count > 0)
+        {
+            <span class="blkprev-warn"
+                  title="@string.Join(", ", UnresolvedVariables)">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                @UnresolvedVariables.Count variable@(UnresolvedVariables.Count == 1 ? "" : "s") sin definir
+            </span>
+        }
+
+    </div>
+
+    <div class="blkprev-sheet">
+
+        <div class="dynamic-report" style="@ThemeStyle">
+
+            @switch (Type)
+            {
+                case ReportBlockType.Header:
+                    <DynamicReportHeader Header="ResolvedHeader" />
+                    break;
+
+                case ReportBlockType.Footer:
+                    <DynamicReportFooter Footer="ResolvedFooter" />
+                    break;
+
+                case ReportBlockType.Text:
+                    <DynamicReportBlock Block="ResolvedTextBlock" />
+                    break;
+            }
+
+        </div>
+
+    </div>
+
+    @if (IsEmpty)
+    {
+        <p class="blkprev-empty">
+            Todavía no hay nada que mostrar. Rellena los campos de arriba.
+        </p>
+    }
+
+</div>
+
+
+@code {
+
+    /// <summary>
+    /// El preview usa los mismos componentes que el informe real
+    /// (DynamicReportHeader, DynamicReportFooter, DynamicReportBlock) en vez
+    /// de imitar el HTML. Es lo único que garantiza que lo que ves aquí sea
+    /// lo que sale luego en el documento: si cambia el render, cambia el
+    /// preview solo.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public ReportBlockType Type { get; set; }
+
+    [Parameter]
+    public ReportHeaderConfiguration? Header { get; set; }
+
+    [Parameter]
+    public ReportFooterConfiguration? Footer { get; set; }
+
+    [Parameter]
+    public ReportTextBlockConfiguration? Text { get; set; }
+
+    /// <summary>
+    /// Diccionario en edición: los bloques guardan claves, no literales.
+    /// </summary>
+    [Parameter]
+    public ReportTextWorkspace Texts { get; set; } =
+        ReportTextWorkspace.Detached();
+
+    /// <summary>
+    /// Variables del tenant, para sustituir los {{marcadores}} y ver el texto
+    /// final en lugar de la plantilla.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyCollection<ReportVariable> Variables { get; set; } = [];
+
+    [Parameter]
+    public ReportTheme Theme { get; set; } = new();
+
+    private readonly List<string> _unresolved = [];
+
+    private List<string> UnresolvedVariables => _unresolved;
+
+
+    private string ThemeStyle => $"""
+        --report-primary:{Theme.PrimaryColor};
+        --report-secondary:{Theme.SecondaryColor};
+        --report-text:{Theme.TextColor};
+        --report-muted:{Theme.MutedTextColor};
+        --report-border:{Theme.BorderColor};
+        --report-section-bg:{Theme.SectionBackgroundColor};
+        --report-section-text:{Theme.SectionTextColor};
+        --report-table-header-bg:{Theme.TableHeaderBackgroundColor};
+        --report-table-header-text:{Theme.TableHeaderTextColor};
+        --report-background:{Theme.BackgroundColor};
+        --report-font:{Theme.FontFamily};
+        """;
+
+
+    private bool IsEmpty =>
+        Type switch
+        {
+            ReportBlockType.Header =>
+                string.IsNullOrWhiteSpace(ResolvedHeader?.Title) &&
+                string.IsNullOrWhiteSpace(ResolvedHeader?.Subtitle) &&
+                ResolvedHeader?.ShowLogo != true,
+
+            ReportBlockType.Footer =>
+                string.IsNullOrWhiteSpace(ResolvedFooter?.Text) &&
+                ResolvedFooter?.ShowGenerationDate != true,
+
+            ReportBlockType.Text =>
+                string.IsNullOrWhiteSpace(ResolvedTextBlock.Text?.Title) &&
+                string.IsNullOrWhiteSpace(ResolvedTextBlock.Text?.Text),
+
+            _ => true
+        };
+
+
+    protected override void OnParametersSet()
+    {
+        _unresolved.Clear();
+    }
+
+
+    private ResolvedReportHeader? ResolvedHeader =>
+        Header is null
+            ? null
+            : new ResolvedReportHeader
+            {
+                // Siempre visible en el preview: aquí estás editando el
+                // bloque, no decidiendo si se pinta en un report concreto.
+                Visible = true,
+
+                Title = Resolve(Header.TitleKey),
+                Subtitle = Resolve(Header.SubtitleKey),
+                ShowLogo = Header.ShowLogo ?? false,
+                LogoUrl = Header.LogoUrl
+            };
+
+
+    private ResolvedReportFooter? ResolvedFooter =>
+        Footer is null
+            ? null
+            : new ResolvedReportFooter
+            {
+                Visible = true,
+                Text = Resolve(Footer.TextKey),
+                ShowGenerationDate = Footer.ShowGenerationDate ?? false,
+                ShowPageNumber = Footer.ShowPageNumber ?? false
+            };
+
+
+    private ResolvedReportBlock ResolvedTextBlock =>
+        new()
+        {
+            Id = "preview",
+            Type = ReportBlockType.Text,
+
+            Text = Text is null
+                ? new ReportTextBlockConfiguration()
+                : new ReportTextBlockConfiguration
+                {
+                    Title = Resolve(Text.TitleKey),
+                    Text = Resolve(Text.TextKey) ?? string.Empty,
+                    Style = Text.Style
+                }
+        };
+
+
+    /// <summary>
+    /// Clave de diccionario → texto del idioma en edición → sustitución de
+    /// variables. Ese es el orden correcto: primero se traduce la plantilla y
+    /// después se rellenan los {{marcadores}}, nunca al revés.
+    /// </summary>
+    private string? Resolve(
+        string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return null;
+
+        var value = Texts.GetText(key, string.Empty);
+
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : ApplyVariables(value);
+    }
+
+
+    private string ApplyVariables(
+        string text)
+    {
+        if (!text.Contains("{{"))
+            return text;
+
+        var result = new System.Text.StringBuilder(text.Length);
+
+        var index = 0;
+
+        while (index < text.Length)
+        {
+            var start = text.IndexOf("{{", index, StringComparison.Ordinal);
+
+            if (start < 0)
+            {
+                result.Append(text, index, text.Length - index);
+                break;
+            }
+
+            var end = text.IndexOf("}}", start, StringComparison.Ordinal);
+
+            if (end < 0)
+            {
+                result.Append(text, index, text.Length - index);
+                break;
+            }
+
+            result.Append(text, index, start - index);
+
+            var key = text[(start + 2)..end].Trim();
+
+            var variable =
+                Variables.FirstOrDefault(x =>
+                    string.Equals(
+                        x.Key,
+                        key,
+                        StringComparison.OrdinalIgnoreCase));
+
+            if (variable is not null &&
+                !string.IsNullOrWhiteSpace(variable.Value))
+            {
+                result.Append(variable.Value);
+            }
+            else
+            {
+                // Se deja el marcador visible en vez de dejar un hueco: un
+                // preview con un espacio en blanco no dice que falte nada.
+                result.Append("⟨").Append(key).Append('⟩');
+
+                if (!_unresolved.Contains(key))
+                    _unresolved.Add(key);
+            }
+
+            index = end + 2;
+        }
+
+        return result.ToString();
+    }
+}

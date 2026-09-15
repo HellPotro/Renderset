@@ -1,0 +1,92 @@
+@implements IDisposable
+
+@inject IToastService Toasts
+
+@if (_messages.Count > 0)
+{
+    <div class="toast-host" aria-live="polite">
+
+        @foreach (var message in _messages)
+        {
+            <div class="@CssFor(message)" @key="message.Id">
+
+                <div class="toast-icon">
+                    <i class="@IconFor(message.Level)"></i>
+                </div>
+
+                <div class="toast-body">
+
+                    @if (!string.IsNullOrWhiteSpace(message.Title))
+                    {
+                        <strong>@message.Title</strong>
+                    }
+
+                    <span>@message.Text</span>
+
+                </div>
+
+                @if (message.Count > 1)
+                {
+                    <span class="toast-count">
+                        @message.Count
+                    </span>
+                }
+
+                <button type="button"
+                        class="toast-close"
+                        title="Cerrar"
+                        @onclick="() => Toasts.Remove(message.Id)">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+
+            </div>
+        }
+
+    </div>
+}
+
+@code {
+
+    private IReadOnlyList<ToastMessage> _messages = [];
+
+    protected override void OnInitialized()
+    {
+        Toasts.Changed += OnChanged;
+
+        _messages = Toasts.Messages;
+    }
+
+    /// <summary>
+    /// El evento puede llegar desde el temporizador de expiración, que corre
+    /// fuera del contexto de sincronización del circuito. Por eso se pasa por
+    /// InvokeAsync antes de repintar.
+    /// </summary>
+    private void OnChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            _messages = Toasts.Messages;
+
+            StateHasChanged();
+        });
+    }
+
+    private static string CssFor(
+        ToastMessage message) =>
+        $"toast toast-{message.Level.ToString().ToLowerInvariant()}";
+
+    private static string IconFor(
+        ToastLevel level) =>
+        level switch
+        {
+            ToastLevel.Success => "fa-solid fa-circle-check",
+            ToastLevel.Error => "fa-solid fa-circle-exclamation",
+            ToastLevel.Warning => "fa-solid fa-triangle-exclamation",
+            _ => "fa-solid fa-circle-info"
+        };
+
+    public void Dispose()
+    {
+        Toasts.Changed -= OnChanged;
+    }
+}
