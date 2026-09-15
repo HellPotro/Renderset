@@ -1,77 +1,70 @@
-﻿@page "/blocks/test"
+@page "/blocks/test"
 
 @using Renderset.Core.Blocks
 
 @inject IRenderSetApi RenderSetApi
+@inject IToastService Toasts
 
-<h3>Report blocks test</h3>
+<div class="page">
 
-<div class="d-flex gap-2 mb-3">
+    <header class="page-header">
+        <div>
+            <h1>Report blocks test</h1>
+            <p>Utilidad interna para crear y cargar bloques de prueba.</p>
+        </div>
+    </header>
 
-    <button class="btn btn-primary"
-            @onclick="CreateBlocksAsync">
-        Crear bloques de prueba
-    </button>
+    <div class="page-actions">
 
-    <button class="btn btn-secondary"
-            @onclick="LoadBlocksAsync">
-        Cargar bloques
-    </button>
+        <button type="button"
+                class="primary-button"
+                @onclick="CreateBlocksAsync">
+            Crear bloques de prueba
+        </button>
+
+        <button type="button"
+                class="secondary-button"
+                @onclick="LoadBlocksAsync">
+            Cargar bloques
+        </button>
+
+    </div>
+
+    @if (_blocks.Count > 0)
+    {
+        <section class="api-card mt-3">
+            <table class="rs-table">
+                    <thead>
+                        <tr>
+                            <th>Id</th>
+                            <th>Nombre</th>
+                            <th>Tipo</th>
+                            <th>Configuración</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var block in _blocks)
+                        {
+                            <tr>
+                                <td><code>@block.Id</code></td>
+                                <td>@block.Name</td>
+                                <td>@block.Type</td>
+                                <td><pre>@block.ConfigurationJson</pre></td>
+                            </tr>
+                        }
+                    </tbody>
+            </table>
+        </section>
+    }
 
 </div>
-
-@if (!string.IsNullOrWhiteSpace(_message))
-{
-    <div class="alert alert-info">
-        @_message
-    </div>
-}
-
-@if (_blocks.Count > 0)
-{
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Id</th>
-                <th>Nombre</th>
-                <th>Tipo</th>
-                <th>Configuración</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            @foreach (var block in _blocks)
-            {
-                <tr>
-                    <td>
-                        <code>@block.Id</code>
-                    </td>
-
-                    <td>
-                        @block.Name
-                    </td>
-
-                    <td>
-                        @block.Type
-                    </td>
-
-                    <td>
-                        <pre class="mb-0">@block.ConfigurationJson</pre>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
 
 @code {
 
     private const string TenantId = "oranauto";
 
-    private IReadOnlyCollection<ReportBlock> _blocks =
-        [];
-
-    private string? _message;
+    private IReadOnlyCollection<ReportBlock> _blocks = [];
 
     private async Task CreateBlocksAsync()
     {
@@ -81,7 +74,6 @@
                 Id = "oran-default-header",
                 Name = "Cabecera ORAN",
                 Type = ReportBlockType.Header,
-
                 ConfigurationJson =
                     """
                     {
@@ -98,7 +90,6 @@
                 Id = "oran-default-footer",
                 Name = "Pie ORAN",
                 Type = ReportBlockType.Footer,
-
                 ConfigurationJson =
                     """
                     {
@@ -108,29 +99,39 @@
                     """
             };
 
-        await RenderSetApi.SaveBlockAsync(
-            TenantId,
-            header.Id,
-            header);
+        var headerSaved = await Toasts.RunApiAsync(
+            () => RenderSetApi.SaveBlockAsync(
+                TenantId,
+                header.Id,
+                header),
+            errorTitle: "No se ha podido guardar la cabecera de prueba");
 
-        await RenderSetApi.SaveBlockAsync(
-            TenantId,
-            footer.Id,
-            footer);
+        if (!headerSaved)
+            return;
 
-        _message =
-            "Bloques guardados correctamente.";
+        var footerSaved = await Toasts.RunApiAsync(
+            () => RenderSetApi.SaveBlockAsync(
+                TenantId,
+                footer.Id,
+                footer),
+            success: "Bloques de prueba guardados.",
+            errorTitle: "No se ha podido guardar el pie de prueba");
 
-        await LoadBlocksAsync();
+        if (footerSaved)
+            await LoadBlocksAsync();
     }
 
     private async Task LoadBlocksAsync()
     {
-        _blocks =
-            await RenderSetApi.GetBlocksAsync(
-                TenantId);
+        var blocks = await Toasts.RunAsync(
+            () => RenderSetApi.GetBlocksAsync(
+                TenantId),
+            errorTitle: "No se han podido cargar los bloques");
 
-        _message =
-            $"Se han cargado {_blocks.Count} bloques.";
+        if (blocks is null)
+            return;
+
+        _blocks = blocks;
+        Toasts.Info($"Se han cargado {_blocks.Count} bloques.");
     }
 }

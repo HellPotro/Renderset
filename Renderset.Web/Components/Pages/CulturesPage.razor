@@ -1,10 +1,11 @@
-@page "/idiomas"
+﻿@page "/idiomas"
 
 @using System.Globalization
 @using Renderset.Core.Localization
 
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
 
 <PageTitle>Idiomas - RenderSet</PageTitle>
 
@@ -112,13 +113,6 @@
 
             </div>
 
-
-            @if (!string.IsNullOrWhiteSpace(_error))
-            {
-                <div class="page-state">
-                    @_error
-                </div>
-            }
 
 
             <div class="editor-actions">
@@ -241,8 +235,6 @@
 
     private bool _loading = true;
 
-    private string? _error;
-
 
     private bool CanSave =>
         _editing is not null &&
@@ -283,9 +275,13 @@
 
         try
         {
-            _cultures =
-                await RenderSetApi.GetCulturesAsync(
-                    CurrentTenant.Id);
+            var cultures = await Toasts.RunAsync(
+                () => RenderSetApi.GetCulturesAsync(
+                    CurrentTenant.Id),
+                errorTitle: "No se han podido cargar los idiomas");
+
+            if (cultures is not null)
+                _cultures = cultures;
         }
         finally
         {
@@ -296,7 +292,6 @@
 
     private void NewCulture()
     {
-        _error = null;
         _isNew = true;
 
         _editing =
@@ -315,7 +310,6 @@
     private void Edit(
         TenantCulture culture)
     {
-        _error = null;
         _isNew = false;
 
         _editing =
@@ -331,7 +325,6 @@
     private void CancelEdit()
     {
         _editing = null;
-        _error = null;
     }
 
 
@@ -395,21 +388,25 @@
         if (_editing is null || !CanSave)
             return;
 
-        _error = null;
-
         if (!IsKnownCulture(_editing.Culture))
         {
-            _error =
+            Toasts.Warning(
                 $"'{_editing.Culture}' no es una cultura reconocida por .NET. " +
-                "Usa el formato idioma-región, por ejemplo en-GB.";
+                "Usa el formato idioma-región, por ejemplo en-GB.");
 
             return;
         }
 
-        await RenderSetApi.SaveCultureAsync(
-            CurrentTenant.Id,
-            _editing.Culture,
-            _editing);
+        var saved = await Toasts.RunApiAsync(
+            () => RenderSetApi.SaveCultureAsync(
+                CurrentTenant.Id,
+                _editing.Culture,
+                _editing),
+            success: "Idioma guardado.",
+            errorTitle: "No se ha podido guardar el idioma");
+
+        if (!saved)
+            return;
 
         _editing = null;
 
@@ -420,17 +417,21 @@
     private async Task SetDefaultAsync(
         TenantCulture culture)
     {
-        await RenderSetApi.SaveCultureAsync(
-            CurrentTenant.Id,
-            culture.Culture,
-            new TenantCulture
-            {
-                Culture = culture.Culture,
-                DisplayName = culture.DisplayName,
-                IsDefault = true
-            });
+        var saved = await Toasts.RunApiAsync(
+            () => RenderSetApi.SaveCultureAsync(
+                CurrentTenant.Id,
+                culture.Culture,
+                new TenantCulture
+                {
+                    Culture = culture.Culture,
+                    DisplayName = culture.DisplayName,
+                    IsDefault = true
+                }),
+            success: $"{culture.DisplayName} es ahora el idioma por defecto.",
+            errorTitle: "No se ha podido cambiar el idioma por defecto");
 
-        await ReloadAsync();
+        if (saved)
+            await ReloadAsync();
     }
 
 

@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 
 @using System.Text.Json
 @using Renderset.Blazor.Components.Editor
@@ -12,6 +12,7 @@
 
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
 
 <PageTitle>Playground - RenderSet</PageTitle>
 
@@ -93,6 +94,7 @@ else
                           Theme="_theme!"
                           ThemeChanged="ThemeChangedAsync"
                           Data="_data"
+                          DataChanged="DataChangedAsync"
                           HeaderBlocks="_headerBlocks"
                           FooterBlocks="_footerBlocks"
                           BodyBlocks="_bodyBlocks"
@@ -123,17 +125,22 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _headerBlocks =
-            await LoadResolvedBlocksAsync(
-                ReportBlockType.Header);
+        await Toasts.RunAsync(
+            async () =>
+            {
+                _headerBlocks =
+                    await LoadResolvedBlocksAsync(
+                        ReportBlockType.Header);
 
-        _footerBlocks =
-            await LoadResolvedBlocksAsync(
-                ReportBlockType.Footer);
+                _footerBlocks =
+                    await LoadResolvedBlocksAsync(
+                        ReportBlockType.Footer);
 
-        _bodyBlocks =
-            await LoadResolvedBlocksAsync(
-                ReportBlockType.Text);
+                _bodyBlocks =
+                    await LoadResolvedBlocksAsync(
+                        ReportBlockType.Text);
+            },
+            errorTitle: "No se han podido cargar los bloques");
     }
 
     private async Task<IReadOnlyCollection<ReportBlock>>
@@ -207,6 +214,14 @@ else
          * Lo mismo con el tema.
          */
         _theme = theme;
+
+        return Task.CompletedTask;
+    }
+
+    private Task DataChangedAsync(
+        JsonElement data)
+    {
+        _data = data.Clone();
 
         return Task.CompletedTask;
     }

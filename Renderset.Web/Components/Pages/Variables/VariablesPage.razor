@@ -1,9 +1,10 @@
-@page "/variables"
+﻿@page "/variables"
 
 @using Renderset.Core.Variables
 
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
 
 <PageTitle>Variables - RenderSet</PageTitle>
 
@@ -220,9 +221,13 @@
 
         try
         {
-            _variables =
-                await RenderSetApi.GetVariablesAsync(
-                    CurrentTenant.Id);
+            var variables = await Toasts.RunAsync(
+                () => RenderSetApi.GetVariablesAsync(
+                    CurrentTenant.Id),
+                errorTitle: "No se han podido cargar las variables");
+
+            if (variables is not null)
+                _variables = variables;
         }
         finally
         {
@@ -325,10 +330,16 @@
         _editing.Key =
             _editing.Key.Trim();
 
-        await RenderSetApi.SaveVariableAsync(
-            CurrentTenant.Id,
-            _editing.Key,
-            _editing);
+        var saved = await Toasts.RunApiAsync(
+            () => RenderSetApi.SaveVariableAsync(
+                CurrentTenant.Id,
+                _editing.Key,
+                _editing),
+            success: "Variable guardada.",
+            errorTitle: "No se ha podido guardar la variable");
+
+        if (!saved)
+            return;
 
         _editing = null;
 
@@ -339,11 +350,15 @@
     private async Task DeleteAsync(
         ReportVariable variable)
     {
-        await RenderSetApi.DeleteVariableAsync(
-            CurrentTenant.Id,
-            variable.Key);
+        var deleted = await Toasts.RunApiAsync(
+            () => RenderSetApi.DeleteVariableAsync(
+                CurrentTenant.Id,
+                variable.Key),
+            success: "Variable eliminada.",
+            errorTitle: "No se ha podido eliminar la variable");
 
-        await ReloadAsync();
+        if (deleted)
+            await ReloadAsync();
     }
 
 }

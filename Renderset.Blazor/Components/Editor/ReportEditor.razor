@@ -1,4 +1,4 @@
-@using System.IO
+﻿@using System.IO
 @using System.Text
 @using System.Text.Json
 @using System.Text.Json.Serialization
@@ -55,8 +55,9 @@
                 @if (ShowSaveButton)
                 {
                     <button type="button"
-                            class="report-editor-action-button report-editor-action-primary"
+                            class="secondary-button"
                             @onclick="SaveRequested">
+                        <i class="fa-solid fa-save"></i>
                         Guardar
                     </button>
                 }
@@ -521,7 +522,7 @@
             {
                 <div class="report-editor-paper">
                     <DynamicReportRenderer Report="@_resolved"
-                                           Data="@Data"
+                                           Data="@_previewData"
                                            Theme="@Theme" />
                 </div>
             }
@@ -540,8 +541,8 @@
 }
 
 <ReportDataPanel Visible="_showData"
-                 Data="Data"
-                 DataChanged="DataChanged"
+                 Data="_previewData"
+                 DataChanged="PreviewDataChangedAsync"
                  Closed="() => _showData = false" />
 
 @code {
@@ -554,6 +555,8 @@
     public EventCallback<JsonElement> DataChanged { get; set; }
 
     private bool _showData;
+    private JsonElement _previewData;
+    private string? _previewDataSignature;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -648,7 +651,38 @@
 
     protected override void OnParametersSet()
     {
+        SyncPreviewDataFromParameter();
         Resolve();
+    }
+
+    private void SyncPreviewDataFromParameter()
+    {
+        var signature =
+            Data.ValueKind == JsonValueKind.Undefined
+                ? string.Empty
+                : JsonSerializer.Serialize(Data);
+
+        if (string.Equals(
+                signature,
+                _previewDataSignature,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _previewDataSignature = signature;
+        _previewData = Data.ValueKind == JsonValueKind.Undefined
+            ? default
+            : Data.Clone();
+    }
+
+    private async Task PreviewDataChangedAsync(
+        JsonElement data)
+    {
+        _previewData = data.Clone();
+        _previewDataSignature = JsonSerializer.Serialize(_previewData);
+
+        await DataChanged.InvokeAsync(_previewData);
     }
 
     private void Resolve()

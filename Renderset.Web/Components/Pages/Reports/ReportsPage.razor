@@ -1,4 +1,4 @@
-@page "/reports"
+﻿@page "/reports"
 
 @using Renderset.Core.Localization
 @using Renderset.Core.Persistence
@@ -8,6 +8,7 @@
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
 @inject NavigationManager Navigation
+@inject IToastService Toasts
 
 <PageTitle>Reports - RenderSet</PageTitle>
 
@@ -33,13 +34,6 @@
 
     </header>
 
-
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <div class="report-error">
-            @_error
-        </div>
-    }
 
 
     @if (_loading)
@@ -267,7 +261,6 @@
 
     private bool _loading = true;
     private bool _deleting;
-    private string? _error;
     private string _search = string.Empty;
 
     private Report? _reportToDelete;
@@ -316,29 +309,37 @@
     private async Task ReloadAsync()
     {
         _loading = true;
-        _error = null;
 
         try
         {
-            _reports =
-                await RenderSetApi.GetReportsAsync(
-                    CurrentTenant.Id);
+            var loaded = await Toasts.RunAsync(
+                async () =>
+                {
+                    _reports =
+                        await RenderSetApi.GetReportsAsync(
+                            CurrentTenant.Id);
 
-            _presets =
-                await RenderSetApi.GetPresetsAsync(
-                    CurrentTenant.Id);
+                    _presets =
+                        await RenderSetApi.GetPresetsAsync(
+                            CurrentTenant.Id);
 
-            _cultures =
-                await RenderSetApi.GetCulturesAsync(
-                    CurrentTenant.Id);
+                    _cultures =
+                        await RenderSetApi.GetCulturesAsync(
+                            CurrentTenant.Id);
 
-            _coverage =
-                await RenderSetApi.GetResourceCoverageAsync(
-                    CurrentTenant.Id);
-        }
-        catch (Exception exception)
-        {
-            _error = exception.Message;
+                    _coverage =
+                        await RenderSetApi.GetResourceCoverageAsync(
+                            CurrentTenant.Id);
+                },
+                errorTitle: "No se han podido cargar los reports");
+
+            if (!loaded)
+            {
+                _reports = [];
+                _presets = [];
+                _cultures = [];
+                _coverage = [];
+            }
         }
         finally
         {
@@ -435,7 +436,6 @@
         Report report)
     {
         _reportToDelete = report;
-        _error = null;
     }
 
 
@@ -451,21 +451,24 @@
             return;
 
         _deleting = true;
-        _error = null;
 
         try
         {
-            await RenderSetApi.DeleteReportAsync(
-                CurrentTenant.Id,
-                _reportToDelete.Id);
+            var reportName = _reportToDelete.Name;
+
+            var deleted = await Toasts.RunApiAsync(
+                () => RenderSetApi.DeleteReportAsync(
+                    CurrentTenant.Id,
+                    _reportToDelete.Id),
+                success: $"Report '{reportName}' eliminado.",
+                errorTitle: "No se ha podido borrar el report");
+
+            if (!deleted)
+                return;
 
             _reportToDelete = null;
 
             await ReloadAsync();
-        }
-        catch (Exception exception)
-        {
-            _error = exception.Message;
         }
         finally
         {

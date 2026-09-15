@@ -8,12 +8,20 @@
 @using Renderset.Core.Themes
 @using Renderset.Blazor.Components.Editor
 
-<h3>Report inference test</h3>
+<div class="page">
 
-<button class="btn btn-primary"
-        @onclick="BuildFromJson">
-    Generar desde JSON
-</button>
+    <header class="page-header">
+        <div>
+            <h1>Report inference test</h1>
+            <p>Utilidad interna para probar inferencia de JSON.</p>
+        </div>
+
+        <button type="button"
+                class="primary-button"
+                @onclick="BuildFromJson">
+            Generar desde JSON
+        </button>
+    </header>
 
 @if (_definition is not null &&
      _configuration is not null &&
@@ -22,8 +30,11 @@
     <ReportEditor Definition="_definition"
                   @bind-Configuration="_configuration"
                   @bind-Theme="_theme"
-                  Data="_data" />
+                  Data="_data"
+                  DataChanged="DataChangedAsync" />
 }
+
+</div>
 
 @code {
     private ReportDefinition? _definition;
@@ -31,6 +42,13 @@
     private ReportTheme? _theme;
     private ReportDataSchema? _schema;
     private JsonElement _data;
+
+    private Task DataChangedAsync(JsonElement data)
+    {
+        _data = data.Clone();
+
+        return Task.CompletedTask;
+    }
 
     private void BuildFromJson()
     {

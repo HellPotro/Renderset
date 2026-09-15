@@ -1,4 +1,4 @@
-@page "/presets"
+﻿@page "/presets"
 
 @using System.Globalization
 @using System.Text
@@ -13,6 +13,7 @@
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
 @inject NavigationManager Navigation
+@inject IToastService Toasts
 
 <PageTitle>Presets - RenderSet</PageTitle>
 
@@ -38,13 +39,6 @@
 
     </header>
 
-
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <div class="preset-error">
-            @_error
-        </div>
-    }
 
 
     @if (_creating)
@@ -383,7 +377,6 @@
 
     private bool _loading = true;
     private bool _saving;
-    private string? _error;
 
     private bool _creating;
     private string? _newReportId;
@@ -471,18 +464,30 @@
 
         try
         {
-            _reports =
-                await RenderSetApi.GetReportsAsync(
-                    CurrentTenant.Id);
+            var loaded = await Toasts.RunAsync(
+                async () =>
+                {
+                    _reports =
+                        await RenderSetApi.GetReportsAsync(
+                            CurrentTenant.Id);
 
-            _presets =
-                await RenderSetApi.GetPresetsAsync(
-                    CurrentTenant.Id);
+                    _presets =
+                        await RenderSetApi.GetPresetsAsync(
+                            CurrentTenant.Id);
 
-            foreach (var report in _reports)
+                    foreach (var report in _reports)
+                    {
+                        await LoadDefaultPresetAsync(
+                            report.Id);
+                    }
+                },
+                errorTitle: "No se han podido cargar los presets");
+
+            if (!loaded)
             {
-                await LoadDefaultPresetAsync(
-                    report.Id);
+                _reports = [];
+                _presets = [];
+                _defaultPresets.Clear();
             }
         }
         finally
@@ -520,7 +525,6 @@
     private void OpenCreator(
         string? reportId)
     {
-        _error = null;
         _creating = true;
 
         _newReportId =
@@ -541,7 +545,6 @@
     private void CancelCreate()
     {
         _creating = false;
-        _error = null;
     }
 
 
@@ -593,7 +596,6 @@
             return;
 
         _saving = true;
-        _error = null;
 
         try
         {
@@ -605,7 +607,7 @@
                         presetId,
                         StringComparison.OrdinalIgnoreCase)))
             {
-                _error = $"Ya existe un preset con el id '{presetId}'.";
+                Toasts.Warning($"Ya existe un preset con el id '{presetId}'.");
                 return;
             }
 
@@ -649,10 +651,15 @@
                         : Clone(source.Theme)
                 };
 
-            await RenderSetApi.SavePresetAsync(
-                CurrentTenant.Id,
-                presetId,
-                preset);
+            var saved = await Toasts.RunApiAsync(
+                () => RenderSetApi.SavePresetAsync(
+                    CurrentTenant.Id,
+                    presetId,
+                    preset),
+                errorTitle: "No se ha podido crear el preset");
+
+            if (!saved)
+                return;
 
             if (source is not null)
             {
@@ -663,15 +670,20 @@
 
             if (_makeDefault || !HasDefaultForNewReport)
             {
-                await RenderSetApi.SaveAssignmentAsync(
-                    CurrentTenant.Id,
-                    new ReportPresetAssignment
-                    {
-                        ReportId = _newReportId!,
-                        ContextType = null,
-                        ContextKey = null,
-                        PresetId = presetId
-                    });
+                var assigned = await Toasts.RunApiAsync(
+                    () => RenderSetApi.SaveAssignmentAsync(
+                        CurrentTenant.Id,
+                        new ReportPresetAssignment
+                        {
+                            ReportId = _newReportId!,
+                            ContextType = null,
+                            ContextKey = null,
+                            PresetId = presetId
+                        }),
+                    errorTitle: "No se ha podido asignar el preset por defecto");
+
+                if (!assigned)
+                    return;
             }
 
             var reportId = _newReportId!;
@@ -684,7 +696,9 @@
         }
         catch (Exception exception)
         {
-            _error = exception.Message;
+            Toasts.Error(
+                ToastServiceExtensions.Describe(exception),
+                "No se ha podido crear el preset");
         }
         finally
         {
@@ -713,19 +727,21 @@
         var targetScope =
             ReportResourceScope.ForPreset(targetPresetId);
 
-        await RenderSetApi.SaveResourcesAsync(
-            CurrentTenant.Id,
-            resources
-                .Select(x => new ReportResource
-                {
-                    Scope = targetScope,
-                    Key = x.Key,
-                    Culture = x.Culture,
-                    Value = x.Value,
-                    Source = x.Source,
-                    Description = x.Description
-                })
-                .ToList());
+        await Toasts.RunApiAsync(
+            () => RenderSetApi.SaveResourcesAsync(
+                CurrentTenant.Id,
+                resources
+                    .Select(x => new ReportResource
+                    {
+                        Scope = targetScope,
+                        Key = x.Key,
+                        Culture = x.Culture,
+                        Value = x.Value,
+                        Source = x.Source,
+                        Description = x.Description
+                    })
+                    .ToList()),
+            errorTitle: "No se han podido copiar los textos del preset");
     }
 
 

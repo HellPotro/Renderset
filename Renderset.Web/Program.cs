@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Refit;
 using Renderset.Blazor.Components.Toasts;
 using Renderset.Core.Services;
@@ -15,7 +17,6 @@ builder.Services
     .AddInteractiveServerComponents();
 
 builder.Services.AddOutputCache();
-
 builder.Services.AddScoped<ICurrentTenant, ConfiguredCurrentTenant>();
 builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddSingleton<IReportConfigurationComposer, ReportConfigurationComposer>();
@@ -23,8 +24,21 @@ builder.Services.AddSingleton<IReportConfigurationComposer, ReportConfigurationC
 var reportingApiBaseAddress =
     new Uri(builder.Configuration["ReportingApi"]!);
 
+var refitSettings =
+    new RefitSettings
+    {
+        ContentSerializer =
+            new SystemTextJsonContentSerializer(
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                {
+                    PropertyNameCaseInsensitive = true,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                    Converters = { new JsonStringEnumConverter() }
+                })
+    };
+
 builder.Services
-    .AddRefitClient<IRenderSetApi>()
+    .AddRefitClient<IRenderSetApi>(refitSettings)
     .ConfigureHttpClient(client =>
     {
         client.BaseAddress = reportingApiBaseAddress;

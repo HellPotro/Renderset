@@ -13,30 +13,28 @@
 @layout EmptyLayout
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
 @inject NavigationManager Navigation
 
 <PageTitle>Designer - RenderSet</PageTitle>
 
 @if (_loading)
 {
-    <div class="p-4">
+    <div class="designer-state">
+        <i class="fa-solid fa-circle-notch fa-spin"></i>
         Cargando diseñador...
     </div>
 }
 else if (_report is null)
 {
-    <div class="p-4">
-
-        <div class="alert alert-danger">
-            No se ha encontrado el report.
-        </div>
-
+    <div class="designer-state designer-state-error">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <strong>No se ha podido abrir el report.</strong>
         <button type="button"
-                class="btn btn-outline-secondary"
+                class="secondary-button"
                 @onclick="GoBack">
             Volver
         </button>
-
     </div>
 }
 else if (_configuration is not null &&
@@ -64,6 +62,14 @@ else if (_configuration is not null &&
                 </span>
             </div>
 
+            @if (_saving)
+            {
+                <span class="designer-saving">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    Guardando
+                </span>
+            }
+
         </header>
 
         <div class="report-designer-page">
@@ -72,6 +78,7 @@ else if (_configuration is not null &&
                           @bind-Configuration="_configuration"
                           @bind-Theme="_theme"
                           Data="_data"
+                          DataChanged="DataChangedAsync"
                           HeaderBlocks="_headerBlocks"
                           FooterBlocks="_footerBlocks"
                           BodyBlocks="_bodyBlocks"
@@ -88,17 +95,15 @@ else if (_configuration is not null &&
 @code {
 
     [Parameter]
-    public string ReportId { get; set; } =
-        default!;
+    public string ReportId { get; set; } = default!;
 
     [Parameter]
     public string? PresetId { get; set; }
 
-    private bool _loading =
-        true;
+    private bool _loading = true;
+    private bool _saving;
 
     private Report? _report;
-
     private ReportConfiguration? _configuration;
 
     private IReadOnlyCollection<ReportBlock> _headerBlocks = [];
@@ -106,9 +111,7 @@ else if (_configuration is not null &&
     private IReadOnlyCollection<ReportBlock> _bodyBlocks = [];
 
     private ReportTheme? _theme;
-
     private JsonElement _data;
-
     private string? _presetId;
 
     private IReadOnlyCollection<TenantCulture> _cultures = [];
@@ -120,86 +123,86 @@ else if (_configuration is not null &&
     {
         _loading = true;
 
-        try
+        var loaded =
+            await Toasts.RunAsync(
+                LoadDesignerAsync,
+                errorTitle: "No se ha podido abrir el diseñador");
+
+        _loading = false;
+
+        if (!loaded)
         {
-            _report =
-                await RenderSetApi.GetReportAsync(
+            _report = null;
+        }
+    }
+
+    private async Task LoadDesignerAsync()
+    {
+        _report =
+            await RenderSetApi.GetReportAsync(
+                CurrentTenant.Id,
+                ReportId);
+
+        _headerBlocks =
+            await LoadResolvedBlocksAsync(
+                ReportBlockType.Header);
+
+        _footerBlocks =
+            await LoadResolvedBlocksAsync(
+                ReportBlockType.Footer);
+
+        _bodyBlocks =
+            await LoadResolvedBlocksAsync(
+                ReportBlockType.Text);
+
+        var preset =
+            string.IsNullOrWhiteSpace(PresetId)
+                ? await RenderSetApi.ResolvePresetAsync(
+                    tenantId: CurrentTenant.Id,
+                    reportId: ReportId,
+                    contextType: null,
+                    contextKey: null)
+                : await RenderSetApi.GetPresetAsync(
                     CurrentTenant.Id,
-                    ReportId);
+                    PresetId);
 
-            _headerBlocks =
-                await LoadResolvedBlocksAsync(
-                    ReportBlockType.Header);
-
-            _footerBlocks =
-                await LoadResolvedBlocksAsync(
-                    ReportBlockType.Footer);
-
-            _bodyBlocks =
-                await LoadResolvedBlocksAsync(
-                    ReportBlockType.Text);
-
-            var preset =
-                string.IsNullOrWhiteSpace(PresetId)
-                    ? await RenderSetApi.ResolvePresetAsync(
-                        tenantId: CurrentTenant.Id,
-                        reportId: ReportId,
-                        contextType: null,
-                        contextKey: null)
-                    : await RenderSetApi.GetPresetAsync(
-                        CurrentTenant.Id,
-                        PresetId);
-
-            if (preset is null)
-            {
-                throw new InvalidOperationException(
-                    string.IsNullOrWhiteSpace(PresetId)
-                        ? $"No existe preset default para '{ReportId}'."
-                        : $"No existe el preset '{PresetId}'.");
-            }
-
-            if (!string.Equals(
-                    preset.Configuration.ReportId,
-                    ReportId,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    $"El preset '{preset.Id}' pertenece al report " +
-                    $"'{preset.Configuration.ReportId}' y no a '{ReportId}'.");
-            }
-
-            _presetId =
-                preset.Id;
-
-            _configuration =
-                Clone(preset.Configuration);
-
-            _theme =
-                Clone(preset.Theme);
-
-            _cultures =
-                await RenderSetApi.GetCulturesAsync(
-                    CurrentTenant.Id);
-
-            var initialCulture =
-                _cultures.FirstOrDefault(x => x.IsDefault)
-                ?? _cultures.FirstOrDefault();
-
-            _texts =
-                await LoadTextsAsync(
-                    initialCulture?.Culture);
-
-            if (_report.SampleData.HasValue)
-            {
-                _data =
-                    _report.SampleData.Value.Clone();
-            }
-        }
-        finally
+        if (preset is null)
         {
-            _loading =
-                false;
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(PresetId)
+                    ? $"No existe preset default para '{ReportId}'."
+                    : $"No existe el preset '{PresetId}'.");
         }
+
+        if (!string.Equals(
+                preset.Configuration.ReportId,
+                ReportId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"El preset '{preset.Id}' pertenece al report " +
+                $"'{preset.Configuration.ReportId}' y no a '{ReportId}'.");
+        }
+
+        _presetId = preset.Id;
+        _configuration = Clone(preset.Configuration);
+        _theme = Clone(preset.Theme);
+
+        _cultures =
+            await RenderSetApi.GetCulturesAsync(
+                CurrentTenant.Id);
+
+        var initialCulture =
+            _cultures.FirstOrDefault(x => x.IsDefault)
+            ?? _cultures.FirstOrDefault();
+
+        _texts =
+            await LoadTextsAsync(
+                initialCulture?.Culture);
+
+        _data = _report.SampleData.HasValue
+            ? _report.SampleData.Value.Clone()
+            : default;
     }
 
     private async Task<ReportTextWorkspace> LoadTextsAsync(
@@ -236,53 +239,99 @@ else if (_configuration is not null &&
     private async Task ChangeCultureAsync(
         string culture)
     {
-        if (_texts.HasPendingChanges)
-            await SaveTextsAsync();
+        await Toasts.RunAsync(
+            async () =>
+            {
+                if (_texts.HasPendingChanges &&
+                    !await SaveTextsAsync())
+                {
+                    return;
+                }
 
-        _texts =
-            await LoadTextsAsync(culture);
+                _texts =
+                    await LoadTextsAsync(culture);
+            },
+            errorTitle: "No se ha podido cambiar el idioma");
     }
 
-    private async Task SaveTextsAsync()
+    private async Task<bool> SaveTextsAsync()
     {
         if (!_texts.HasPendingChanges)
-            return;
+            return true;
 
-        await RenderSetApi.SaveResourcesAsync(
-            CurrentTenant.Id,
-            _texts.GetPendingChanges());
+        var saved =
+            await Toasts.RunApiAsync(
+                () => RenderSetApi.SaveResourcesAsync(
+                    CurrentTenant.Id,
+                    _texts.GetPendingChanges()),
+                errorTitle: "No se han podido guardar los textos");
 
-        _texts.AcceptPendingChanges();
+        if (saved)
+            _texts.AcceptPendingChanges();
+
+        return saved;
     }
 
     private async Task SaveAsync()
     {
         if (_configuration is null ||
             _theme is null ||
-            string.IsNullOrWhiteSpace(_presetId))
+            string.IsNullOrWhiteSpace(_presetId) ||
+            _report is null ||
+            _saving)
         {
             return;
         }
 
-        var preset =
-            new ReportPreset
-            {
-                Id = _presetId,
-                Version = 1,
+        _saving = true;
 
-                Configuration =
-                    Clone(_configuration),
+        try
+        {
+            _report.SampleData =
+                _data.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : _data.Clone();
 
-                Theme =
-                    Clone(_theme)
-            };
+            var reportSaved =
+                await Toasts.RunApiAsync(
+                    () => RenderSetApi.SaveReportAsync(
+                        CurrentTenant.Id,
+                        _report.Id,
+                        _report),
+                    errorTitle: "No se han podido guardar los datos de ejemplo");
 
-        await RenderSetApi.SavePresetAsync(
-            CurrentTenant.Id,
-            _presetId,
-            preset);
+            if (!reportSaved)
+                return;
 
-        await SaveTextsAsync();
+            var preset =
+                new ReportPreset
+                {
+                    Id = _presetId,
+                    Version = 1,
+                    Configuration = Clone(_configuration),
+                    Theme = Clone(_theme)
+                };
+
+            var presetSaved =
+                await Toasts.RunApiAsync(
+                    () => RenderSetApi.SavePresetAsync(
+                        CurrentTenant.Id,
+                        _presetId,
+                        preset),
+                    errorTitle: "No se ha podido guardar el preset");
+
+            if (!presetSaved)
+                return;
+
+            if (!await SaveTextsAsync())
+                return;
+
+            Toasts.Success("Diseñador guardado.");
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task<IReadOnlyCollection<ReportBlock>> LoadResolvedBlocksAsync(
@@ -293,6 +342,9 @@ else if (_configuration is not null &&
                 CurrentTenant.Id,
                 type);
 
+        if (blocks.Count == 0)
+            return [];
+
         var resolvedBlocks =
             await Task.WhenAll(
                 blocks.Select(block =>
@@ -301,6 +353,14 @@ else if (_configuration is not null &&
                         block.Id)));
 
         return resolvedBlocks;
+    }
+
+    private Task DataChangedAsync(
+        JsonElement data)
+    {
+        _data = data.Clone();
+
+        return Task.CompletedTask;
     }
 
     private void GoBack()

@@ -1,10 +1,11 @@
-@page "/blocks"
+﻿@page "/blocks"
 
 @using Renderset.Core.Blocks
 
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
 @inject NavigationManager Navigation
+@inject IToastService Toasts
 
 <PageTitle>Blocks - RenderSet</PageTitle>
 
@@ -164,9 +165,13 @@
     {
         try
         {
-            _blocks =
-                await RenderSetApi.GetBlocksAsync(
-                    CurrentTenant.Id);
+            var blocks = await Toasts.RunAsync(
+                () => RenderSetApi.GetBlocksAsync(
+                    CurrentTenant.Id),
+                errorTitle: "No se han podido cargar los bloques");
+
+            if (blocks is not null)
+                _blocks = blocks;
         }
         finally
         {

@@ -1,0 +1,311 @@
+﻿@page "/api"
+
+@inject ICurrentTenant CurrentTenant
+@inject IJSRuntime JS
+@inject IToastService Toasts
+
+<PageTitle>API - RenderSet</PageTitle>
+
+<div class="page page-wide api-page">
+
+    <header class="page-header api-header">
+        <div>
+            <span class="page-eyebrow">Developer</span>
+            <h1>API de RenderSet</h1>
+            <p>
+                Guía rápida para crear reports, presets, recursos y generar
+                documentos desde aplicaciones externas o desde un ERP.
+            </p>
+        </div>
+
+        <div class="api-tenant-card">
+            <span>Tenant actual</span>
+            <code>@CurrentTenant.Id</code>
+        </div>
+    </header>
+
+    <section class="api-hero-card">
+        <div>
+            <h2>Flujo recomendado</h2>
+            <p>
+                RenderSet funciona mejor cuando separas el origen de datos del
+                diseño. El cliente envía JSON o un dataset tabular; la API lo
+                transforma, resuelve el preset y renderiza el documento.
+            </p>
+        </div>
+
+        <div class="api-flow">
+            <span>Dataset</span>
+            <i class="fa-solid fa-arrow-right-long"></i>
+            <span>Mapping</span>
+            <i class="fa-solid fa-arrow-right-long"></i>
+            <span>Report</span>
+            <i class="fa-solid fa-arrow-right-long"></i>
+            <span>Preset</span>
+            <i class="fa-solid fa-arrow-right-long"></i>
+            <span>PDF / HTML</span>
+        </div>
+    </section>
+
+
+
+    <section class="api-map-card">
+        <header>
+            <h2>Mapa de endpoints actuales</h2>
+            <p>Resumen rápido de lo que ya expone el backend.</p>
+        </header>
+
+        <div class="api-endpoint-list">
+            <div><span class="api-method get">GET</span><code>/api/reports/{tenantId}</code><strong>Listado de reports</strong></div>
+            <div><span class="api-method get">GET</span><code>/api/reports/{tenantId}/{reportId}</code><strong>Detalle de report</strong></div>
+            <div><span class="api-method put">PUT</span><code>/api/reports/{tenantId}/{reportId}</code><strong>Guardar report</strong></div>
+            <div><span class="api-method delete">DEL</span><code>/api/reports/{tenantId}/{reportId}</code><strong>Borrar report</strong></div>
+            <div><span class="api-method get">GET</span><code>/api/presets/{tenantId}</code><strong>Listado de presets</strong></div>
+            <div><span class="api-method get">GET</span><code>/api/presets/{tenantId}/{presetId}</code><strong>Detalle de preset</strong></div>
+            <div><span class="api-method put">PUT</span><code>/api/presets/{tenantId}/{presetId}</code><strong>Guardar preset</strong></div>
+            <div><span class="api-method get">GET</span><code>/api/presets/resolve/{tenantId}/{reportId}</code><strong>Resolver preset por contexto</strong></div>
+            <div><span class="api-method get">GET</span><code>/api/assignments/{tenantId}/{reportId}</code><strong>Assignments de un report</strong></div>
+            <div><span class="api-method put">PUT</span><code>/api/assignments/{tenantId}</code><strong>Guardar assignment</strong></div>
+            <div><span class="api-method get">GET</span><code>/api/blocks/{tenantId}</code><strong>Bloques reutilizables</strong></div>
+            <div><span class="api-method get">GET</span><code>/api/blocks/{tenantId}/type/{type}</code><strong>Bloques por tipo</strong></div>
+            <div><span class="api-method put">PUT</span><code>/api/blocks/{tenantId}/{blockId}</code><strong>Guardar bloque</strong></div>
+            <div><span class="api-method get">GET</span><code>/api/resources/{tenantId}/{scope}</code><strong>Recursos de diccionario</strong></div>
+            <div><span class="api-method put">PUT</span><code>/api/resources/{tenantId}</code><strong>Guardar recursos</strong></div>
+            <div><span class="api-method post">POST</span><code>/api/resources/{tenantId}/copy-missing</code><strong>Copiar claves pendientes</strong></div>
+            <div><span class="api-method post">POST</span><code>/api/resources/{tenantId}/translate-missing</code><strong>Traducir claves pendientes</strong></div>
+            <div><span class="api-method get">GET</span><code>/api/variables/{tenantId}</code><strong>Variables del tenant</strong></div>
+            <div><span class="api-method put">PUT</span><code>/api/variables/{tenantId}/{key}</code><strong>Guardar variable</strong></div>
+            <div><span class="api-method get">GET</span><code>/api/cultures/{tenantId}</code><strong>Idiomas del tenant</strong></div>
+        </div>
+    </section>
+
+    <div class="api-grid">
+
+        <section class="api-card">
+            <header>
+                <span class="api-method get">GET</span>
+                <code>/api/reports/{tenantId}</code>
+            </header>
+
+            <p>Devuelve los reports disponibles para un tenant.</p>
+
+            <pre>@ReportsExample</pre>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="() => CopyAsync(ReportsExample)">
+                <i class="fa-regular fa-copy"></i>
+                Copiar ejemplo
+            </button>
+        </section>
+
+        <section class="api-card">
+            <header>
+                <span class="api-method put">PUT</span>
+                <code>/api/reports/{tenantId}/{reportId}</code>
+            </header>
+
+            <p>
+                Crea o actualiza la definición del report, su schema y datos de
+                ejemplo. Es el endpoint que usa la pantalla “Nuevo report”.
+            </p>
+
+            <pre>@SaveReportExample</pre>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="() => CopyAsync(SaveReportExample)">
+                <i class="fa-regular fa-copy"></i>
+                Copiar ejemplo
+            </button>
+        </section>
+
+        <section class="api-card">
+            <header>
+                <span class="api-method put">PUT</span>
+                <code>/api/presets/{tenantId}/{presetId}</code>
+            </header>
+
+            <p>
+                Guarda el diseño visual: configuración sparse, bloques,
+                composición del body y theme.
+            </p>
+
+            <pre>@PresetExample</pre>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="() => CopyAsync(PresetExample)">
+                <i class="fa-regular fa-copy"></i>
+                Copiar ejemplo
+            </button>
+        </section>
+
+        <section class="api-card">
+            <header>
+                <span class="api-method post">POST</span>
+                <code>/api/resources/{tenantId}/translate-missing</code>
+            </header>
+
+            <p>
+                Traduce las claves pendientes de un ámbito sin sobrescribir los
+                textos escritos manualmente.
+            </p>
+
+            <pre>@TranslateExample</pre>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="() => CopyAsync(TranslateExample)">
+                <i class="fa-regular fa-copy"></i>
+                Copiar ejemplo
+            </button>
+        </section>
+
+        <section class="api-card api-card-wide">
+            <header>
+                <span class="api-method post">POST</span>
+                <code>/api/render</code>
+            </header>
+
+            <p>
+                Endpoint recomendado para la siguiente fase: recibir datos reales
+                y devolver PDF/HTML. Si el origen es SQL, lo ideal es enviar el
+                dataset tabular y que RenderSet aplique el mapping guardado.
+            </p>
+
+            <pre>@RenderExample</pre>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="() => CopyAsync(RenderExample)">
+                <i class="fa-regular fa-copy"></i>
+                Copiar ejemplo
+            </button>
+        </section>
+
+    </div>
+
+    <section class="api-card api-card-wide api-notes">
+        <h2>Contrato tabular recomendado</h2>
+        <p>
+            No envíes un <code>DataTable</code> .NET como tal. Es mejor enviar
+            columnas y filas: pesa menos, no ata la API a .NET y sirve igual
+            para SQL, CSV, Excel o cualquier cliente HTTP.
+        </p>
+
+        <pre>@TabularExample</pre>
+
+        <button type="button"
+                class="secondary-button"
+                @onclick="() => CopyAsync(TabularExample)">
+            <i class="fa-regular fa-copy"></i>
+            Copiar dataset
+        </button>
+    </section>
+
+</div>
+
+@code {
+
+    private string ReportsExample =>
+        $"GET /api/reports/{CurrentTenant.Id}";
+
+    private string SaveReportExample =>
+        $$"""
+        PUT /api/reports/{{CurrentTenant.Id}}/invoice
+        Content-Type: application/json
+
+        {
+          "id": "invoice",
+          "name": "Factura",
+          "version": 1,
+          "definition": { },
+          "dataSchema": { },
+          "sampleData": { }
+        }
+        """;
+
+    private string PresetExample =>
+        $$"""
+        PUT /api/presets/{{CurrentTenant.Id}}/invoice-default
+        Content-Type: application/json
+
+        {
+          "id": "invoice-default",
+          "version": 1,
+          "configuration": {
+            "id": "invoice-default",
+            "reportId": "invoice",
+            "name": "Default",
+            "version": 1
+          },
+          "theme": {
+            "id": "default",
+            "name": "Default"
+          }
+        }
+        """;
+
+    private string TranslateExample =>
+        $$"""
+        POST /api/resources/{{CurrentTenant.Id}}/translate-missing
+        Content-Type: application/json
+
+        {
+          "scope": "invoice",
+          "sourceCulture": "es-ES",
+          "targetCulture": "en-GB",
+          "includeEmptyValues": true,
+          "overwriteExistingValues": false
+        }
+        """;
+
+    private string RenderExample =>
+        $$"""
+        POST /api/render
+        Accept: application/pdf
+        Content-Type: application/json
+
+        {
+          "tenantId": "{{CurrentTenant.Id}}",
+          "reportId": "invoice",
+          "presetId": "invoice-default",
+          "output": {
+            "format": "pdf",
+            "language": "en-GB",
+            "fileName": "invoice-080041.pdf"
+          },
+          "data": { }
+        }
+        """;
+
+    private const string TabularExample =
+        """
+        {
+          "columns": [
+            { "name": "Factura", "type": "string" },
+            { "name": "Cliente", "type": "string" },
+            { "name": "Albaran_codigo", "type": "string" },
+            { "name": "Articulo", "type": "string" },
+            { "name": "Cantidad", "type": "number" },
+            { "name": "Precio", "type": "number" }
+          ],
+          "rows": [
+            ["080041", "000123", "ALB-1", "A001", 2, 20.50],
+            ["080041", "000123", "ALB-1", "A002", 5, 12.30],
+            ["080041", "000123", "ALB-2", "A003", 1, 40.00]
+          ]
+        }
+        """;
+
+    private async Task CopyAsync(
+        string text)
+    {
+        await JS.InvokeVoidAsync(
+            "renderSet.copyText",
+            text);
+
+        Toasts.Success("Copiado al portapapeles.");
+    }
+}

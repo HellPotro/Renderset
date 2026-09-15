@@ -1,4 +1,4 @@
-@page "/resources"
+﻿@page "/resources"
 
 @using Renderset.Core.Localization
 @using Renderset.Core.Reports
@@ -540,7 +540,7 @@
         }
         catch (Exception exception)
         {
-            Toasts.Error(exception.Message);
+            Toasts.Error(ToastServiceExtensions.Describe(exception));
         }
         finally
         {
@@ -838,17 +838,21 @@
                     })
                     .ToList();
 
-            await RenderSetApi.SaveResourcesAsync(
-                CurrentTenant.Id,
-                resources);
+            var saved = await Toasts.RunApiAsync(
+                () => RenderSetApi.SaveResourcesAsync(
+                    CurrentTenant.Id,
+                    resources),
+                success: $"{resources.Count} entradas guardadas.",
+                errorTitle: "No se han podido guardar las traducciones");
 
-            Toasts.Success($"{resources.Count} entradas guardadas.");
+            if (!saved)
+                return;
 
             await LoadScopeAsync();
         }
         catch (Exception exception)
         {
-            Toasts.Error(exception.Message);
+            Toasts.Error(ToastServiceExtensions.Describe(exception));
         }
         finally
         {
@@ -929,12 +933,16 @@
         if (!confirmed)
             return;
 
-        await RenderSetApi.DeleteResourceAsync(
-            CurrentTenant.Id,
-            _scope,
-            key);
+        var deleted = await Toasts.RunApiAsync(
+            () => RenderSetApi.DeleteResourceAsync(
+                CurrentTenant.Id,
+                _scope,
+                key),
+            success: "Clave eliminada.",
+            errorTitle: "No se ha podido eliminar la clave");
 
-        await LoadScopeAsync();
+        if (deleted)
+            await LoadScopeAsync();
     }
 
 
@@ -949,7 +957,8 @@
 
         try
         {
-            var result = await RenderSetApi.CopyMissingResourcesAsync(
+            var result = await Toasts.RunApiAsync(
+                () => RenderSetApi.CopyMissingResourcesAsync(
                     CurrentTenant.Id,
                     new CopyMissingReportResourcesRequest
                     {
@@ -957,7 +966,11 @@
                         SourceCulture = sourceCulture,
                         TargetCulture = targetCulture,
                         CopyValue = true
-                    });
+                    }),
+                errorTitle: "No se han podido copiar las claves pendientes");
+
+            if (result is null)
+                return;
 
             Toasts.Success(
                 $"Copiadas {result.Created} claves de {sourceCulture} " +
@@ -968,7 +981,7 @@
         }
         catch (Exception exception)
         {
-            Toasts.Error(exception.Message);
+            Toasts.Error(ToastServiceExtensions.Describe(exception));
         }
         finally
         {
@@ -989,29 +1002,34 @@
         try
         {
             var result =
-                await RenderSetApi.TranslateMissingResourcesAsync(
-                    CurrentTenant.Id,
-                    new TranslateMissingReportResourcesRequest
-                    {
-                        Scope = _scope,
-                        SourceCulture = sourceCulture,
-                        TargetCulture = targetCulture,
-                        IncludeEmptyValues = true,
-                        OverwriteExistingValues = false
-                    });
-                    
-                Toasts.Success(
-                    $"Traducidas {result.Translated} claves con {result.Provider}. " +
-                    $"Revisa las marcadas como automáticas.");
+                await Toasts.RunApiAsync(
+                    () => RenderSetApi.TranslateMissingResourcesAsync(
+                        CurrentTenant.Id,
+                        new TranslateMissingReportResourcesRequest
+                        {
+                            Scope = _scope,
+                            SourceCulture = sourceCulture,
+                            TargetCulture = targetCulture,
+                            IncludeEmptyValues = true,
+                            OverwriteExistingValues = false
+                        }),
+                    errorTitle: "No se han podido traducir las claves pendientes");
+
+            if (result is null)
+                return;
+
+            Toasts.Success(
+                $"Traducidas {result.Translated} claves con {result.Provider}. " +
+                $"Revisa las marcadas como automáticas.");
 
             if (result.Failed > 0)
-                Toasts.Warning($" {result.Failed} fallaron.");
+                Toasts.Warning($"{result.Failed} claves fallaron.");
 
             await LoadScopeAsync();
         }
         catch (Exception exception)
         {
-            Toasts.Error( exception.Message);
+            Toasts.Error(ToastServiceExtensions.Describe(exception));
         }
         finally
         {

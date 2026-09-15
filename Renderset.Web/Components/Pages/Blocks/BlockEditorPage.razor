@@ -1,4 +1,4 @@
-@page "/blocks/new"
+﻿@page "/blocks/new"
 @page "/blocks/{BlockId}"
 
 @using System.Text.Json
@@ -13,6 +13,7 @@
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
 @inject NavigationManager Navigation
+@inject IToastService Toasts
 
 <PageTitle>@PageTitleText - RenderSet</PageTitle>
 
@@ -460,7 +461,9 @@
         if (!IsEditMode)
         {
             ResetNewBlock();
-            await LoadEditorContextAsync();
+            await Toasts.RunAsync(
+                LoadEditorContextAsync,
+                errorTitle: "No se han podido cargar los datos del editor");
             return;
         }
 
@@ -510,6 +513,14 @@
 
             await LoadEditorContextAsync();
         }
+        catch (Exception exception)
+        {
+            Toasts.Error(
+                ToastServiceExtensions.Describe(exception),
+                "No se ha podido cargar el bloque");
+
+            Navigation.NavigateTo("/blocks");
+        }
         finally
         {
             _loading = false;
@@ -558,15 +569,21 @@
     private async Task ChangeCultureAsync(
         ChangeEventArgs e)
     {
-        if (_texts.HasPendingChanges)
-            await SaveTextsAsync();
+        if (_texts.HasPendingChanges &&
+            !await SaveTextsAsync())
+        {
+            return;
+        }
 
         _selectedCulture =
             e.Value?.ToString();
 
-        _texts =
-            await LoadTextsAsync(
-                _selectedCulture);
+        var texts = await Toasts.RunAsync(
+            () => LoadTextsAsync(_selectedCulture),
+            errorTitle: "No se han podido cargar los textos del bloque");
+
+        if (texts is not null)
+            _texts = texts;
     }
 
 
@@ -628,15 +645,29 @@
                         ConfigurationJson
                 };
 
-            await RenderSetApi.SaveBlockAsync(
-                CurrentTenant.Id,
-                block.Id,
-                block);
+            var saved = await Toasts.RunApiAsync(
+                () => RenderSetApi.SaveBlockAsync(
+                    CurrentTenant.Id,
+                    block.Id,
+                    block),
+                errorTitle: "No se ha podido guardar el bloque");
 
-            await SaveTextsAsync();
+            if (!saved)
+                return;
+
+            if (!await SaveTextsAsync())
+                return;
+
+            Toasts.Success("Bloque guardado.");
 
             Navigation.NavigateTo(
                 "/blocks");
+        }
+        catch (Exception exception)
+        {
+            Toasts.Error(
+                ToastServiceExtensions.Describe(exception),
+                "No se ha podido guardar el bloque");
         }
         finally
         {
@@ -931,16 +962,21 @@
     }
 
 
-    private async Task SaveTextsAsync()
+    private async Task<bool> SaveTextsAsync()
     {
         if (!_texts.HasPendingChanges)
-            return;
+            return true;
 
-        await RenderSetApi.SaveResourcesAsync(
-            CurrentTenant.Id,
-            _texts.GetPendingChanges());
+        var saved = await Toasts.RunApiAsync(
+            () => RenderSetApi.SaveResourcesAsync(
+                CurrentTenant.Id,
+                _texts.GetPendingChanges()),
+            errorTitle: "No se han podido guardar los textos del bloque");
 
-        _texts.AcceptPendingChanges();
+        if (saved)
+            _texts.AcceptPendingChanges();
+
+        return saved;
     }
 
 

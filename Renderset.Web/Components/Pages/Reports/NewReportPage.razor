@@ -1,4 +1,4 @@
-@page "/reports/new"
+﻿@page "/reports/new"
 
 @using System.Globalization
 @using System.Text
@@ -48,13 +48,6 @@
 
     </header>
 
-
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <div class="new-error">
-            @_error
-        </div>
-    }
 
 
     <div class="new-shell">
@@ -289,7 +282,6 @@
     private string _name = string.Empty;
     private string _reportId = string.Empty;
 
-    private string? _error;
     private bool _saving;
     private bool _showCreationSummary;
 
@@ -317,9 +309,14 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _cultures =
-            await RenderSetApi.GetCulturesAsync(
-                CurrentTenant.Id);
+        var cultures =
+            await Toasts.RunAsync(
+                () => RenderSetApi.GetCulturesAsync(
+                    CurrentTenant.Id),
+                errorTitle: "No se han podido cargar los idiomas");
+
+        if (cultures is not null)
+            _cultures = cultures;
     }
 
 
@@ -344,7 +341,6 @@
             return;
         }
 
-        _error = null;
         _saving = true;
 
         try
@@ -366,14 +362,18 @@
                     SampleData = dataset.SampleData
                 };
 
-            var result = await Toasts.RunAsync(
+            var reportSaved = await Toasts.RunApiAsync(
                 () => RenderSetApi.SaveReportAsync(CurrentTenant.Id, _reportId, report),
-                success: "Report creado");
+                success: null,
+                errorTitle: "No se ha podido crear el report");
 
-            if (!result.IsSuccessStatusCode)
+            if (!reportSaved)
                 return;
 
-            await CreateDefaultPresetAsync();
+            if (!await CreateDefaultPresetAsync())
+                return;
+
+            Toasts.Success("Report creado.");
 
             // Cuando exista persistencia de mappings, aquí se guardará
             // dataset.Mapping y se enlazará con el report. Sin eso, un report
@@ -382,7 +382,7 @@
         }
         catch (Exception exception)
         {
-            _error = exception.Message;
+            Toasts.Error(ToastServiceExtensions.Describe(exception), "No se ha podido crear el report");
         }
         finally
         {
@@ -391,7 +391,7 @@
     }
 
 
-    private async Task CreateDefaultPresetAsync()
+    private async Task<bool> CreateDefaultPresetAsync()
     {
         var presetId = $"{_reportId}-default";
 
@@ -419,20 +419,27 @@
                     }
             };
 
-        await RenderSetApi.SavePresetAsync(
-            CurrentTenant.Id,
-            presetId,
-            preset);
+        var presetSaved = await Toasts.RunApiAsync(
+            () => RenderSetApi.SavePresetAsync(
+                CurrentTenant.Id,
+                presetId,
+                preset),
+            errorTitle: "No se ha podido crear el preset default");
 
-        await RenderSetApi.SaveAssignmentAsync(
-            CurrentTenant.Id,
-            new ReportPresetAssignment
-            {
-                ReportId = _reportId,
-                ContextType = null,
-                ContextKey = null,
-                PresetId = presetId
-            });
+        if (!presetSaved)
+            return false;
+
+        return await Toasts.RunApiAsync(
+            () => RenderSetApi.SaveAssignmentAsync(
+                CurrentTenant.Id,
+                new ReportPresetAssignment
+                {
+                    ReportId = _reportId,
+                    ContextType = null,
+                    ContextKey = null,
+                    PresetId = presetId
+                }),
+            errorTitle: "No se ha podido asignar el preset default");
     }
 
 

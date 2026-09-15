@@ -20,7 +20,7 @@ public interface IRenderSetApi
         CancellationToken cancellationToken = default);
 
     [Put("/api/cultures/{tenantId}/{culture}")]
-    Task SaveCultureAsync(
+    Task<IApiResponse> SaveCultureAsync(
         string tenantId,
         string culture,
         [Body] TenantCulture body,
@@ -49,20 +49,19 @@ public interface IRenderSetApi
         CancellationToken cancellationToken = default);
 
     [Put("/api/resources/{tenantId}")]
-    Task SaveResourcesAsync(
+    Task<IApiResponse> SaveResourcesAsync(
         string tenantId,
         [Body] IReadOnlyCollection<ReportResource> resources,
         CancellationToken cancellationToken = default);
 
-
     [Post("/api/resources/{tenantId}/translate-missing")]
-    Task<TranslateMissingReportResourcesResult> TranslateMissingResourcesAsync(
+    Task<IApiResponse<TranslateMissingReportResourcesResult>> TranslateMissingResourcesAsync(
         string tenantId,
         [Body] TranslateMissingReportResourcesRequest request,
         CancellationToken cancellationToken = default);
 
     [Delete("/api/resources/{tenantId}/{scope}/{key}")]
-    Task DeleteResourceAsync(
+    Task<IApiResponse> DeleteResourceAsync(
         string tenantId,
         string scope,
         string key,
@@ -75,7 +74,7 @@ public interface IRenderSetApi
         CancellationToken cancellationToken = default);
 
     [Post("/api/resources/{tenantId}/copy-missing")]
-    Task<CopyMissingReportResourcesResult> CopyMissingResourcesAsync(
+    Task<IApiResponse<CopyMissingReportResourcesResult>> CopyMissingResourcesAsync(
         string tenantId,
         [Body] CopyMissingReportResourcesRequest request,
         CancellationToken cancellationToken = default);
@@ -105,7 +104,7 @@ public interface IRenderSetApi
         CancellationToken cancellationToken = default);
 
     [Put("/api/assignments/{tenantId}")]
-    Task SaveAssignmentAsync(
+    Task<IApiResponse> SaveAssignmentAsync(
         string tenantId,
         [Body] ReportPresetAssignment assignment,
         CancellationToken cancellationToken = default);
@@ -116,8 +115,8 @@ public interface IRenderSetApi
 
     [Get("/api/blocks/{tenantId}")]
     Task<IReadOnlyCollection<ReportBlock>> GetBlocksAsync(
-    string tenantId,
-    CancellationToken cancellationToken = default);
+        string tenantId,
+        CancellationToken cancellationToken = default);
 
     [Get("/api/blocks/{tenantId}/type/{type}")]
     Task<IReadOnlyCollection<ReportBlock>> GetBlocksByTypeAsync(
@@ -138,7 +137,7 @@ public interface IRenderSetApi
         CancellationToken cancellationToken = default);
 
     [Put("/api/blocks/{tenantId}/{blockId}")]
-    Task SaveBlockAsync(
+    Task<IApiResponse> SaveBlockAsync(
         string tenantId,
         string blockId,
         [Body] ReportBlock block,
@@ -168,7 +167,7 @@ public interface IRenderSetApi
         CancellationToken cancellationToken = default);
 
     [Put("/api/presets/{tenantId}/{presetId}")]
-    Task SavePresetAsync(
+    Task<IApiResponse> SavePresetAsync(
         string tenantId,
         string presetId,
         [Body] ReportPreset preset,
@@ -180,8 +179,8 @@ public interface IRenderSetApi
 
     [Get("/api/reports/{tenantId}")]
     Task<IReadOnlyCollection<Report>> GetReportsAsync(
-    string tenantId,
-    CancellationToken cancellationToken = default);
+        string tenantId,
+        CancellationToken cancellationToken = default);
 
     [Get("/api/reports/{tenantId}/{reportId}")]
     Task<Report> GetReportAsync(
@@ -208,18 +207,18 @@ public interface IRenderSetApi
 
     [Get("/api/variables/{tenantId}")]
     Task<IReadOnlyCollection<ReportVariable>> GetVariablesAsync(
-    string tenantId,
-    CancellationToken cancellationToken = default);
+        string tenantId,
+        CancellationToken cancellationToken = default);
 
     [Put("/api/variables/{tenantId}/{key}")]
-    Task SaveVariableAsync(
+    Task<IApiResponse> SaveVariableAsync(
         string tenantId,
         string key,
         [Body] ReportVariable variable,
         CancellationToken cancellationToken = default);
 
     [Delete("/api/variables/{tenantId}/{key}")]
-    Task DeleteVariableAsync(
+    Task<IApiResponse> DeleteVariableAsync(
         string tenantId,
         string key,
         CancellationToken cancellationToken = default);

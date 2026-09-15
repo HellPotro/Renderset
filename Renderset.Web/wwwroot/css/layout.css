@@ -365,3 +365,28 @@ a.renderset-nav-item.active .renderset-nav-icon {
     overflow: hidden;
 }
 
+
+.designer-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 100dvh;
+    color: #61737b;
+    font-size: 13px;
+}
+
+.designer-state-error strong {
+    color: #8c3a3a;
+}
+
+.designer-saving {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #75868e;
+    font-size: 11px;
+    font-weight: 700;
+}

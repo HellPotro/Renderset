@@ -1,0 +1,205 @@
+@page "/styles"
+
+@using System.Text.Json
+@using Renderset.Core.Themes
+
+@inject IJSRuntime JS
+@inject IToastService Toasts
+
+<PageTitle>Estilos base - RenderSet</PageTitle>
+
+<div class="page page-wide styles-page">
+
+    <header class="page-header">
+        <div>
+            <span class="page-eyebrow">Tenant</span>
+            <h1>Estilos base</h1>
+            <p>
+                Paletas recomendadas para partir de una base común en todos los
+                presets del tenant. Hoy son plantillas copiables; el siguiente
+                paso natural será persistirlas como estilos de tenant.
+            </p>
+        </div>
+    </header>
+
+    <div class="styles-grid">
+        @foreach (var style in Styles)
+        {
+            <article class="style-card" @key="style.Theme.Id">
+
+                <header>
+                    <div>
+                        <h2>@style.Theme.Name</h2>
+                        <p>@style.Description</p>
+                    </div>
+
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="() => CopyThemeAsync(style.Theme)">
+                        <i class="fa-regular fa-copy"></i>
+                        Copiar JSON
+                    </button>
+                </header>
+
+                <div class="style-preview"
+                     style="@ThemeStyle(style.Theme)">
+                    <div class="style-preview-page">
+                        <div class="style-preview-header">
+                            <strong>Factura 080041</strong>
+                            <span>Van Wezel Autoparts</span>
+                        </div>
+
+                        <div class="style-preview-section">
+                            Datos del cliente
+                        </div>
+
+                        <div class="style-preview-fields">
+                            <div>
+                                <span>Cliente</span>
+                                <strong>000123</strong>
+                            </div>
+
+                            <div>
+                                <span>País</span>
+                                <strong>Bélgica</strong>
+                            </div>
+                        </div>
+
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Artículo</th>
+                                    <th>Cantidad</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>A001</td>
+                                    <td>2</td>
+                                    <td>41,00</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <dl class="style-tokens">
+                    <div>
+                        <dt>Principal</dt>
+                        <dd><code>@style.Theme.PrimaryColor</code></dd>
+                    </div>
+
+                    <div>
+                        <dt>Sección</dt>
+                        <dd><code>@style.Theme.SectionBackgroundColor</code></dd>
+                    </div>
+
+                    <div>
+                        <dt>Tabla</dt>
+                        <dd><code>@style.Theme.TableHeaderBackgroundColor</code></dd>
+                    </div>
+                </dl>
+
+            </article>
+        }
+    </div>
+
+</div>
+
+@code {
+
+    private static readonly JsonSerializerOptions JsonOptions =
+        new(JsonSerializerDefaults.Web)
+        {
+            WriteIndented = true
+        };
+
+    private static IReadOnlyCollection<BaseStyle> Styles { get; } =
+    [
+        new(
+            new ReportTheme
+            {
+                Id = "tenant-default",
+                Name = "Tenant default",
+                PrimaryColor = "#173D4F",
+                SecondaryColor = "#E8EFF3",
+                TextColor = "#25313A",
+                MutedTextColor = "#6D7B83",
+                BorderColor = "#D8E1E7",
+                SectionBackgroundColor = "#E8EFF3",
+                SectionTextColor = "#173D4F",
+                TableHeaderBackgroundColor = "#E8EFF3",
+                TableHeaderTextColor = "#173D4F",
+                BackgroundColor = "#FFFFFF",
+                FontFamily = "\"Segoe UI\", Arial, sans-serif"
+            },
+            "Base limpia para documentos de negocio y previews del diseñador."),
+
+        new(
+            new ReportTheme
+            {
+                Id = "oran-compact",
+                Name = "ORAN compact",
+                PrimaryColor = "#00285A",
+                SecondaryColor = "#EEF3F6",
+                TextColor = "#1F2D33",
+                MutedTextColor = "#687A82",
+                BorderColor = "#C9D5DB",
+                SectionBackgroundColor = "#EEF3F6",
+                SectionTextColor = "#00285A",
+                TableHeaderBackgroundColor = "#00285A",
+                TableHeaderTextColor = "#FFFFFF",
+                BackgroundColor = "#FFFFFF",
+                FontFamily = "Arial, sans-serif"
+            },
+            "Más denso y corporativo, pensado para factura, albarán o packing list."),
+
+        new(
+            new ReportTheme
+            {
+                Id = "soft-report",
+                Name = "Soft report",
+                PrimaryColor = "#325D6B",
+                SecondaryColor = "#F1F6F7",
+                TextColor = "#22343B",
+                MutedTextColor = "#75868E",
+                BorderColor = "#E0E8EB",
+                SectionBackgroundColor = "#F1F6F7",
+                SectionTextColor = "#325D6B",
+                TableHeaderBackgroundColor = "#F1F6F7",
+                TableHeaderTextColor = "#325D6B",
+                BackgroundColor = "#FFFFFF",
+                FontFamily = "\"Segoe UI\", Arial, sans-serif"
+            },
+            "Adecuado para informes internos, calidad, producción o mantenimiento.")
+    ];
+
+    private static string ThemeStyle(
+        ReportTheme theme) =>
+        $"--style-primary:{theme.PrimaryColor};" +
+        $"--style-secondary:{theme.SecondaryColor};" +
+        $"--style-text:{theme.TextColor};" +
+        $"--style-muted:{theme.MutedTextColor};" +
+        $"--style-border:{theme.BorderColor};" +
+        $"--style-section-bg:{theme.SectionBackgroundColor};" +
+        $"--style-section-text:{theme.SectionTextColor};" +
+        $"--style-table-bg:{theme.TableHeaderBackgroundColor};" +
+        $"--style-table-text:{theme.TableHeaderTextColor};" +
+        $"--style-bg:{theme.BackgroundColor};" +
+        $"--style-font:{theme.FontFamily};";
+
+    private async Task CopyThemeAsync(
+        ReportTheme theme)
+    {
+        await JS.InvokeVoidAsync(
+            "renderSet.copyText",
+            JsonSerializer.Serialize(theme, JsonOptions));
+
+        Toasts.Success($"Estilo '{theme.Name}' copiado.");
+    }
+
+    private sealed record BaseStyle(
+        ReportTheme Theme,
+        string Description);
+}

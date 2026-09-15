@@ -1,4 +1,4 @@
-@page "/presets/{ReportId}/{PresetId}"
+﻿@page "/presets/{ReportId}/{PresetId}"
 
 @using Renderset.Core.Persistence
 @using Renderset.Core.Presets
@@ -7,6 +7,7 @@
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
 @inject NavigationManager Navigation
+@inject IToastService Toasts
 
 <PageTitle>Preset - RenderSet</PageTitle>
 
@@ -363,30 +364,43 @@
 
         try
         {
-            _report =
-                await RenderSetApi.GetReportAsync(
-                    CurrentTenant.Id,
-                    ReportId);
+            var loaded = await Toasts.RunAsync(
+                async () =>
+                {
+                    _report =
+                        await RenderSetApi.GetReportAsync(
+                            CurrentTenant.Id,
+                            ReportId);
 
-            _preset =
-                await RenderSetApi.GetPresetAsync(
-                    CurrentTenant.Id,
-                    PresetId);
+                    _preset =
+                        await RenderSetApi.GetPresetAsync(
+                            CurrentTenant.Id,
+                            PresetId);
 
-            var allPresets =
-                await RenderSetApi.GetPresetsAsync(
-                    CurrentTenant.Id);
+                    var allPresets =
+                        await RenderSetApi.GetPresetsAsync(
+                            CurrentTenant.Id);
 
-            _reportPresets =
-                allPresets
-                    .Where(x =>
-                        string.Equals(
-                            x.Configuration.ReportId,
-                            ReportId,
-                            StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+                    _reportPresets =
+                        allPresets
+                            .Where(x =>
+                                string.Equals(
+                                    x.Configuration.ReportId,
+                                    ReportId,
+                                    StringComparison.OrdinalIgnoreCase))
+                            .ToList();
 
-            await ReloadAssignmentsAsync();
+                    await ReloadAssignmentsAsync();
+                },
+                errorTitle: "No se ha podido cargar el preset");
+
+            if (!loaded)
+            {
+                _report = null;
+                _preset = null;
+                _reportPresets = [];
+                _assignments = [];
+            }
         }
         finally
         {
@@ -420,10 +434,13 @@
         if (_preset is null)
             return;
 
-        await RenderSetApi.SavePresetAsync(
-            CurrentTenant.Id,
-            _preset.Id,
-            _preset);
+        await Toasts.RunApiAsync(
+            () => RenderSetApi.SavePresetAsync(
+                CurrentTenant.Id,
+                _preset.Id,
+                _preset),
+            success: "Preset guardado.",
+            errorTitle: "No se ha podido guardar el preset");
     }
 
 
@@ -443,11 +460,15 @@
                 PresetId = _preset.Id
             };
 
-        await RenderSetApi.SaveAssignmentAsync(
-            CurrentTenant.Id,
-            assignment);
+        var saved = await Toasts.RunApiAsync(
+            () => RenderSetApi.SaveAssignmentAsync(
+                CurrentTenant.Id,
+                assignment),
+            success: "Preset establecido como default.",
+            errorTitle: "No se ha podido guardar el assignment");
 
-        await ReloadAssignmentsAsync();
+        if (saved)
+            await ReloadAssignmentsAsync();
     }
 
 
@@ -474,9 +495,15 @@
                     _preset.Id
             };
 
-        await RenderSetApi.SaveAssignmentAsync(
-            CurrentTenant.Id,
-            assignment);
+        var saved = await Toasts.RunApiAsync(
+            () => RenderSetApi.SaveAssignmentAsync(
+                CurrentTenant.Id,
+                assignment),
+            success: "Assignment creado.",
+            errorTitle: "No se ha podido guardar el assignment");
+
+        if (!saved)
+            return;
 
         _contextType = string.Empty;
         _contextKey = string.Empty;
