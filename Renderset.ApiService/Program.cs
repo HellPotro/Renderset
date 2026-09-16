@@ -5,9 +5,11 @@ using Renderset.Core.Blocks;
 using Renderset.Core.Localization;
 using Renderset.Core.Presets;
 using Renderset.Core.Reports;
+using Renderset.Core.Rendering;
 using Renderset.Core.Services;
 using Renderset.Core.Translations;
 using Renderset.Core.Variables;
+using Renderset.Blazor.Rendering;
 using Renderset.Infrastructure.Persistence;
 using Renderset.Infrastructure.Repositories;
 using Renderset.Infrastructure.Translations;
@@ -40,6 +42,13 @@ builder.Services.AddScoped<IReportVariableResolver, ReportVariableResolver>();
 builder.Services.AddScoped<IReportResourceRepository, EfReportResourceRepository>();
 builder.Services.AddScoped<ITenantCultureRepository, EfTenantCultureRepository>();
 builder.Services.AddScoped<IReportTextCatalogFactory, ReportTextCatalogFactory>();
+builder.Services.AddScoped<IRenderedDocumentRepository, EfRenderedDocumentRepository>();
+builder.Services.AddScoped<IReportRenderService, ReportRenderService>();
+
+// El renderizador estático de Blazor no necesita estado por petición: pinta
+// los mismos componentes que el preview del diseñador a partir del informe ya
+// resuelto.
+builder.Services.AddSingleton<IReportDocumentRenderer, BlazorReportDocumentRenderer>();
 
 builder.Services.Configure<AzureTranslatorOptions>(
     builder.Configuration.GetSection(AzureTranslatorOptions.SectionName));
@@ -70,6 +79,7 @@ app.MapAssignmentEndpoints();
 app.MapPresetEndpoints();
 app.MapReportBlockEndpoints();
 app.MapReportEndpoints();
+app.MapRenderEndpoints();
 app.MapReportVariableEndpoints();
 app.MapReportResourceEndpoints();
 app.MapTenantCultureEndpoints();

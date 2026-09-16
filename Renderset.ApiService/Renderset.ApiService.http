@@ -1,6 +1,124 @@
 @ApiService_HostAddress = http://localhost:5351
+@tenantId = oranauto
+@reportId = albaran
+@presetId = albaran-default
 
-GET {{ApiService_HostAddress}}/weatherforecast/
+### Generar un documento con datos ya jerárquicos
+# fileName admite variables del tenant y rutas del documento, por ejemplo
+# factura-{{data.numeroFactura}}.html (aquí va literal para no chocar con la
+# interpolación de este fichero .http)
+POST {{ApiService_HostAddress}}/api/render/{{tenantId}}
+Content-Type: application/json
+{
+  "reportId": "{{reportId}}",
+  "presetId": "{{presetId}}",
+  "context": {
+    "culture": "it-IT"
+  },
+  "output": {
+    "format": "Html",
+    "fileName": "factura-060098.html"
+  },
+  "data": {
+    "deliveryNote": {
+      "number": "ALB_CON_PIT",
+      "date": "2026-09-15",
+      "warehouse": "La oficina chula",
+      "completed": false
+    },
+    "customer": {
+      "code": "001184",
+      "name": "Gestamp Esmar S.A.U.",
+      "vat": "ESA08472913",
+      "address": "Polígono Industrial Can Roqueta, Nave 12",
+      "city": "Sabadell",
+      "country": "Spain"
+    },
+    "shipping": {
+      "carrier": "Transportes Ochoa",
+      "trackingNumber": "OCH-ES-30117645",
+      "vehiclePlate": "4471-KDR",
+      "departureDate": "2026-09-15T06:20:00Z",
+      "expectedDeliveryDate": "2026-09-16"
+    },
+    "materials": [
+      {
+        "reference": "00578012",
+        "description": "Aleta delantera derecha",
+        "batch": "L26091501",
+        "quantity": 150,
+        "unit": "ud",
+        "weightKg": 97.5,
+        "packageType": "Pallet",
+        "packages": 3
+      },
+      {
+        "reference": "00765410",
+        "description": "Parrilla frontal",
+        "batch": "L26091502",
+        "quantity": 60,
+        "unit": "ud",
+        "weightKg": 41.2,
+        "packageType": "Cage",
+        "packages": 1,
+        "observations": "Piezas pintadas, no apilar"
+      },
+      {
+        "reference": "00341255",
+        "description": "Capó",
+        "batch": "L26091503",
+        "quantity": 24,
+        "unit": "ud",
+        "weightKg": 118.8,
+        "packageType": "Rack",
+        "packages": 2
+      },
+      {
+        "reference": "00987114",
+        "description": "Retrovisor izquierdo",
+        "batch": "L26091504",
+        "quantity": 200,
+        "unit": "ud",
+        "weightKg": 52.0,
+        "packageType": "Box",
+        "packages": 4
+      }
+    ],
+    "summary": {
+      "totalPackages": 10,
+      "totalUnits": 434,
+      "totalWeightKg": 309.5
+    },
+    "observations": "Expedición parcial. El resto del pedido sale el lunes 21."
+  }
+}
+
+### Sin presetId: el preset se resuelve por assignment segun el contexto
+POST {{ApiService_HostAddress}}/api/render/{{tenantId}}
+Content-Type: application/json
+{
+  "reportId": "{{reportId}}",
+  "context": {
+    "culture": "es-ES",
+    "contextType": "cliente",
+    "contextKey": "002532"
+  },
+  "output": {
+    "format": "Html"
+  },
+  "data": {
+    "factura": "060098"
+  }
+}
+
+### Ver el documento (es la url que devuelve el render)
+GET {{ApiService_HostAddress}}/api/documents/{{tenantId}}/f3ad6d5120f84c3cbd3ad4922bd039b0
+
+### Descargarlo con su nombre de fichero
+GET {{ApiService_HostAddress}}/api/documents/{{tenantId}}/REEMPLAZA_DOCUMENT_ID/download
+
+### Metadatos, sin el contenido
+GET {{ApiService_HostAddress}}/api/documents/{{tenantId}}/REEMPLAZA_DOCUMENT_ID/metadata
 Accept: application/json
 
 ###

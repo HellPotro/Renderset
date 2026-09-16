@@ -1,22 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
 
 
-  <ItemGroup>
-    <SupportedPlatform Include="browser" />
-  </ItemGroup>
+	<ItemGroup>
+		<SupportedPlatform Include="browser" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
-  </ItemGroup>
+	<!--
+    El CSS del documento se sirve como asset de la RCL para el diseñador y,
+    además, se embebe para que la API pueda incrustarlo en el HTML generado
+    sin depender de wwwroot.
+  -->
+	<ItemGroup>
+		<EmbeddedResource Include="wwwroot\css\report-document.css"
+						  LogicalName="Renderset.Blazor.report-document.css" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Renderset.Core\Renderset.Core.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Renderset.Core\Renderset.Core.csproj" />
+	</ItemGroup>
 
 </Project>

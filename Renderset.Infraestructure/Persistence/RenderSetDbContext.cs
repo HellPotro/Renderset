@@ -32,6 +32,9 @@ public sealed class RenderSetDbContext : DbContext
     public DbSet<TenantCultureEntity> TenantCultures =>
         Set<TenantCultureEntity>();
 
+    public DbSet<RenderedDocumentEntity> RenderedDocuments =>
+        Set<RenderedDocumentEntity>();
+
     public DbSet<TenantEntity> Tenants =>
         Set<TenantEntity>();
 
