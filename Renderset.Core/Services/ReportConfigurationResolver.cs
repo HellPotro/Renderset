@@ -656,6 +656,18 @@ public sealed class ReportConfigurationResolver
                     definition.Subtitle ?? string.Empty)),
             ShowLogo = configuration?.ShowLogo ?? definition.AllowLogo,
             LogoUrl = configuration?.LogoUrl,
+            LogoMaxHeight = configuration?.LogoMaxHeight,
+            Layout = configuration?.Layout ?? ReportHeaderLayout.LogoLeft,
+            BackgroundColor = configuration?.BackgroundColor,
+            TextColor = configuration?.TextColor,
+
+            // Sin configurar se comporta como siempre: línea de separación.
+            ShowDivider = configuration?.ShowDivider ?? true,
+
+            Lines = ResolveHeaderLines(
+                texts,
+                configuration),
+
             Fields = definition.Fields
                 .OrderBy(x => x.Order)
                 .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
@@ -672,6 +684,31 @@ public sealed class ReportConfigurationResolver
                 })
                 .ToList()
         };
+    }
+
+    /// <summary>
+    /// Las líneas de datos sólo existen en configuración: la definición se
+    /// infiere de los datos del documento y no sabe nada de la empresa que
+    /// emite el informe.
+    /// </summary>
+    private static List<ResolvedReportHeaderLine> ResolveHeaderLines(
+        ReportTextCatalog texts,
+        ReportHeaderConfiguration? configuration)
+    {
+        if (configuration is null)
+            return [];
+
+        return configuration.Lines
+            .OrderBy(x => x.Order)
+            .Select(line => new ResolvedReportHeaderLine
+            {
+                Text = texts.Resolve(
+                    line.TextKey,
+                    string.Empty),
+                Style = line.Style
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+            .ToList();
     }
 
     private static ResolvedReportFooter? ResolveFooter(

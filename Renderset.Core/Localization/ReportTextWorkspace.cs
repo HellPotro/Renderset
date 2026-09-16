@@ -1,3 +1,5 @@
+using Renderset.Core.Variables;
+
 namespace Renderset.Core.Localization;
 
 /// <summary>
@@ -15,15 +17,20 @@ public sealed class ReportTextWorkspace
     private readonly Dictionary<string, string?> _own;
     private readonly Dictionary<string, string> _inherited;
     private readonly HashSet<string> _pending;
+    private readonly Dictionary<string, string> _variables;
 
     public ReportTextWorkspace(
         string scope,
         string culture,
         IEnumerable<ReportResource>? ownValues = null,
-        IReadOnlyDictionary<string, string>? inherited = null)
+        IReadOnlyDictionary<string, string>? inherited = null,
+        IEnumerable<ReportVariable>? variables = null)
     {
         Scope = scope;
         Culture = culture;
+
+        _variables =
+            ReportVariableTemplate.ToDictionary(variables);
 
         _own = new Dictionary<string, string?>(
             StringComparer.OrdinalIgnoreCase);
@@ -164,6 +171,29 @@ public sealed class ReportTextWorkspace
             }
 
             entries[entry.Key] = entry.Value;
+        }
+
+        /*
+         * Las variables se sustituyen aquí y no en GetText a propósito.
+         *
+         * ToCatalog es lo que ve el render: ahí un texto como
+         * "CIF: {{company.cif}}" tiene que llegar ya con el CIF puesto.
+         * GetText es lo que ve el formulario de edición, y ahí hace falta
+         * la plantilla: si al editor le enseñas el valor sustituido, lo
+         * guarda como literal y el texto deja de seguir a la variable.
+         */
+        if (_variables.Count > 0)
+        {
+            foreach (var key in entries.Keys.ToList())
+            {
+                if (!ReportVariableTemplate.HasTokens(entries[key]))
+                    continue;
+
+                entries[key] =
+                    ReportVariableTemplate.Apply(
+                        entries[key],
+                        _variables);
+            }
         }
 
         return new ReportTextCatalog(

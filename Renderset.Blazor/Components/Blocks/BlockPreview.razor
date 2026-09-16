@@ -1,5 +1,6 @@
 @using Renderset.Core.Blocks
 @using Renderset.Core.Configurations
+@using Renderset.Core.Definitions
 @using Renderset.Core.Localization
 @using Renderset.Core.Resolved
 @using Renderset.Core.Themes
@@ -33,15 +34,15 @@
             @switch (Type)
             {
                 case ReportBlockType.Header:
-                    <DynamicReportHeader Header="ResolvedHeader" />
+                    <DynamicReportHeader Header="_resolvedHeader" />
                     break;
 
                 case ReportBlockType.Footer:
-                    <DynamicReportFooter Footer="ResolvedFooter" />
+                    <DynamicReportFooter Footer="_resolvedFooter" />
                     break;
 
                 case ReportBlockType.Text:
-                    <DynamicReportBlock Block="ResolvedTextBlock" />
+                    <DynamicReportBlock Block="_resolvedTextBlock" />
                     break;
             }
 
@@ -101,6 +102,23 @@
 
     private List<string> UnresolvedVariables => _unresolved;
 
+    /*
+     * Lo resuelto se calcula una vez por cambio de parámetros, no en cada
+     * acceso desde el marcado. Si no, el aviso de variables sin definir se
+     * pinta antes de que nadie haya mirado los textos y va siempre un
+     * render por detrás.
+     */
+    private Dictionary<string, string> _variableValues =
+        new(StringComparer.OrdinalIgnoreCase);
+    private ResolvedReportHeader? _resolvedHeader;
+    private ResolvedReportFooter? _resolvedFooter;
+    private ResolvedReportBlock _resolvedTextBlock = new()
+    {
+        Id = "preview",
+        Type = ReportBlockType.Text,
+        Text = new ReportTextBlockConfiguration()
+    };
+
 
     private string ThemeStyle => $"""
         --report-primary:{Theme.PrimaryColor};
@@ -121,17 +139,18 @@
         Type switch
         {
             ReportBlockType.Header =>
-                string.IsNullOrWhiteSpace(ResolvedHeader?.Title) &&
-                string.IsNullOrWhiteSpace(ResolvedHeader?.Subtitle) &&
-                ResolvedHeader?.ShowLogo != true,
+                string.IsNullOrWhiteSpace(_resolvedHeader?.Title) &&
+                string.IsNullOrWhiteSpace(_resolvedHeader?.Subtitle) &&
+                (_resolvedHeader?.Lines.Count ?? 0) == 0 &&
+                _resolvedHeader?.ShowLogo != true,
 
             ReportBlockType.Footer =>
-                string.IsNullOrWhiteSpace(ResolvedFooter?.Text) &&
-                ResolvedFooter?.ShowGenerationDate != true,
+                string.IsNullOrWhiteSpace(_resolvedFooter?.Text) &&
+                _resolvedFooter?.ShowGenerationDate != true,
 
             ReportBlockType.Text =>
-                string.IsNullOrWhiteSpace(ResolvedTextBlock.Text?.Title) &&
-                string.IsNullOrWhiteSpace(ResolvedTextBlock.Text?.Text),
+                string.IsNullOrWhiteSpace(_resolvedTextBlock.Text?.Title) &&
+                string.IsNullOrWhiteSpace(_resolvedTextBlock.Text?.Text),
 
             _ => true
         };
@@ -140,39 +159,74 @@
     protected override void OnParametersSet()
     {
         _unresolved.Clear();
+
+        _variableValues =
+            ReportVariableTemplate.ToDictionary(Variables);
+
+        _resolvedHeader = BuildHeader();
+        _resolvedFooter = BuildFooter();
+        _resolvedTextBlock = BuildTextBlock();
     }
 
 
-    private ResolvedReportHeader? ResolvedHeader =>
-        Header is null
-            ? null
-            : new ResolvedReportHeader
-            {
-                // Siempre visible en el preview: aquí estás editando el
-                // bloque, no decidiendo si se pinta en un report concreto.
-                Visible = true,
+    private ResolvedReportHeader? BuildHeader()
+    {
+        if (Header is null)
+            return null;
 
-                Title = Resolve(Header.TitleKey),
-                Subtitle = Resolve(Header.SubtitleKey),
-                ShowLogo = Header.ShowLogo ?? false,
-                LogoUrl = Header.LogoUrl
-            };
+        return new ResolvedReportHeader
+        {
+            // Siempre visible en el preview: aquí estás editando el
+            // bloque, no decidiendo si se pinta en un report concreto.
+            Visible = true,
+
+            Title = Resolve(Header.TitleKey),
+            Subtitle = Resolve(Header.SubtitleKey),
+            ShowLogo = Header.ShowLogo ?? false,
+
+            // La URL es un literal de la configuración, no una clave del
+            // diccionario, así que hay que sustituirle las variables aquí:
+            // de lo contrario el src acaba siendo {{company.logoUrl}} y el
+            // preview enseña una imagen rota.
+            LogoUrl = ResolveUrl(Header.LogoUrl),
+
+            LogoMaxHeight = Header.LogoMaxHeight,
+            Layout = Header.Layout ?? ReportHeaderLayout.LogoLeft,
+            BackgroundColor = Header.BackgroundColor,
+            TextColor = Header.TextColor,
+            ShowDivider = Header.ShowDivider ?? true,
+
+            Lines = Header.Lines
+                .OrderBy(x => x.Order)
+                .Select(line => new ResolvedReportHeaderLine
+                {
+                    Text = Resolve(line.TextKey) ?? string.Empty,
+                    Style = line.Style
+                })
+                .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+                .ToList()
+        };
+    }
 
 
-    private ResolvedReportFooter? ResolvedFooter =>
-        Footer is null
-            ? null
-            : new ResolvedReportFooter
-            {
-                Visible = true,
-                Text = Resolve(Footer.TextKey),
-                ShowGenerationDate = Footer.ShowGenerationDate ?? false,
-                ShowPageNumber = Footer.ShowPageNumber ?? false
-            };
+    private ResolvedReportFooter? BuildFooter()
+    {
+        if (Footer is null)
+            return null;
+
+        return new ResolvedReportFooter
+        {
+            Visible = true,
+            Text = Resolve(Footer.TextKey),
+            ShowGenerationDate = Footer.ShowGenerationDate ?? false,
+            ShowPageNumber = Footer.ShowPageNumber ?? false
+        };
+    }
 
 
-    private ResolvedReportBlock ResolvedTextBlock =>
-        new()
+    private ResolvedReportBlock BuildTextBlock()
+    {
+        return new ResolvedReportBlock
         {
             Id = "preview",
             Type = ReportBlockType.Text,
@@ -186,6 +240,26 @@
                     Style = Text.Style
                 }
         };
+    }
+
+
+    /// <summary>
+    /// Igual que Resolve, pero sobre un literal y pensado para un src: si
+    /// queda algún marcador sin valor no sirve como URL, así que se devuelve
+    /// nulo y el aviso de variables sin definir explica por qué no hay logo.
+    /// </summary>
+    private string? ResolveUrl(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var resolved = ApplyVariables(value);
+
+        return resolved.Contains('\u27e8')
+            ? null
+            : resolved;
+    }
 
 
     /// <summary>
@@ -207,63 +281,23 @@
     }
 
 
+    /// <summary>
+    /// Sustituye los {{marcadores}} con la misma implementación que usa la
+    /// API, pero dejando visible el que no tiene valor: un hueco en blanco no
+    /// dice que falte nada.
+    /// </summary>
     private string ApplyVariables(
         string text)
     {
-        if (!text.Contains("{{"))
-            return text;
-
-        var result = new System.Text.StringBuilder(text.Length);
-
-        var index = 0;
-
-        while (index < text.Length)
-        {
-            var start = text.IndexOf("{{", index, StringComparison.Ordinal);
-
-            if (start < 0)
+        return ReportVariableTemplate.Apply(
+            text,
+            _variableValues,
+            onMissing: key =>
             {
-                result.Append(text, index, text.Length - index);
-                break;
-            }
-
-            var end = text.IndexOf("}}", start, StringComparison.Ordinal);
-
-            if (end < 0)
-            {
-                result.Append(text, index, text.Length - index);
-                break;
-            }
-
-            result.Append(text, index, start - index);
-
-            var key = text[(start + 2)..end].Trim();
-
-            var variable =
-                Variables.FirstOrDefault(x =>
-                    string.Equals(
-                        x.Key,
-                        key,
-                        StringComparison.OrdinalIgnoreCase));
-
-            if (variable is not null &&
-                !string.IsNullOrWhiteSpace(variable.Value))
-            {
-                result.Append(variable.Value);
-            }
-            else
-            {
-                // Se deja el marcador visible en vez de dejar un hueco: un
-                // preview con un espacio en blanco no dice que falte nada.
-                result.Append("⟨").Append(key).Append('⟩');
-
                 if (!_unresolved.Contains(key))
                     _unresolved.Add(key);
-            }
 
-            index = end + 2;
-        }
-
-        return result.ToString();
+                return $"\u27e8{key}\u27e9";
+            });
     }
 }

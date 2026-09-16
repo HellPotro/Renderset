@@ -6,6 +6,7 @@
 @using Renderset.Blazor.Components.Blocks
 @using Renderset.Core.Blocks
 @using Renderset.Core.Configurations 
+@using Renderset.Core.Definitions
 @using Renderset.Core.Localization
 @using Renderset.Core.Variables 
 @using Renderset.Core.Themes
@@ -220,7 +221,200 @@
                                 </div>
 
                             </div>
-                        }                                              
+
+                            <div class="form-group">
+
+                                <label>Alto máximo del logo (px)</label>
+
+                                <input type="number"
+                                       min="20"
+                                       max="300"
+                                       step="1"
+                                       value="@_header.LogoMaxHeight"
+                                       @onchange="HeaderLogoHeightChanged"
+                                       placeholder="70" />
+
+                            </div>
+                        }
+
+                        <div class="form-group">
+
+                            <label>Disposición</label>
+
+                            <select value="@HeaderLayoutValue"
+                                    @onchange="HeaderLayoutChanged">
+
+                                <option value="@ReportHeaderLayout.LogoLeft">
+                                    Logo a la izquierda
+                                </option>
+
+                                <option value="@ReportHeaderLayout.LogoRight">
+                                    Logo a la derecha
+                                </option>
+
+                                <option value="@ReportHeaderLayout.Stacked">
+                                    Logo arriba, todo centrado
+                                </option>
+
+                            </select>
+
+                        </div>
+
+                        <div class="form-group">
+
+                            <label>Datos de la empresa</label>
+
+                            <div class="header-line-presets">
+
+                                @foreach (var preset in HeaderLinePresets)
+                                {
+                                    <button type="button"
+                                            class="header-line-preset"
+                                            title="Añadir una línea de @preset.Label"
+                                            @onclick="() => AddPresetLine(preset)">
+
+                                        <i class="fa-solid fa-plus"></i>
+                                        @preset.Label
+
+                                    </button>
+                                }
+
+                                <button type="button"
+                                        class="header-line-preset"
+                                        @onclick="() => AddHeaderLine()">
+
+                                    <i class="fa-solid fa-plus"></i>
+                                    Línea vacía
+
+                                </button>
+
+                            </div>
+
+                            @if (_header.Lines.Count == 0)
+                            {
+                                <small>
+                                    Cada línea es un texto libre que puede llevar
+                                    variables del tenant, por ejemplo
+                                    CIF: &#123;&#123;company.cif&#125;&#125;.
+                                </small>
+                            }
+
+                            @foreach (var line in OrderedHeaderLines)
+                            {
+                                <div class="header-line-row" @key="line.Id">
+
+                                    <input type="text"
+                                           value="@HeaderLineText(line)"
+                                           @onchange="e => HeaderLineTextChanged(line, e)"
+                                           placeholder="Texto de la línea" />
+
+                                    <VariablePicker Variables="_variables"
+                                                    Selected="variable => InsertHeaderLineVariableAsync(line, variable)" />
+
+                                    <select value="@line.Style"
+                                            @onchange="e => HeaderLineStyleChanged(line, e)">
+
+                                        <option value="@ReportHeaderLineStyle.Normal">
+                                            Normal
+                                        </option>
+
+                                        <option value="@ReportHeaderLineStyle.Strong">
+                                            Destacado
+                                        </option>
+
+                                        <option value="@ReportHeaderLineStyle.Muted">
+                                            Secundario
+                                        </option>
+
+                                        <option value="@ReportHeaderLineStyle.Small">
+                                            Pequeño
+                                        </option>
+
+                                    </select>
+
+                                    <div class="header-line-actions">
+
+                                        <button type="button"
+                                                title="Subir"
+                                                disabled="@(!CanMoveHeaderLine(line, -1))"
+                                                @onclick="() => MoveHeaderLine(line, -1)">
+                                            <i class="fa-solid fa-arrow-up"></i>
+                                        </button>
+
+                                        <button type="button"
+                                                title="Bajar"
+                                                disabled="@(!CanMoveHeaderLine(line, 1))"
+                                                @onclick="() => MoveHeaderLine(line, 1)">
+                                            <i class="fa-solid fa-arrow-down"></i>
+                                        </button>
+
+                                        <button type="button"
+                                                class="is-danger"
+                                                title="Quitar línea"
+                                                @onclick="() => RemoveHeaderLine(line)">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+
+                                    </div>
+
+                                </div>
+                            }
+
+                        </div>
+
+                        <div class="form-group">
+
+                            <label>Color de fondo</label>
+
+                            <div class="color-input-row">
+
+                                <input type="color"
+                                       value="@(_header.BackgroundColor ?? "#ffffff")"
+                                       @onchange="HeaderBackgroundChanged" />
+
+                                <span>@(_header.BackgroundColor ?? "Sin fondo")</span>
+
+                                <button type="button"
+                                        class="secondary-button"
+                                        @onclick="() => _header.BackgroundColor = null">
+                                    Quitar
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <div class="form-group">
+
+                            <label>Color del texto</label>
+
+                            <div class="color-input-row">
+
+                                <input type="color"
+                                       value="@(_header.TextColor ?? "#1f2933")"
+                                       @onchange="HeaderTextColorChanged" />
+
+                                <span>@(_header.TextColor ?? "Del tema")</span>
+
+                                <button type="button"
+                                        class="secondary-button"
+                                        @onclick="() => _header.TextColor = null">
+                                    Quitar
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <label class="toggle-row">
+
+                            <input type="checkbox"
+                                   checked="@(_header.ShowDivider ?? true)"
+                                   @onchange="HeaderDividerChanged" />
+
+                            <span>Línea de separación bajo la cabecera</span>
+
+                        </label>
 
                         <BlockPreview Type="ReportBlockType.Header"
                                       Header="_header"
@@ -745,6 +939,269 @@
     }
 
 
+    private void HeaderLogoHeightChanged(
+        ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var height))
+        {
+            _header.LogoMaxHeight = null;
+            return;
+        }
+
+        _header.LogoMaxHeight = Math.Clamp(height, 20, 300);
+    }
+
+
+    private string HeaderLayoutValue =>
+        (_header.Layout ?? ReportHeaderLayout.LogoLeft).ToString();
+
+
+    private void HeaderLayoutChanged(
+        ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ReportHeaderLayout>(
+                e.Value?.ToString(),
+                out var layout))
+        {
+            _header.Layout = layout;
+        }
+    }
+
+
+    private void HeaderBackgroundChanged(
+        ChangeEventArgs e)
+    {
+        _header.BackgroundColor =
+            Normalize(e.Value?.ToString());
+    }
+
+
+    private void HeaderTextColorChanged(
+        ChangeEventArgs e)
+    {
+        _header.TextColor =
+            Normalize(e.Value?.ToString());
+    }
+
+
+    private void HeaderDividerChanged(
+        ChangeEventArgs e)
+    {
+        _header.ShowDivider =
+            e.Value is bool value &&
+            value;
+    }
+
+
+    /*
+     * Atajos para los datos que aparecen en casi todas las cabeceras. No
+     * inventan nada: crean la línea con el texto ya apuntando a la variable
+     * del tenant que mejor encaja, si existe alguna.
+     */
+    private sealed record HeaderLinePreset(
+        string Label,
+        string Prefix,
+        string[] Hints,
+        ReportHeaderLineStyle Style);
+
+    private static readonly HeaderLinePreset[] HeaderLinePresets =
+    [
+        new("Razón social", "", ["company.name", "empresa", "razon", "company"], ReportHeaderLineStyle.Strong),
+        new("CIF", "CIF: ", ["cif", "nif", "vat"], ReportHeaderLineStyle.Normal),
+        new("Dirección", "", ["address", "direccion", "domicilio"], ReportHeaderLineStyle.Normal),
+        new("Teléfono", "Tel. ", ["phone", "telefono", "tel"], ReportHeaderLineStyle.Muted),
+        new("Email", "", ["email", "mail", "correo"], ReportHeaderLineStyle.Muted),
+        new("Web", "", ["web", "url", "site"], ReportHeaderLineStyle.Muted)
+    ];
+
+    private IEnumerable<ReportHeaderLineConfiguration> OrderedHeaderLines =>
+        _header.Lines.OrderBy(x => x.Order);
+
+
+    private string? SuggestVariableToken(
+        IEnumerable<string> hints)
+    {
+        foreach (var hint in hints)
+        {
+            var variable =
+                _variables.FirstOrDefault(x =>
+                    x.Key.Contains(
+                        hint,
+                        StringComparison.OrdinalIgnoreCase));
+
+            if (variable is not null)
+                return $"{{{{{variable.Key}}}}}";
+        }
+
+        return null;
+    }
+
+
+    private void AddPresetLine(
+        HeaderLinePreset preset)
+    {
+        var token =
+            SuggestVariableToken(preset.Hints);
+
+        AddHeaderLine(
+            preset.Prefix + (token ?? string.Empty),
+            preset.Style);
+    }
+
+
+    private void AddHeaderLine(
+        string? text = null,
+        ReportHeaderLineStyle style = ReportHeaderLineStyle.Normal)
+    {
+        var line =
+            new ReportHeaderLineConfiguration
+            {
+                Id = Guid.NewGuid().ToString("N")[..8],
+                Style = style,
+                Order = NextHeaderLineOrder()
+            };
+
+        line.TextKey =
+            ReportTextKeys.HeaderLine(line.Id);
+
+        _header.Lines.Add(line);
+
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            _texts.SetText(
+                line.TextKey,
+                text);
+        }
+    }
+
+
+    private int NextHeaderLineOrder() =>
+        _header.Lines.Count == 0
+            ? 10
+            : _header.Lines.Max(x => x.Order) + 10;
+
+
+    private void RemoveHeaderLine(
+        ReportHeaderLineConfiguration line)
+    {
+        // El texto se queda en el diccionario a propósito: borrar recursos
+        // desde aquí dejaría huérfanas las traducciones de otros idiomas.
+        _header.Lines =
+            OrderedHeaderLines
+                .Where(x => !ReferenceEquals(x, line))
+                .ToList();
+
+        NormalizeHeaderLineOrders();
+    }
+
+
+    private bool CanMoveHeaderLine(
+        ReportHeaderLineConfiguration line,
+        int direction)
+    {
+        var ordered =
+            OrderedHeaderLines.ToList();
+
+        var index =
+            ordered.IndexOf(line);
+
+        var target =
+            index + direction;
+
+        return index >= 0 &&
+               target >= 0 &&
+               target < ordered.Count;
+    }
+
+
+    private void MoveHeaderLine(
+        ReportHeaderLineConfiguration line,
+        int direction)
+    {
+        var ordered =
+            OrderedHeaderLines.ToList();
+
+        var index =
+            ordered.IndexOf(line);
+
+        var target =
+            index + direction;
+
+        if (index < 0 ||
+            target < 0 ||
+            target >= ordered.Count)
+        {
+            return;
+        }
+
+        (ordered[index], ordered[target]) =
+            (ordered[target], ordered[index]);
+
+        _header.Lines = ordered;
+
+        NormalizeHeaderLineOrders();
+    }
+
+
+    /// <summary>
+    /// Renumera siguiendo el orden actual de la lista, que es el que acaban
+    /// de dejar mover o quitar.
+    /// </summary>
+    private void NormalizeHeaderLineOrders()
+    {
+        for (var i = 0; i < _header.Lines.Count; i++)
+            _header.Lines[i].Order = (i + 1) * 10;
+    }
+
+
+    private string HeaderLineText(
+        ReportHeaderLineConfiguration line) =>
+        BlockText(line.TextKey);
+
+
+    private void HeaderLineTextChanged(
+        ReportHeaderLineConfiguration line,
+        ChangeEventArgs e)
+    {
+        line.TextKey ??=
+            ReportTextKeys.HeaderLine(line.Id);
+
+        _texts.SetText(
+            line.TextKey,
+            e.Value?.ToString());
+    }
+
+
+    private void HeaderLineStyleChanged(
+        ReportHeaderLineConfiguration line,
+        ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ReportHeaderLineStyle>(
+                e.Value?.ToString(),
+                out var style))
+        {
+            line.Style = style;
+        }
+    }
+
+
+    private Task InsertHeaderLineVariableAsync(
+        ReportHeaderLineConfiguration line,
+        ReportVariable variable)
+    {
+        line.TextKey ??=
+            ReportTextKeys.HeaderLine(line.Id);
+
+        _texts.SetText(
+            line.TextKey,
+            AppendVariable(
+                HeaderLineText(line),
+                variable.Key));
+
+        return Task.CompletedTask;
+    }
+
+
     private void FooterTextChanged(
         ChangeEventArgs e)
     {
@@ -931,6 +1388,10 @@
         {
             _header.TitleKey ??= ReportTextKeys.BlockTitle(blockId);
             _header.SubtitleKey ??= ReportTextKeys.BlockSubtitle(blockId);
+
+            foreach (var line in _header.Lines)
+                line.TextKey ??= ReportTextKeys.HeaderLine(line.Id);
+
             return;
         }
 

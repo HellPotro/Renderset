@@ -49,4 +49,15 @@ public static class ReportTextKeys
     {
         return $"block.{blockId}.text";
     }
+
+    /// <summary>
+    /// Clave de una línea de datos de cabecera. Cuelga del id de la línea y
+    /// no del bloque: así el texto no se pierde mientras se crea el bloque,
+    /// cuando todavía no hay identificador, y sobrevive a renombrados.
+    /// </summary>
+    public static string HeaderLine(
+        string lineId)
+    {
+        return $"header.line.{lineId}";
+    }
 }

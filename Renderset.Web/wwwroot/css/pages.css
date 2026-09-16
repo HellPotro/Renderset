@@ -2831,3 +2831,116 @@
         grid-column: 2;
     }
 }
+
+
+/* =========================================================
+   EDITOR DE CABECERA: LÍNEAS DE DATOS
+   ========================================================= */
+
+.header-line-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.header-line-preset {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid #d8e1e7;
+    border-radius: 999px;
+    background: #f8fafb;
+    color: #34454d;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+    .header-line-preset:hover {
+        border-color: #b9c8d1;
+        background: #eef3f6;
+    }
+
+    .header-line-preset i {
+        font-size: 9px;
+        color: #6e7e86;
+    }
+
+.header-line-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 140px) auto;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+    .header-line-row:last-child {
+        margin-bottom: 0;
+    }
+
+.header-line-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+    .header-line-actions button {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: #71828a;
+        cursor: pointer;
+        font-size: 11px;
+    }
+
+        .header-line-actions button:hover:not(:disabled) {
+            background: #eef3f6;
+            border-color: #d8e1e7;
+            color: #173d4f;
+        }
+
+        .header-line-actions button:disabled {
+            opacity: .25;
+            cursor: default;
+        }
+
+        .header-line-actions button.is-danger:hover {
+            background: #fdeceb;
+            border-color: #f3c9c6;
+            color: #b3261e;
+        }
+
+.color-input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+    .color-input-row input[type="color"] {
+        width: 44px;
+        height: 32px;
+        padding: 2px;
+        border: 1px solid #d8e1e7;
+        border-radius: 6px;
+        background: #fff;
+        cursor: pointer;
+    }
+
+    .color-input-row span {
+        color: #6e7e86;
+        font-size: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+@media (max-width: 720px) {
+    .header-line-row {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 6px;
+    }
+}

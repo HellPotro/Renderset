@@ -9,6 +9,7 @@
 @using Renderset.Core.Persistence
 @using Renderset.Core.Reports
 @using Renderset.Core.Themes
+@using Renderset.Core.Variables
 
 @layout EmptyLayout
 @inject IRenderSetApi RenderSetApi
@@ -116,6 +117,13 @@ else if (_configuration is not null &&
 
     private IReadOnlyCollection<TenantCulture> _cultures = [];
 
+    /// <summary>
+    /// Variables del tenant. El diccionario guarda plantillas
+    /// ("CIF: {{company.cif}}") y es aquí donde se convierten en texto real
+    /// para el preview.
+    /// </summary>
+    private IReadOnlyCollection<ReportVariable> _variables = [];
+
     private ReportTextWorkspace _texts =
         ReportTextWorkspace.Detached();
 
@@ -192,6 +200,10 @@ else if (_configuration is not null &&
             await RenderSetApi.GetCulturesAsync(
                 CurrentTenant.Id);
 
+        _variables =
+            await RenderSetApi.GetVariablesAsync(
+                CurrentTenant.Id);
+
         var initialCulture =
             _cultures.FirstOrDefault(x => x.IsDefault)
             ?? _cultures.FirstOrDefault();
@@ -233,7 +245,8 @@ else if (_configuration is not null &&
             presetScope,
             culture,
             own,
-            inherited);
+            inherited,
+            _variables);
     }
 
     private async Task ChangeCultureAsync(

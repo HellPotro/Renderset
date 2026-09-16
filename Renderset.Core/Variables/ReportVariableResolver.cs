@@ -1,14 +1,8 @@
-﻿using System.Text.RegularExpressions;
-
-namespace Renderset.Core.Variables;
+﻿namespace Renderset.Core.Variables;
 
 public sealed class ReportVariableResolver
     : IReportVariableResolver
 {
-    private static readonly Regex VariableRegex = new(
-        @"\{\{\s*(?<key>[^{}]+?)\s*\}\}",
-        RegexOptions.Compiled);
-
     private readonly IReportVariableRepository _repository;
 
     public ReportVariableResolver(
@@ -30,26 +24,10 @@ public sealed class ReportVariableResolver
                 tenantId,
                 cancellationToken);
 
-        var dictionary =
-            variables.ToDictionary(
-                x => x.Key,
-                x => x.Value ?? string.Empty,
-                StringComparer.OrdinalIgnoreCase);
-
-        return VariableRegex.Replace(
+        // Misma sustitución que usa el preview del diseñador: si el marcador
+        // no tiene valor se deja tal cual, para que se vea qué falta.
+        return ReportVariableTemplate.Apply(
             input,
-            match =>
-            {
-                var key =
-                    match.Groups["key"]
-                        .Value
-                        .Trim();
-
-                return dictionary.TryGetValue(
-                    key,
-                    out var value)
-                        ? value
-                        : match.Value;
-            });
+            ReportVariableTemplate.ToDictionary(variables));
     }
 }

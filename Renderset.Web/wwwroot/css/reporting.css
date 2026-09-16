@@ -29,11 +29,66 @@
     border-bottom: 1px solid var(--report-border);
 }
 
+    /* El logo a la derecha es sólo el mismo flex al revés: así el contenido
+       no cambia de orden en el DOM y sigue leyéndose igual. */
+    .report-header.is-logo-right {
+        flex-direction: row-reverse;
+    }
+
+    .report-header.is-stacked {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 12px;
+    }
+
+    .report-header.is-borderless {
+        padding-bottom: 0;
+        border-bottom: 0;
+    }
+
+    /* Con fondo propio deja de ser una banda transparente y necesita
+       respirar por dentro. */
+    .report-header.is-filled {
+        padding: 16px 20px;
+        border-radius: 6px;
+    }
+
 .report-header-logo img {
     max-width: 140px;
     max-height: 70px;
     object-fit: contain;
 }
+
+.report-header-lines {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.report-header-line {
+    line-height: 1.45;
+}
+
+    .report-header-line.is-strong {
+        font-weight: 700;
+    }
+
+    .report-header-line.is-muted {
+        color: var(--report-muted);
+    }
+
+    .report-header-line.is-small {
+        font-size: 12px;
+    }
+
+    /* Sobre un fondo de color, el gris del tema puede quedar ilegible: se
+       hereda el color de la cabecera y se baja la intensidad. */
+    .report-header.is-filled .report-header-line.is-muted {
+        color: inherit;
+        opacity: .8;
+    }
 
 .report-header-content {
     flex: 1;

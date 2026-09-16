@@ -72,6 +72,16 @@ public sealed class ReportConfigurationComposer
         effective.Header.SubtitleKey ??= blockConfiguration.SubtitleKey;
         effective.Header.ShowLogo ??= blockConfiguration.ShowLogo;
         effective.Header.LogoUrl ??= blockConfiguration.LogoUrl;
+        effective.Header.LogoMaxHeight ??= blockConfiguration.LogoMaxHeight;
+        effective.Header.Layout ??= blockConfiguration.Layout;
+        effective.Header.BackgroundColor ??= blockConfiguration.BackgroundColor;
+        effective.Header.TextColor ??= blockConfiguration.TextColor;
+        effective.Header.ShowDivider ??= blockConfiguration.ShowDivider;
+
+        // Las líneas van en bloque, no línea a línea: mezclar dos listas por
+        // posición daría cabeceras imposibles de explicar.
+        if (effective.Header.Lines.Count == 0)
+            effective.Header.Lines = blockConfiguration.Lines;
     }
 
     private static void ApplyFooterBlock(

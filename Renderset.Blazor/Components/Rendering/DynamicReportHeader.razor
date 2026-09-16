@@ -1,15 +1,19 @@
-﻿@using Renderset.Core.Resolved
+﻿@using System.Text
+@using Renderset.Core.Definitions
+@using Renderset.Core.Resolved
 
 @if (Header is not null && Header.Visible)
 {
-    <div class="report-header">
+    <div class="report-header @LayoutClass @StateClasses"
+         style="@HeaderStyle">
 
         @if (Header.ShowLogo &&
              !string.IsNullOrWhiteSpace(Header.LogoUrl))
         {
             <div class="report-header-logo">
                 <img src="@Header.LogoUrl"
-                     alt="Logo" />
+                     alt="Logo"
+                     style="@LogoStyle" />
             </div>
         }
 
@@ -27,6 +31,20 @@
                 </div>
             }
 
+            @if (Header.Lines.Count > 0)
+            {
+                <div class="report-header-lines">
+
+                    @foreach (var line in Header.Lines)
+                    {
+                        <div class="report-header-line @LineClass(line.Style)">
+                            @line.Text
+                        </div>
+                    }
+
+                </div>
+            }
+
         </div>
 
     </div>
@@ -35,4 +53,68 @@
 @code {
     [Parameter]
     public ResolvedReportHeader? Header { get; set; }
+
+    private string LayoutClass =>
+        Header?.Layout switch
+        {
+            ReportHeaderLayout.LogoRight => "is-logo-right",
+            ReportHeaderLayout.Stacked => "is-stacked",
+            _ => "is-logo-left"
+        };
+
+    /// <summary>
+    /// Con fondo propio la cabecera deja de ser una banda transparente y
+    /// necesita su propio relleno, o el color se pega al texto.
+    /// </summary>
+    private string StateClasses
+    {
+        get
+        {
+            var classes = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(Header?.BackgroundColor))
+                classes.Add("is-filled");
+
+            if (Header?.ShowDivider == false)
+                classes.Add("is-borderless");
+
+            return string.Join(' ', classes);
+        }
+    }
+
+    private string? HeaderStyle
+    {
+        get
+        {
+            if (Header is null)
+                return null;
+
+            var style = new StringBuilder();
+
+            if (!string.IsNullOrWhiteSpace(Header.BackgroundColor))
+                style.Append("background:").Append(Header.BackgroundColor).Append(';');
+
+            if (!string.IsNullOrWhiteSpace(Header.TextColor))
+                style.Append("color:").Append(Header.TextColor).Append(';');
+
+            return style.Length == 0
+                ? null
+                : style.ToString();
+        }
+    }
+
+    private string? LogoStyle =>
+        Header?.LogoMaxHeight is > 0
+            ? $"max-height:{Header.LogoMaxHeight}px;"
+            : null;
+
+    private static string LineClass(
+        ReportHeaderLineStyle style) =>
+        style switch
+        {
+            ReportHeaderLineStyle.Strong => "is-strong",
+            ReportHeaderLineStyle.Muted => "is-muted",
+            ReportHeaderLineStyle.Small => "is-small",
+            _ => "is-normal"
+        };
 }
