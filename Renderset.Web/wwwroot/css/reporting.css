@@ -235,15 +235,52 @@
 */
 
 .report-editor {
+    /* El ancho de la barra lateral lo escribe el divisor por JS sobre este
+       mismo elemento, y se recuerda en localStorage. */
+    --report-editor-sidebar-width: 600px;
     width: 100%;
     height: 100%;
     min-width: 0;
     min-height: 0;
     display: grid;
-    grid-template-columns: 360px minmax(0, 1fr);
+    grid-template-columns: minmax(0, var(--report-editor-sidebar-width)) auto minmax(0, 1fr);
     overflow: hidden;
     background: #eef2f4;
 }
+
+    .report-editor.is-resizing {
+        cursor: col-resize;
+        user-select: none;
+    }
+
+/* ---------- Divisor ---------- */
+
+.report-editor-resizer {
+    width: 6px;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    background: #e6ecef;
+    cursor: col-resize;
+    /* Sin esto el navegador se queda el gesto en táctil y no llega
+       el pointermove. */
+    touch-action: none;
+}
+
+    .report-editor-resizer:hover,
+    .report-editor.is-resizing .report-editor-resizer {
+        background: #cdd9df;
+    }
+
+    .report-editor-resizer span {
+        width: 2px;
+        height: 28px;
+        border-radius: 2px;
+        background: #9fb0b9;
+        pointer-events: none;
+    }
 
 .report-editor-sidebar {
     width: 100%;
@@ -580,6 +617,109 @@
     .report-editor-chevron.expanded {
         transform: rotate(225deg);
     }
+
+
+/* =========================================================
+   4b. SECCIONES ANIDADAS
+   ========================================================= */
+
+/* Los chips van en su propia línea, debajo del título. En una barra lateral
+   estrecha, compartir línea con el nombre y los botones dejaba el nombre sin
+   ancho y el texto se salía encima de los chips. */
+.report-editor-section-header {
+    flex-wrap: wrap;
+    row-gap: 4px;
+}
+
+    .report-editor-section-header .report-editor-section-name {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+.report-editor-section-chips {
+    order: 3;
+    display: flex;
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.report-editor-section-chip {
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #eef3f6;
+    color: #4d626d;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+    .report-editor-section-chip.is-repeated {
+        background: #e7f1ea;
+        color: #2f6b4f;
+    }
+
+    .report-editor-section-chip.is-table {
+        background: #eaeef7;
+        color: #3c4f86;
+    }
+
+    .report-editor-section-chip.is-nested {
+        background: #f3eef7;
+        color: #63497c;
+    }
+
+    .report-editor-section-chip.is-path {
+        border: 1px solid #e2e9ec;
+        background: #fbfcfd;
+        color: #6e7e86;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+    }
+
+/* El rail de la izquierda es lo que hace que un albarán se lea como algo
+   contenido en la factura y no como otra sección suelta. */
+.report-editor-subsections {
+    margin-top: 8px;
+    padding-left: 10px;
+    border-left: 2px solid #d5e0e6;
+}
+
+.report-editor-section.is-depth-1,
+.report-editor-section.is-depth-2,
+.report-editor-section.is-depth-3 {
+    border-color: #d2dde3;
+    box-shadow: none;
+}
+
+    .report-editor-section.is-depth-1 > .report-editor-section-header,
+    .report-editor-section.is-depth-2 > .report-editor-section-header,
+    .report-editor-section.is-depth-3 > .report-editor-section-header {
+        padding: 8px 10px;
+        background: #eff4f6;
+    }
+
+    .report-editor-section.is-depth-1 > .report-editor-section-header .report-editor-section-name,
+    .report-editor-section.is-depth-2 > .report-editor-section-header .report-editor-section-name,
+    .report-editor-section.is-depth-3 > .report-editor-section-header .report-editor-section-name {
+        font-size: 12px;
+    }
+
+.report-editor-section.is-repeated > .report-editor-section-header {
+    border-left: 3px solid #2f6b4f;
+}
+
+.report-editor-section.is-table > .report-editor-section-header {
+    border-left: 3px solid #3c4f86;
+}
 
 
 /* =========================================================
@@ -978,7 +1118,8 @@
 
 @media (max-width: 900px) {
     .report-editor {
-        grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+        --report-editor-sidebar-width: 340px;
+        grid-template-columns: minmax(260px, var(--report-editor-sidebar-width)) auto minmax(0, 1fr);
     }
 }
 
@@ -988,6 +1129,10 @@
         min-height: 100dvh;
         grid-template-columns: 1fr;
         overflow: visible;
+    }
+
+    .report-editor-resizer {
+        display: none;
     }
 
     .report-editor-sidebar {

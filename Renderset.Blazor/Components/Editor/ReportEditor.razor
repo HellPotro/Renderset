@@ -17,7 +17,7 @@
 @inject IJSRuntime JS
 @inject IReportConfigurationComposer ConfigurationComposer
 
-<div class="report-editor">
+<div class="report-editor" @ref="_root">
 
     <aside class="report-editor-sidebar">
 
@@ -210,6 +210,12 @@
                     if (item.Type == ReportBodyItemType.Section &&
                         !string.IsNullOrWhiteSpace(item.SectionId))
                     {
+                        // Las subsecciones las dibuja su padre. Si una llega
+                        // aquí por un body antiguo, se ignora en vez de
+                        // salir dos veces.
+                        if (IsNestedSection(item.SectionId))
+                            continue;
+
                         var sectionDefinition = Definition.Sections.FirstOrDefault(x =>
                             string.Equals(x.Id, item.SectionId, StringComparison.OrdinalIgnoreCase));
 
@@ -504,6 +510,16 @@
 
     </aside>
 
+    @* Arrastra para cambiar el ancho; doble clic vuelve al de por defecto.
+       El ancho lo aplica JS sobre una variable CSS, sin pasar por el
+       servidor: un pointermove por render dejaría el editor a rastras. *@
+    <div class="report-editor-resizer"
+         role="separator"
+         aria-orientation="vertical"
+         title="Arrastra para cambiar el ancho. Doble clic para el ancho por defecto.">
+        <span></span>
+    </div>
+
     <main class="report-editor-preview">
 
         <div class="report-editor-preview-toolbar">
@@ -649,10 +665,54 @@
             _collapsedItems.Add(itemId);
     }
 
+    private ElementReference _root;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        await JS.InvokeVoidAsync(
+            "renderSet.initEditorResizer",
+            _root);
+    }
+
     protected override void OnParametersSet()
     {
+        RebuildNestedSectionIndex();
         SyncPreviewDataFromParameter();
         Resolve();
+    }
+
+    /// <summary>
+    /// Ids de las secciones que cuelgan de otra sección. El body sólo pinta
+    /// raíces: de las anidadas se encarga el ReportSectionEditor del padre.
+    /// </summary>
+    private HashSet<string> _nestedSectionIds =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private bool IsNestedSection(string? sectionId) =>
+        !string.IsNullOrWhiteSpace(sectionId) &&
+        _nestedSectionIds.Contains(sectionId);
+
+    private void RebuildNestedSectionIndex()
+    {
+        _nestedSectionIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var section in Definition.Sections)
+            CollectNestedSectionIds(section, _nestedSectionIds);
+    }
+
+    private static void CollectNestedSectionIds(
+        ReportSectionDefinition section,
+        HashSet<string> target)
+    {
+        foreach (var child in section.Sections)
+        {
+            target.Add(child.Id);
+            CollectNestedSectionIds(child, target);
+        }
     }
 
     private void SyncPreviewDataFromParameter()

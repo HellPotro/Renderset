@@ -3,7 +3,7 @@
 @using Renderset.Core.Definitions
 @using Renderset.Core.Resolved
 
-<div class="report-editor-section">
+<div class="report-editor-section @DepthClass @KindClass">
 
     <div class="report-editor-section-header">
 
@@ -16,27 +16,55 @@
             <span class="report-editor-toggle"></span>
 
             <span class="report-editor-section-name">
-                @Definition.Name
+                @Resolved.Name
             </span>
         </label>
 
+        <div class="report-editor-section-chips">
+
+            @if (IsNested)
+            {
+                <span class="report-editor-section-chip is-nested"
+                      title="Subsección: se pinta dentro de su sección padre">
+                    Subsección
+                </span>
+            }
+
+            <span class="report-editor-section-chip @KindChipClass"
+                  title="@KindDescription">
+                @KindLabel
+            </span>
+
+            @if (!string.IsNullOrWhiteSpace(EffectiveDataPath))
+            {
+                <span class="report-editor-section-chip is-path"
+                      title="Colección de origen">
+                    @(EffectiveDataPath)[]
+                </span>
+            }
+
+        </div>
+
         <div class="report-editor-section-actions">
 
-            <button type="button"
-                    class="report-editor-section-order-button"
-                    title="Mover sección arriba"
-                    disabled="@(!CanMoveUp)"
-                    @onclick="MoveUp">
-                <i class="fa-solid fa-arrow-up"></i>
-            </button>
+            @if (ShowMoveButtons)
+            {
+                <button type="button"
+                        class="report-editor-section-order-button"
+                        title="Mover sección arriba"
+                        disabled="@(!CanMoveUp)"
+                        @onclick="MoveUp">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
 
-            <button type="button"
-                    class="report-editor-section-order-button"
-                    title="Mover sección abajo"
-                    disabled="@(!CanMoveDown)"
-                    @onclick="MoveDown">
-                <i class="fa-solid fa-arrow-down"></i>
-            </button>
+                <button type="button"
+                        class="report-editor-section-order-button"
+                        title="Mover sección abajo"
+                        disabled="@(!CanMoveDown)"
+                        @onclick="MoveDown">
+                    <i class="fa-solid fa-arrow-down"></i>
+                </button>
+            }
 
             <button type="button"
                     class="report-editor-collapse-button"
@@ -57,7 +85,7 @@
             <label class="report-editor-section-option">
 
                 <input type="checkbox"
-                       checked="@(Configuration is null || ShowsName)"
+                       checked="@ShowsName"
                        @onchange="ToggleShowNameAsync" />
 
                 <span>Mostrar el título de la sección</span>
@@ -249,6 +277,37 @@
                 }
             }
 
+            @if (OrderedChildren.Count > 0)
+            {
+                <div class="report-editor-subtitle">
+                    Subsecciones
+                </div>
+
+                <div class="report-editor-subsections">
+
+                    @foreach (var childDefinition in OrderedChildren)
+                    {
+                        var resolvedChild = FindResolvedChild(childDefinition.Id);
+
+                        if (resolvedChild is null)
+                        {
+                            continue;
+                        }
+
+                        <ReportSectionEditor @key="childDefinition.Id"
+                                             Definition="childDefinition"
+                                             Resolved="resolvedChild"
+                                             Configuration="Configuration"
+                                             Depth="@(Depth + 1)"
+                                             ScopeReader="ChildScopeReader"
+                                             ScopeWriter="ChildScopeWriter"
+                                             Texts="Texts"
+                                             Changed="Changed" />
+                    }
+
+                </div>
+            }
+
         </div>
     }
 
@@ -287,8 +346,120 @@
     [Parameter]
     public EventCallback Changed { get; set; }
 
+    /// <summary>
+    /// Nivel de anidamiento. 0 es una sección del body; 1 en adelante son
+    /// subsecciones que ya dibuja su padre, no el ReportEditor.
+    /// </summary>
+    [Parameter]
+    public int Depth { get; set; }
+
+    /// <summary>
+    /// Lista donde vive la configuración de esta sección, sólo para leer.
+    /// Puede devolver null porque la configuración es sparse y el padre
+    /// quizá no tenga todavía ninguna entrada.
+    ///
+    /// Nulo significa raíz: Configuration.Sections.
+    /// </summary>
+    [Parameter]
+    public Func<List<ReportSectionConfiguration>?>? ScopeReader { get; set; }
+
+    /// <summary>
+    /// Lo mismo, pero creando por el camino la configuración del padre. Sólo
+    /// se invoca al escribir un override, para no ensuciar el preset con
+    /// entradas vacías al pintar.
+    /// </summary>
+    [Parameter]
+    public Func<List<ReportSectionConfiguration>>? ScopeWriter { get; set; }
+
     private bool _collapsed = true;
     private DragItem? _dragItem;
+
+    protected override void OnInitialized()
+    {
+        // Una sección con hijos se abre sola: si no, el árbol factura →
+        // albaranes → líneas no se ve hasta que el usuario despliega a mano.
+        _collapsed = Definition.Sections.Count == 0;
+    }
+
+    private bool IsRepeated =>
+        !string.IsNullOrWhiteSpace(Definition.DataPath);
+
+    private bool IsTable =>
+        Definition.Table is not null;
+
+    private bool IsNested =>
+        Depth > 0;
+
+    private bool ShowMoveButtons =>
+        Depth == 0;
+
+    private string? EffectiveDataPath =>
+        Definition.DataPath
+        ?? Definition.Table?.DataPath;
+
+    private string DepthClass =>
+        $"is-depth-{Math.Min(Depth, 3)}";
+
+    private string? KindClass =>
+        IsRepeated
+            ? "is-repeated"
+            : IsTable
+                ? "is-table"
+                : null;
+
+    private string KindLabel =>
+        IsRepeated
+            ? "Repetida"
+            : IsTable
+                ? "Tabla"
+                : "Sección";
+
+    private string KindChipClass =>
+        IsRepeated
+            ? "is-repeated"
+            : IsTable
+                ? "is-table"
+                : "is-plain";
+
+    private string KindDescription =>
+        IsRepeated
+            ? "Se pinta una vez por cada elemento de la colección"
+            : IsTable
+                ? "Una fila por elemento de la colección"
+                : "Se pinta una sola vez con los datos del documento";
+
+    private IReadOnlyList<ReportSectionDefinition> OrderedChildren =>
+        Definition.Sections
+            .OrderBy(x => FindResolvedChild(x.Id)?.Order ?? x.Order)
+            .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private ResolvedReportSection? FindResolvedChild(string sectionId) =>
+        Resolved.Sections.FirstOrDefault(x =>
+            string.Equals(
+                x.Id,
+                sectionId,
+                StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Ámbito de configuración de las subsecciones: la lista Sections de la
+    /// configuración de esta sección, que puede no existir todavía.
+    /// </summary>
+    private List<ReportSectionConfiguration>? ChildScopeReader() =>
+        FindSectionConfiguration()?.Sections;
+
+    private List<ReportSectionConfiguration> ChildScopeWriter() =>
+        GetOrCreateSectionConfiguration().Sections;
+
+    private List<ReportSectionConfiguration>? ReadScope =>
+        ScopeReader is null
+            ? Configuration.Sections
+            : ScopeReader();
+
+    private List<ReportSectionConfiguration> WriteScope =>
+        ScopeWriter is null
+            ? Configuration.Sections
+            : ScopeWriter();
 
     private IEnumerable<ReportFieldDefinition> OrderedFields =>
         Definition.Fields.OrderBy(x =>
@@ -333,7 +504,9 @@
         await Changed.InvokeAsync();
     }
 
-    private bool ShowsName => GetOrCreateSectionConfiguration()?.ShowName ?? true;
+    // De lectura: pintar la sección no puede crear configuración, o el preset
+    // dejaría de ser sparse sólo por abrir el editor.
+    private bool ShowsName => FindSectionConfiguration()?.ShowName ?? true;
 
     private async Task ToggleShowNameAsync(ChangeEventArgs e)
     {
@@ -413,10 +586,22 @@
         await Changed.InvokeAsync();
     }
 
+    private ReportSectionConfiguration? FindSectionConfiguration() =>
+        ReadScope?.FirstOrDefault(x =>
+            string.Equals(
+                x.SectionId,
+                Definition.Id,
+                StringComparison.OrdinalIgnoreCase));
+
     private ReportSectionConfiguration GetOrCreateSectionConfiguration()
     {
+        // El ámbito es el del padre cuando esto es una subsección: el
+        // resolver espera las subsecciones dentro de Sections de su padre,
+        // no en la lista plana del report.
+        var scope = WriteScope;
+
         var section =
-            Configuration.Sections.FirstOrDefault(x =>
+            scope.FirstOrDefault(x =>
                 string.Equals(
                     x.SectionId,
                     Definition.Id,
@@ -431,7 +616,7 @@
                 SectionId = Definition.Id
             };
 
-        Configuration.Sections.Add(section);
+        scope.Add(section);
 
         return section;
     }
@@ -496,12 +681,7 @@
 
     private ReportFieldConfiguration? FindFieldConfiguration(
         string fieldId) =>
-        Configuration.Sections
-            .FirstOrDefault(x =>
-                string.Equals(
-                    x.SectionId,
-                    Definition.Id,
-                    StringComparison.OrdinalIgnoreCase))
+        FindSectionConfiguration()
             ?.Fields
             .FirstOrDefault(x =>
                 string.Equals(
@@ -511,12 +691,7 @@
 
     private ReportColumnConfiguration? FindColumnConfiguration(
         string columnId) =>
-        Configuration.Sections
-            .FirstOrDefault(x =>
-                string.Equals(
-                    x.SectionId,
-                    Definition.Id,
-                    StringComparison.OrdinalIgnoreCase))
+        FindSectionConfiguration()
             ?.Table
             ?.Columns
             .FirstOrDefault(x =>
