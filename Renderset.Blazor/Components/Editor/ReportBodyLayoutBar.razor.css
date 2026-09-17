@@ -1,0 +1,57 @@
+/* Barra discreta: es una decisión de colocación, no el contenido. No debe
+   competir visualmente con la cabecera del elemento que hay justo debajo. */
+
+.layout-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    padding: 0 2px;
+}
+
+.layout-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border: 1px solid #d8e1e7;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #89969d;
+    cursor: pointer;
+    font-size: 10px;
+}
+
+    .layout-toggle:hover:not(:disabled) {
+        border-color: #b9c8d1;
+        color: #34454d;
+    }
+
+    .layout-toggle.is-on {
+        border-color: #00285a;
+        background: #eef3f6;
+        color: #00285a;
+        font-weight: 600;
+    }
+
+    .layout-toggle:disabled {
+        opacity: .45;
+        cursor: default;
+    }
+
+.layout-width {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #89969d;
+    font-size: 10px;
+}
+
+    .layout-width select {
+        padding: 3px 6px;
+        border: 1px solid #d8e1e7;
+        border-radius: 5px;
+        background: #ffffff;
+        color: #34454d;
+        font-size: 10px;
+    }

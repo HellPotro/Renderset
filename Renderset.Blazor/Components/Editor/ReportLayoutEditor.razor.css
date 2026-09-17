@@ -1,0 +1,188 @@
+.layout-hint {
+    margin: 0 0 10px;
+    color: #89969d;
+    font-size: 10px;
+    line-height: 1.45;
+}
+
+.layout-empty {
+    padding: 14px 10px;
+    border: 1px dashed #d8e1e7;
+    border-radius: 8px;
+    color: #89969d;
+    font-size: 10px;
+    text-align: center;
+}
+
+.layout-row {
+    margin-bottom: 10px;
+    padding: 8px;
+    border: 1px solid #d8e1e7;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+    .layout-row:last-child {
+        margin-bottom: 0;
+    }
+
+.layout-row-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.layout-row-name {
+    color: #34454d;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+
+.layout-row-meta {
+    color: #89969d;
+    font-size: 10px;
+}
+
+/* Maqueta en pequeño de la fila: es la forma más rápida de entender el
+   reparto sin tener que mirar el preview. */
+
+.layout-row-preview {
+    display: flex;
+    gap: 3px;
+    margin-bottom: 8px;
+}
+
+.layout-row-bar {
+    flex-shrink: 1;
+    flex-basis: 0;
+    min-width: 0;
+    padding: 4px 0;
+    border-radius: 4px;
+    background: #eef3f6;
+    color: #00285a;
+    font-size: 9px;
+    font-weight: 600;
+    text-align: center;
+    overflow: hidden;
+}
+
+.layout-row-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.layout-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 7px;
+    border: 1px solid #edf1f3;
+    border-radius: 6px;
+    background: #fbfcfd;
+}
+
+.layout-item-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 5px;
+    background: #eef3f6;
+    color: #00285a;
+    font-size: 10px;
+}
+
+.layout-item-text {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+    .layout-item-text strong {
+        overflow: hidden;
+        color: #22343b;
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .layout-item-text span {
+        color: #89969d;
+        font-size: 9px;
+    }
+
+.layout-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.layout-icon-button {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #d8e1e7;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #6d7b83;
+    cursor: pointer;
+    font-size: 9px;
+}
+
+    .layout-icon-button:hover:not(:disabled) {
+        border-color: #b9c8d1;
+        color: #34454d;
+    }
+
+.layout-join {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid #d8e1e7;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #6d7b83;
+    cursor: pointer;
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+    .layout-join:hover:not(:disabled) {
+        border-color: #b9c8d1;
+        color: #34454d;
+    }
+
+    .layout-join.is-on {
+        border-color: #00285a;
+        background: #eef3f6;
+        color: #00285a;
+        font-weight: 600;
+    }
+
+.layout-width {
+    height: 24px;
+    padding: 0 5px;
+    border: 1px solid #d8e1e7;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #34454d;
+    font-size: 9px;
+}
+
+.layout-icon-button:disabled,
+.layout-join:disabled {
+    opacity: .45;
+    cursor: default;
+}

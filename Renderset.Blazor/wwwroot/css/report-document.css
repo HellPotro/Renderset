@@ -110,6 +110,38 @@
 }
 
 
+/* ---------- Rows ---------- */
+
+/* Una fila sólo aparece cuando hay dos o más elementos que comparten línea.
+   Se reparte con flex-grow y no con una rejilla de doce columnas fijas
+   porque así, si uno de los elementos se oculta por configuración, los que
+   quedan reparten el hueco en vez de dejarlo vacío. */
+
+.dynamic-report-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.dynamic-report-column {
+    /* El crecimiento lo pone el renderer en el style del elemento, que es
+       el único dato que cambia por columna. */
+    flex-shrink: 1;
+    flex-basis: 0;
+
+    /* Sin esto, una tabla ancha estira su columna y rompe el reparto: el
+       contenido mínimo de un flex item es su contenido, no cero. */
+    min-width: 0;
+}
+
+    /* La sección ya trae su propio margen inferior; dentro de una columna
+       sobra, porque el margen lo pone la fila. */
+    .dynamic-report-column > .dynamic-report-section:last-child {
+        margin-bottom: 0;
+    }
+
+
 /* ---------- Sections ---------- */
 
 .dynamic-report-section {
@@ -317,6 +349,13 @@
        cualquier informe de ERP. */
     .dynamic-report-repeat-item,
     .dynamic-report-table tr {
+        break-inside: avoid;
+    }
+
+    /* Dos secciones en paralelo cortadas por el salto de página quedan
+       descolocadas entre sí, que es peor que empezar la fila en la página
+       siguiente. */
+    .dynamic-report-row {
         break-inside: avoid;
     }
 }

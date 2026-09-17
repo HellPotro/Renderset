@@ -126,3 +126,24 @@ window.renderSet.initEditorResizer = function (root) {
         remember();
     });
 };
+
+/* Preferencias de pantalla que no merecen viajar al servidor: son de este
+   navegador y de este usuario, y perderlas no rompe nada. */
+
+window.renderSet.getPreference = function (key, fallback) {
+    try {
+        const stored = window.localStorage.getItem(key);
+
+        return stored === null ? (fallback || null) : stored;
+    } catch (e) {
+        return fallback || null;
+    }
+};
+
+window.renderSet.setPreference = function (key, value) {
+    try {
+        window.localStorage.setItem(key, value);
+    } catch (e) {
+        // localStorage puede estar bloqueado; se pierde la preferencia y ya.
+    }
+};

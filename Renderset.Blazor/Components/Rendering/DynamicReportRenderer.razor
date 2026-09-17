@@ -8,18 +8,30 @@
 
     <DynamicReportHeader Header="Report.Header" />
 
-    @foreach (var item in VisibleBodyItems)
+    @foreach (var row in Rows)
     {
-        @if (item.Type == ReportBodyItemType.Section &&
-             item.Section is not null)
+        @* Una fila de un solo elemento se pinta tal cual, sin envoltorio.
+           Así los reports que no usan columnas generan exactamente el mismo
+           HTML que antes y no cambian de aspecto. *@
+        @if (row.Count == 1)
         {
-            <DynamicReportSection Section="@item.Section"
-                                  Data="@Data" />
+            @RenderItem(row[0])
         }
-        else if (item.Type == ReportBodyItemType.Block &&
-                 item.Block is not null)
+        else
         {
-            <DynamicReportBlock Block="item.Block" />
+            <div class="dynamic-report-row">
+
+                @foreach (var item in row)
+                {
+                    <div class="dynamic-report-column"
+                         style="flex-grow:@item.Span">
+
+                        @RenderItem(item)
+
+                    </div>
+                }
+
+            </div>
         }
     }
 
@@ -43,6 +55,38 @@
                 x.Type != ReportBodyItemType.Section ||
                 x.Section?.Visible == true)
             .OrderBy(x => x.Order);
+
+    /// <summary>
+    /// Las filas salen de agrupar por el número que ya trae el elemento
+    /// resuelto: aquí no se decide layout, sólo se agrupa.
+    ///
+    /// Se agrupa después de filtrar por visibilidad a propósito. Si una
+    /// sección oculta deja a su compañera sola en la fila, la compañera pasa
+    /// a ocupar el ancho completo en vez de quedarse a media página con un
+    /// hueco al lado.
+    /// </summary>
+    private IReadOnlyList<IReadOnlyList<ResolvedReportBodyItem>> Rows =>
+        VisibleBodyItems
+            .GroupBy(x => x.Row)
+            .Select(group =>
+                (IReadOnlyList<ResolvedReportBodyItem>)group.ToList())
+            .ToList();
+
+    private RenderFragment RenderItem(
+        ResolvedReportBodyItem item) =>
+        @<text>
+            @if (item.Type == ReportBodyItemType.Section &&
+                 item.Section is not null)
+            {
+                <DynamicReportSection Section="@item.Section"
+                                      Data="@Data" />
+            }
+            else if (item.Type == ReportBodyItemType.Block &&
+                     item.Block is not null)
+            {
+                <DynamicReportBlock Block="item.Block" />
+            }
+        </text>;
 
     private string ThemeStyle => $"""
         --report-primary:{Theme.PrimaryColor};

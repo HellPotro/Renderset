@@ -1,4 +1,4 @@
-﻿@page "/reports"
+@page "/reports"
 
 @using Renderset.Core.Localization
 @using Renderset.Core.Persistence
@@ -9,6 +9,7 @@
 @inject ICurrentTenant CurrentTenant
 @inject NavigationManager Navigation
 @inject IToastService Toasts
+@inject IJSRuntime JS
 
 <PageTitle>Reports - RenderSet</PageTitle>
 
@@ -68,35 +69,120 @@
     }
     else
     {
-        <div class="report-search">
+        <div class="report-toolbar">
 
-            <i class="fa-solid fa-magnifying-glass"></i>
+            <div class="report-search">
 
-            <input value="@_search"
-                   @oninput="e => _search = e.Value?.ToString() ?? string.Empty"
-                   placeholder="Buscar por nombre, id, sección o campo" />
+                <i class="fa-solid fa-magnifying-glass"></i>
 
-            @if (!string.IsNullOrWhiteSpace(_search))
-            {
+                <input value="@_search"
+                       @oninput="e => _search = e.Value?.ToString() ?? string.Empty"
+                       placeholder="Buscar por nombre, id, sección o campo" />
+
+                @if (!string.IsNullOrWhiteSpace(_search))
+                {
+                    <button type="button"
+                            class="report-search-clear"
+                            title="Limpiar"
+                            @onclick="() => _search = string.Empty">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                }
+
+            </div>
+
+            <div class="report-view-toggle">
+
                 <button type="button"
-                        class="report-search-clear"
-                        title="Limpiar"
-                        @onclick="() => _search = string.Empty">
-                    <i class="fa-solid fa-xmark"></i>
+                        class="@(_view == GridView ? "is-on" : null)"
+                        title="Vista de cuadros"
+                        @onclick="() => ChangeViewAsync(GridView)">
+                    <i class="fa-solid fa-table-cells-large"></i>
                 </button>
-            }
+
+                <button type="button"
+                        class="@(_view == ListView ? "is-on" : null)"
+                        title="Vista de lista"
+                        @onclick="() => ChangeViewAsync(ListView)">
+                    <i class="fa-solid fa-list"></i>
+                </button>
+
+            </div>
 
         </div>
-        
+
         @if (!FilteredReports.Any())
         {
             <div class="page-state">
                 Ningún report coincide con «@_search».
             </div>
         }
+        else if (_view == ListView)
+        {
+            <div class="report-list">
+
+                @foreach (var report in FilteredReports)
+                {
+                    var stats = Stats(report);
+
+                    <article class="report-row" @key="report.Id">
+
+                        <div class="report-row-main">
+
+                            <div class="report-row-title">
+                                <h2>@report.Name</h2>
+                                <code>@report.Id</code>
+                            </div>
+
+                            <div class="report-row-meta">
+
+                                <span class="report-version">
+                                    v@(report.Version)
+                                </span>
+
+                                <span>@stats.Sections secc.</span>
+                                <span>@stats.Fields campos</span>
+                                <span>@stats.Columns col.</span>
+                                <span>@PresetCount(report.Id) presets</span>
+
+                                @if (!stats.HasSampleData)
+                                {
+                                    <span class="report-row-warn"
+                                          title="Sin datos de ejemplo: el preview del designer saldrá vacío.">
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                        sin datos
+                                    </span>
+                                }
+
+                            </div>
+
+                            <div class="report-langs">
+                                @LanguageBadges(report)
+                            </div>
+
+                        </div>
+
+                        <div class="report-row-actions">
+                            @ActionButtons(report)
+                        </div>
+
+                        @if (_reportToRename?.Id == report.Id)
+                        {
+                            @RenamePanel(report)
+                        }
+
+                        @if (_reportToDelete?.Id == report.Id)
+                        {
+                            @DeletePanel(report)
+                        }
+
+                    </article>
+                }
+
+            </div>
+        }
         else
         {
-
             <div class="report-grid">
 
                 @foreach (var report in FilteredReports)
@@ -155,101 +241,29 @@
 
 
                         <div class="report-langs">
-
-                            @if (_cultures.Count == 0)
-                            {
-                                <a class="report-langs-empty"
-                                   href="/idiomas">
-                                    Sin idiomas configurados
-                                </a>
-                            }
-                            else
-                            {
-                                @foreach (var culture in _cultures)
-                                {
-                                    var percentage = CoverageOf(report.Id, culture.Culture);
-
-                                    <span class="@LangClass(percentage)"
-                                          title="@culture.DisplayName">
-                                        <code>@culture.Culture</code>
-                                        <strong>@percentage%</strong>
-                                    </span>
-                                }
-                            }
-
+                            @LanguageBadges(report)
                         </div>
 
 
                         <footer class="report-actions">
-
-                            <button type="button"
-                                    class="primary-button"
-                                    @onclick="() => OpenDesigner(report.Id)">
-                                <i class="fa-solid fa-pen-ruler"></i>
-                                Diseñar
-                            </button>
-
-                            <button type="button"
-                                    class="secondary-button"
-                                    @onclick="() => OpenPresets(report.Id)">
-                                <i class="fa-solid fa-sliders"></i>
-                                Presets
-                            </button>
-
-                            <button type="button"
-                                    class="secondary-button"
-                                    @onclick="() => OpenDictionary(report.Id)">
-                                <i class="fa-solid fa-language"></i>
-                                Diccionario
-                            </button>
-
-                            <button type="button"
-                                    class="icon-button danger"
-                                    title="Borrar report"
-                                    @onclick="() => AskDelete(report)">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-
+                            @ActionButtons(report)
                         </footer>
 
 
+                        @if (_reportToRename?.Id == report.Id)
+                        {
+                            @RenamePanel(report)
+                        }
+
                         @if (_reportToDelete?.Id == report.Id)
                         {
-                            <div class="report-delete">
-
-                                <div>
-                                    <strong>¿Borrar @report.Name?</strong>
-                                    <small>
-                                        Se desactiva el report y con él sus
-                                        presets, assignments y traducciones.
-                                    </small>
-                                </div>
-
-                                <div class="report-delete-actions">
-
-                                    <button type="button"
-                                            class="secondary-button"
-                                            @onclick="CancelDelete">
-                                        Cancelar
-                                    </button>
-
-                                    <button type="button"
-                                            class="danger-button"
-                                            disabled="@_deleting"
-                                            @onclick="ConfirmDeleteAsync">
-                                        Borrar
-                                    </button>
-
-                                </div>
-
-                            </div>
+                            @DeletePanel(report)
                         }
 
                     </article>
                 }
 
             </div>
-            
         }
 
     }
@@ -259,11 +273,25 @@
 
 @code {
 
+    private const string GridView = "grid";
+    private const string ListView = "list";
+    private const string ViewPreferenceKey = "renderset.reports.view";
+
     private bool _loading = true;
     private bool _deleting;
+    private bool _renaming;
     private string _search = string.Empty;
+    private string _view = GridView;
 
     private Report? _reportToDelete;
+    private Report? _reportToRename;
+    private string _renameValue = string.Empty;
+
+    /// <summary>
+    /// Validación local, así que va en línea y no por toast: no ha llegado a
+    /// haber llamada a la API.
+    /// </summary>
+    private string? _renameError;
 
     private IReadOnlyCollection<Report> _reports = [];
     private IReadOnlyCollection<ReportPreset> _presets = [];
@@ -303,6 +331,46 @@
     protected override async Task OnInitializedAsync()
     {
         await ReloadAsync();
+    }
+
+
+    /// <summary>
+    /// La preferencia de vista se lee después del primer render porque
+    /// durante el prerender no hay navegador al que preguntar.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(
+        bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        var stored =
+            await JS.InvokeAsync<string?>(
+                "renderSet.getPreference",
+                ViewPreferenceKey,
+                GridView);
+
+        if (stored != ListView || _view == ListView)
+            return;
+
+        _view = ListView;
+
+        StateHasChanged();
+    }
+
+
+    private async Task ChangeViewAsync(
+        string view)
+    {
+        if (_view == view)
+            return;
+
+        _view = view;
+
+        await JS.InvokeVoidAsync(
+            "renderSet.setPreference",
+            ViewPreferenceKey,
+            view);
     }
 
 
@@ -346,6 +414,156 @@
             _loading = false;
         }
     }
+
+
+    // ------------------------------------------------------- trozos comunes
+
+    /// <summary>
+    /// Las dos vistas enseñan lo mismo y sólo cambian de forma, así que los
+    /// bloques repetidos se escriben una vez.
+    /// </summary>
+    private RenderFragment LanguageBadges(
+        Report report) =>
+        @<text>
+            @if (_cultures.Count == 0)
+            {
+                <a class="report-langs-empty"
+                   href="/idiomas">
+                    Sin idiomas configurados
+                </a>
+            }
+            else
+            {
+                @foreach (var culture in _cultures)
+                {
+                    var percentage = CoverageOf(report.Id, culture.Culture);
+
+                    <span class="@LangClass(percentage)"
+                          title="@culture.DisplayName">
+                        <code>@culture.Culture</code>
+                        <strong>@percentage%</strong>
+                    </span>
+                }
+            }
+        </text>;
+
+
+    private RenderFragment ActionButtons(
+        Report report) =>
+        @<text>
+            <button type="button"
+                    class="primary-button"
+                    @onclick="() => OpenDesigner(report.Id)">
+                <i class="fa-solid fa-pen-ruler"></i>
+                Diseñar
+            </button>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="() => OpenPresets(report.Id)">
+                <i class="fa-solid fa-sliders"></i>
+                Presets
+            </button>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="() => OpenDictionary(report.Id)">
+                <i class="fa-solid fa-language"></i>
+                Diccionario
+            </button>
+
+            <button type="button"
+                    class="icon-button"
+                    title="Renombrar report"
+                    @onclick="() => AskRename(report)">
+                <i class="fa-solid fa-pen"></i>
+            </button>
+
+            <button type="button"
+                    class="icon-button danger"
+                    title="Borrar report"
+                    @onclick="() => AskDelete(report)">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </text>;
+
+
+    private RenderFragment RenamePanel(
+        Report report) =>
+        @<div class="report-rename">
+
+            <label>
+                Nombre del report
+
+                <input value="@_renameValue"
+                       maxlength="120"
+                       autofocus
+                       @oninput="e => _renameValue = e.Value?.ToString() ?? string.Empty"
+                       @onkeydown="RenameKeyDownAsync" />
+            </label>
+
+            <p class="report-rename-hint">
+                El identificador <code>@report.Id</code> no cambia: presets,
+                assignments y diccionario cuelgan de él.
+            </p>
+
+            @if (!string.IsNullOrWhiteSpace(_renameError))
+            {
+                <p class="report-rename-error">
+                    @_renameError
+                </p>
+            }
+
+            <div class="report-rename-actions">
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="CancelRename">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        class="primary-button"
+                        disabled="@_renaming"
+                        @onclick="ConfirmRenameAsync">
+                    Guardar
+                </button>
+
+            </div>
+
+        </div>;
+
+
+    private RenderFragment DeletePanel(
+        Report report) =>
+        @<div class="report-delete">
+
+            <div>
+                <strong>¿Borrar @report.Name?</strong>
+                <small>
+                    Se desactiva el report y con él sus presets, assignments y
+                    traducciones.
+                </small>
+            </div>
+
+            <div class="report-delete-actions">
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="CancelDelete">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        class="danger-button"
+                        disabled="@_deleting"
+                        @onclick="ConfirmDeleteAsync">
+                    Borrar
+                </button>
+
+            </div>
+
+        </div>;
 
 
     /// <summary>
@@ -430,11 +648,110 @@
             $"/resources?scope={Uri.EscapeDataString(reportId)}");
 
 
+    // -------------------------------------------------------- renombrado
+
+    private void AskRename(
+        Report report)
+    {
+        _reportToDelete = null;
+        _reportToRename = report;
+        _renameValue = report.Name;
+        _renameError = null;
+    }
+
+
+    private void CancelRename()
+    {
+        _reportToRename = null;
+        _renameError = null;
+    }
+
+
+    private async Task RenameKeyDownAsync(
+        KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ConfirmRenameAsync();
+            return;
+        }
+
+        if (e.Key == "Escape")
+            CancelRename();
+    }
+
+
+    /// <summary>
+    /// El PUT lleva el report entero, así que se toca el nombre sobre el
+    /// objeto ya cargado. Sólo se cambia el nombre: el Id no se toca porque
+    /// de él cuelgan presets, assignments y diccionario, y la versión tampoco
+    /// porque versiona la estructura, no la etiqueta.
+    /// </summary>
+    private async Task ConfirmRenameAsync()
+    {
+        if (_reportToRename is null || _renaming)
+            return;
+
+        var name = _renameValue.Trim();
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            _renameError = "El nombre no puede estar vacío.";
+            return;
+        }
+
+        if (string.Equals(name, _reportToRename.Name, StringComparison.Ordinal))
+        {
+            CancelRename();
+            return;
+        }
+
+        _renaming = true;
+
+        try
+        {
+            var report = _reportToRename;
+            var previousName = report.Name;
+            var previousDefinitionName = report.Definition.Name;
+
+            report.Name = name;
+            report.Definition.Name = name;
+
+            var saved = await Toasts.RunApiAsync(
+                () => RenderSetApi.SaveReportAsync(
+                    CurrentTenant.Id,
+                    report.Id,
+                    report),
+                success: $"Report renombrado a '{name}'.",
+                errorTitle: "No se ha podido renombrar el report");
+
+            if (!saved)
+            {
+                // Si la API lo rechaza, no puede quedarse en pantalla un
+                // nombre que no está guardado en ningún sitio.
+                report.Name = previousName;
+                report.Definition.Name = previousDefinitionName;
+
+                return;
+            }
+
+            _reportToRename = null;
+
+            await ReloadAsync();
+        }
+        finally
+        {
+            _renaming = false;
+        }
+    }
+
+
     // ---------------------------------------------------------------- borrado
 
     private void AskDelete(
         Report report)
     {
+        _reportToRename = null;
         _reportToDelete = report;
     }
 

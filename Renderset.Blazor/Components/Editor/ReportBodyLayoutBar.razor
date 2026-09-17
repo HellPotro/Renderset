@@ -1,0 +1,104 @@
+@* Barra de colocación de un elemento del cuerpo.
+
+   Va por encima del elemento y no dentro porque los elementos los pintan
+   cuatro componentes distintos: así la colocación se edita igual sea una
+   sección, un bloque de texto o un bloque reutilizable.
+
+   No toca la configuración: avisa y decide el editor. Un preset antiguo
+   puede llegar sin Body materializado, y en ese caso el elemento que se ve
+   en pantalla es una copia de trabajo que no está en la configuración. *@
+
+<div class="layout-bar">
+
+    <button type="button"
+            class="layout-toggle @(SameRow == true ? "is-on" : null)"
+            disabled="@IsFirst"
+            title="@ToggleTitle"
+            @onclick="ToggleAsync">
+
+        <i class="@(SameRow == true ? "fa-solid fa-table-columns" : "fa-solid fa-bars")"></i>
+
+        @(SameRow == true ? "En la misma fila" : "En su propia fila")
+
+    </button>
+
+    @if (SharesRow)
+    {
+        <label class="layout-width">
+
+            Ancho
+
+            <select value="@WidthValue"
+                    @onchange="SpanSelectedAsync">
+
+                <option value="">Reparto automático</option>
+                <option value="3">Un cuarto</option>
+                <option value="4">Un tercio</option>
+                <option value="6">La mitad</option>
+                <option value="8">Dos tercios</option>
+                <option value="9">Tres cuartos</option>
+
+            </select>
+
+        </label>
+    }
+
+</div>
+
+@code {
+
+    [Parameter]
+    public bool? SameRow { get; set; }
+
+    [Parameter]
+    public int? Span { get; set; }
+
+    /// <summary>
+    /// El primer elemento del cuerpo no tiene nada encima a lo que unirse.
+    /// </summary>
+    [Parameter]
+    public bool IsFirst { get; set; }
+
+    /// <summary>
+    /// Cierto cuando el elemento comparte fila con alguien: porque sigue al
+    /// anterior o porque el siguiente se le une. Sólo entonces tiene sentido
+    /// elegir ancho.
+    /// </summary>
+    [Parameter]
+    public bool SharesRow { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> SameRowToggled { get; set; }
+
+    [Parameter]
+    public EventCallback<int?> SpanSelected { get; set; }
+
+    private string ToggleTitle =>
+        IsFirst
+            ? "El primer elemento siempre empieza fila"
+            : SameRow == true
+                ? "Bajar a una fila propia"
+                : "Poner al lado del elemento anterior";
+
+    private string WidthValue =>
+        Span?.ToString() ?? string.Empty;
+
+    private async Task ToggleAsync()
+    {
+        if (IsFirst)
+            return;
+
+        await SameRowToggled.InvokeAsync(SameRow != true);
+    }
+
+    private async Task SpanSelectedAsync(
+        ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        await SpanSelected.InvokeAsync(
+            int.TryParse(value, out var span)
+                ? span
+                : null);
+    }
+}

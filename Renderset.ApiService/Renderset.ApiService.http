@@ -93,6 +93,73 @@ Content-Type: application/json
   }
 }
 
+### Generar un documento con datos ya jerárquicos
+POST {{ApiService_HostAddress}}/api/render/{{tenantId}}
+Content-Type: application/json
+{
+  "reportId": "reporte-de-horas-trabajador",
+  "presetId": "reporte-de-horas-trabajador-default",
+  "context": {
+    "culture": "es-ES"
+  },
+  "output": {
+    "format": "Html",
+    "fileName": "factura-060098.html"
+  },
+  "data": {
+    "codigo": "EMP-00231",
+    "nombre": "Carlos Martín",
+    "departamento": "Mecanizado",
+    "centroTrabajo": "Barcelona",
+    "desde": "2026-08-01",
+    "hasta": "2026-08-30",
+    "horasTotales": 164.5,
+    "horasProduccion": 152.0,
+    "horasPreparacion": 8.5,
+    "horasIncidencias": 4.0,
+    "eficiencia": 92.4,
+    "trabajosPorMaquina": [
+      {
+        "maquina": "Centro CNC Mazak VCN-530",
+        "codigoMaquina": "CNC-001",
+        "seccion": "Mecanizado",
+        "horas": 62.5,
+        "ordenesTrabajo": 18,
+        "piezasFabricadas": 1480,
+        "eficiencia": 95.8
+      },
+      {
+        "maquina": "Prensa Hidráulica 450T",
+        "codigoMaquina": "PR-045",
+        "seccion": "Estampación",
+        "horas": 38.0,
+        "ordenesTrabajo": 11,
+        "piezasFabricadas": 3120,
+        "eficiencia": 89.2
+      },
+      {
+        "maquina": "Robot Soldadura ABB IRB2600",
+        "codigoMaquina": "ROB-012",
+        "seccion": "Soldadura",
+        "horas": 27.5,
+        "ordenesTrabajo": 9,
+        "piezasFabricadas": 940,
+        "eficiencia": 93.7
+      },
+      {
+        "maquina": "Línea de Ensamblaje A",
+        "codigoMaquina": "ENS-001",
+        "seccion": "Montaje",
+        "horas": 36.5,
+        "ordenesTrabajo": 14,
+        "piezasFabricadas": 1260,
+        "eficiencia": 91.5
+      }
+    ],
+    "observaciones": "El empleado ha realizado apoyo puntual en la línea de ensamblaje durante la última semana del periodo."
+  }
+}
+
 ### Sin presetId: el preset se resuelve por assignment segun el contexto
 POST {{ApiService_HostAddress}}/api/render/{{tenantId}}
 Content-Type: application/json

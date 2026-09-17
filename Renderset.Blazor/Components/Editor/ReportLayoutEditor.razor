@@ -1,0 +1,239 @@
+@using Renderset.Core.Services
+
+@* Pestaña de disposición.
+
+   Enseña el cuerpo agrupado en filas, con el reparto real que va a aplicar
+   el documento. Las filas y los anchos los calcula ReportBodyLayout, el
+   mismo código que usa el resolver: aquí no se decide nada, sólo se pinta y
+   se avisa de los cambios. *@
+
+<div class="report-editor-block">
+
+    <div class="report-editor-block-title">
+        Disposición
+    </div>
+
+    <p class="layout-hint">
+        Cada fila se reparte entre sus elementos. Une un elemento a la fila
+        de arriba para ponerlos uno al lado del otro.
+    </p>
+
+    @if (Items.Count == 0)
+    {
+        <div class="layout-empty">
+            Todavía no hay contenido que colocar. Añádelo desde la pestaña de
+            estructura.
+        </div>
+    }
+    else
+    {
+        @foreach (var row in Rows)
+        {
+            var total = row.Sum(x => x.Span);
+
+            <section class="layout-row" @key="row[0].Item.Id">
+
+                <header class="layout-row-head">
+
+                    <span class="layout-row-name">
+                        Fila @row[0].Row
+                    </span>
+
+                    <span class="layout-row-meta">
+                        @row.Count elemento@(row.Count == 1 ? "" : "s")
+                    </span>
+
+                </header>
+
+                <div class="layout-row-preview">
+
+                    @foreach (var member in row)
+                    {
+                        <span class="layout-row-bar"
+                              style="flex-grow:@member.Span"
+                              title="@member.Item.Label">
+                            @Percentage(member.Span, total)%
+                        </span>
+                    }
+
+                </div>
+
+                <div class="layout-row-items">
+
+                    @foreach (var member in row)
+                    {
+                        <div class="layout-item" @key="member.Item.Id">
+
+                            <span class="layout-item-icon">
+                                <i class="@member.Item.Icon"></i>
+                            </span>
+
+                            <div class="layout-item-text">
+                                <strong>@member.Item.Label</strong>
+                                <span>@member.Item.Kind</span>
+                            </div>
+
+                            <div class="layout-item-actions">
+
+                                <button type="button"
+                                        class="layout-icon-button"
+                                        title="Subir"
+                                        disabled="@(member.Index == 0)"
+                                        @onclick="() => MoveRequested.InvokeAsync((member.Item.Id, -1))">
+                                    <i class="fa-solid fa-arrow-up"></i>
+                                </button>
+
+                                <button type="button"
+                                        class="layout-icon-button"
+                                        title="Bajar"
+                                        disabled="@(member.Index == Items.Count - 1)"
+                                        @onclick="() => MoveRequested.InvokeAsync((member.Item.Id, 1))">
+                                    <i class="fa-solid fa-arrow-down"></i>
+                                </button>
+
+                                <button type="button"
+                                        class="layout-join @(member.ContinuesRow ? "is-on" : null)"
+                                        disabled="@(member.Index == 0)"
+                                        title="@JoinTitle(member)"
+                                        @onclick="() => SameRowToggled.InvokeAsync((member.Item.Id, !member.ContinuesRow))">
+
+                                    <i class="@(member.ContinuesRow ? "fa-solid fa-table-columns" : "fa-solid fa-turn-up")"></i>
+
+                                    @(member.ContinuesRow ? "En esta fila" : "Unir arriba")
+
+                                </button>
+
+                                @if (row.Count > 1)
+                                {
+                                    <select class="layout-width"
+                                            value="@WidthValue(member.Item)"
+                                            @onchange="e => SpanChangedAsync(member.Item, e)">
+
+                                        <option value="">Automático</option>
+                                        <option value="3">Un cuarto</option>
+                                        <option value="4">Un tercio</option>
+                                        <option value="6">La mitad</option>
+                                        <option value="8">Dos tercios</option>
+                                        <option value="9">Tres cuartos</option>
+
+                                    </select>
+                                }
+
+                            </div>
+
+                        </div>
+                    }
+
+                </div>
+
+            </section>
+        }
+    }
+
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ReportLayoutItem> Items { get; set; } = [];
+
+    /// <summary>
+    /// Id del elemento y si pasa a continuar la fila de arriba.
+    /// </summary>
+    [Parameter]
+    public EventCallback<(string Id, bool SameRow)> SameRowToggled { get; set; }
+
+    [Parameter]
+    public EventCallback<(string Id, int? Span)> SpanSelected { get; set; }
+
+    /// <summary>
+    /// Id del elemento y dirección: -1 sube, 1 baja.
+    /// </summary>
+    [Parameter]
+    public EventCallback<(string Id, int Direction)> MoveRequested { get; set; }
+
+    /// <summary>
+    /// Filas ya repartidas. Se delega en ReportBodyLayout para que la
+    /// pantalla y el documento no puedan discrepar.
+    /// </summary>
+    private IReadOnlyList<IReadOnlyList<Member>> Rows
+    {
+        get
+        {
+            var rows =
+                ReportBodyLayout.BuildRows(
+                    Items
+                        .Select(x => x.SameRow)
+                        .ToList());
+
+            var result = new List<IReadOnlyList<Member>>();
+
+            for (var row = 0; row < rows.Count; row++)
+            {
+                var members = rows[row];
+
+                var spans =
+                    ReportBodyLayout.DistributeSpans(
+                        members
+                            .Select(index => Items[index].Span)
+                            .ToList());
+
+                result.Add(
+                    members
+                        .Select((index, position) =>
+                            new Member(
+                                Items[index],
+                                index,
+                                row + 1,
+                                spans[position],
+                                position > 0))
+                        .ToList());
+            }
+
+            return result;
+        }
+    }
+
+    private static string JoinTitle(
+        Member member) =>
+        member.Index == 0
+            ? "El primer elemento siempre empieza fila"
+            : member.ContinuesRow
+                ? "Sacarlo a una fila propia"
+                : "Ponerlo al lado del elemento de arriba";
+
+    private static string WidthValue(
+        ReportLayoutItem item) =>
+        item.Span?.ToString() ?? string.Empty;
+
+    /// <summary>
+    /// El ancho es un peso, no un porcentaje absoluto: la fila siempre se
+    /// llena, así que lo que se enseña es la proporción resultante.
+    /// </summary>
+    private static int Percentage(
+        int span,
+        int total) =>
+        total == 0
+            ? 0
+            : (int)Math.Round(span * 100d / total);
+
+    private async Task SpanChangedAsync(
+        ReportLayoutItem item,
+        ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        await SpanSelected.InvokeAsync(
+            (item.Id,
+             int.TryParse(value, out var span)
+                 ? span
+                 : null));
+    }
+
+    private sealed record Member(
+        ReportLayoutItem Item,
+        int Index,
+        int Row,
+        int Span,
+        bool ContinuesRow);
+}

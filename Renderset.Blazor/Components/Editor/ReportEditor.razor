@@ -101,6 +101,12 @@
             </button>
 
             <button type="button"
+                    class="report-editor-tab @(_activeTab == LayoutTab ? "active" : null)"
+                    @onclick="ShowLayout">
+                Layout
+            </button>
+
+            <button type="button"
                     class="report-editor-tab @(_activeTab == ThemeTab ? "active" : null)"
                     @onclick="ShowTheme">
                 Tema
@@ -502,6 +508,14 @@
             </div>
         }
 
+        @if (_activeTab == LayoutTab)
+        {
+            <ReportLayoutEditor Items="GetLayoutItems()"
+                                SameRowToggled="change => SetBodyItemSameRowAsync(change.Id, change.SameRow)"
+                                SpanSelected="change => SetBodyItemSpanAsync(change.Id, change.Span)"
+                                MoveRequested="change => MoveBodyItemAsync(change.Id, change.Direction)" />
+        }
+
         @if (_activeTab == ThemeTab)
         {
             <ReportThemeEditor Theme="Theme"
@@ -564,6 +578,7 @@
 @code {
     private const string StructureTab = "structure";
     private const string HeaderFooterTab = "header-footer";
+    private const string LayoutTab = "layout";
     private const string ThemeTab = "theme";
     private const long MaxPresetFileSize = 1024 * 1024;
 
@@ -806,6 +821,9 @@
     private void ShowHeaderFooter() =>
         _activeTab = HeaderFooterTab;
 
+    private void ShowLayout() =>
+        _activeTab = LayoutTab;
+
     private void ShowTheme() =>
         _activeTab = ThemeTab;
 
@@ -851,7 +869,9 @@
                 SectionId = x.SectionId,
                 BlockId = x.BlockId,
                 LocalBlock = x.LocalBlock,
-                Order = x.Order
+                Order = x.Order,
+                SameRow = x.SameRow,
+                Span = x.Span
             })
             .ToList();
     }
@@ -978,6 +998,132 @@
         await ConfigurationUpdated();
     }
 
+    /// <summary>
+    /// Traduce el cuerpo a lo que necesita la pestaña de disposición.
+    ///
+    /// Se aplican los mismos descartes que en la pestaña de estructura: las
+    /// subsecciones las coloca su padre, y lo que no se puede resolver no se
+    /// puede colocar. Así las dos pestañas enseñan siempre la misma lista.
+    /// </summary>
+    private IReadOnlyList<ReportLayoutItem> GetLayoutItems()
+    {
+        var items = new List<ReportLayoutItem>();
+
+        foreach (var item in GetOrderedBodyItems())
+        {
+            if (item.Type == ReportBodyItemType.Section)
+            {
+                if (string.IsNullOrWhiteSpace(item.SectionId) ||
+                    IsNestedSection(item.SectionId))
+                {
+                    continue;
+                }
+
+                var section = _resolved?.GetSection(item.SectionId);
+
+                if (section is null)
+                    continue;
+
+                items.Add(
+                    new ReportLayoutItem(
+                        item.Id,
+                        section.Name,
+                        section.Table is not null ? "Sección con tabla" : "Sección",
+                        "fa-solid fa-layer-group",
+                        item.SameRow,
+                        item.Span));
+
+                continue;
+            }
+
+            if (item.LocalBlock is not null)
+            {
+                items.Add(
+                    new ReportLayoutItem(
+                        item.Id,
+                        string.IsNullOrWhiteSpace(item.LocalBlock.Name)
+                            ? GetBlockTypeLabel(item.LocalBlock.Type)
+                            : item.LocalBlock.Name,
+                        $"{GetBlockTypeLabel(item.LocalBlock.Type)} local",
+                        $"fa-solid {GetBlockIcon(item.LocalBlock.Type)}",
+                        item.SameRow,
+                        item.Span));
+
+                continue;
+            }
+
+            var block = FindBodyBlock(item.BlockId);
+
+            if (block is null)
+                continue;
+
+            items.Add(
+                new ReportLayoutItem(
+                    item.Id,
+                    block.Name,
+                    $"Bloque · {GetBlockTypeLabel(block.Type)}",
+                    $"fa-solid {GetBlockIcon(block.Type)}",
+                    item.SameRow,
+                    item.Span));
+        }
+
+        return items;
+    }
+
+    /// <summary>
+    /// Une el elemento a la fila del anterior o lo baja a la suya propia.
+    ///
+    /// Pasa por EnsureBodyInitialized porque un preset antiguo puede no
+    /// tener Body todavía: sin esto se estaría marcando una copia de trabajo
+    /// que no se guarda en ningún sitio.
+    /// </summary>
+    private async Task SetBodyItemSameRowAsync(
+        string itemId,
+        bool sameRow)
+    {
+        EnsureBodyInitialized();
+
+        var item = FindBodyItem(itemId);
+
+        if (item is null)
+            return;
+
+        // Nulo y no false: la configuración sólo guarda lo que se aparta del
+        // comportamiento por defecto.
+        item.SameRow = sameRow ? true : null;
+
+        // Al bajar a fila propia el ancho deja de significar nada, y dejarlo
+        // guardado haría que reapareciera raro al volver a unirlo.
+        if (!sameRow)
+            item.Span = null;
+
+        await ConfigurationUpdated();
+    }
+
+    private async Task SetBodyItemSpanAsync(
+        string itemId,
+        int? span)
+    {
+        EnsureBodyInitialized();
+
+        var item = FindBodyItem(itemId);
+
+        if (item is null)
+            return;
+
+        item.Span = span;
+
+        await ConfigurationUpdated();
+    }
+
+    private ReportBodyItemConfiguration? FindBodyItem(
+        string itemId) =>
+        Configuration.Body.FirstOrDefault(x =>
+            string.Equals(
+                x.Id,
+                itemId,
+                StringComparison.OrdinalIgnoreCase));
+
     private async Task RemoveBodyItemAsync(string itemId)
     {
         EnsureBodyInitialized();
@@ -1064,6 +1210,12 @@
             var item = ordered[i];
 
             item.Order = order;
+
+            // El primero no puede continuar la fila de nadie. Si acaba
+            // arriba por un movimiento o por un borrado, se limpia la
+            // bandera para que la configuración guardada diga la verdad.
+            if (i == 0)
+                item.SameRow = null;
 
             if (item.Type == ReportBodyItemType.Section &&
                 !string.IsNullOrWhiteSpace(item.SectionId))

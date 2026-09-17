@@ -1,4 +1,4 @@
-using Renderset.Core.Blocks;
+﻿using Renderset.Core.Blocks;
 using Renderset.Core.Configurations;
 using Renderset.Core.Definitions;
 using Renderset.Core.Localization;
@@ -412,7 +412,7 @@ public sealed class ReportConfigurationResolver
     {
         if (configuration is null || configuration.Body.Count == 0)
         {
-            return sections
+            var fallback = sections
                 .Where(x => x.Visible)
                 .OrderBy(x => x.Order)
                 .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
@@ -424,6 +424,10 @@ public sealed class ReportConfigurationResolver
                     Section = section
                 })
                 .ToList();
+
+            ReportBodyLayout.Apply(fallback, null);
+
+            return fallback;
         }
 
         var result = new List<ResolvedReportBodyItem>();
@@ -453,10 +457,17 @@ public sealed class ReportConfigurationResolver
             sections,
             result);
 
-        return result
+        var ordered = result
             .OrderBy(x => x.Order)
             .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        // El layout se calcula sobre la lista definitiva: las secciones que
+        // entran por compatibilidad hacia atrás también tienen que caer en
+        // una fila, y lo hacen en la suya propia al no traer banderas.
+        ReportBodyLayout.Apply(ordered, configuration.Body);
+
+        return ordered;
     }
 
     private static void ResolveBodySection(
