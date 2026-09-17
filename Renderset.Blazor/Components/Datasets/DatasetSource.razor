@@ -1,404 +1,507 @@
 @using System.Text.Json
-@using Microsoft.JSInterop
 @using Renderset.Core.DataSources
 @using Renderset.Core.Mapping
 @using Renderset.Core.Reports
 @using Renderset.Core.Reports.Inference
-@inject IJSRuntime JS
 
+@* Asistente de origen de datos.
+
+   Va por pasos en vez de enseñarlo todo a la vez: pegar, definir un nivel,
+   definir el siguiente, revisar. Un SELECT con JOINs de un ERP trae
+   fácilmente cuarenta columnas, y decidirlo todo en una pantalla obliga a
+   sostener en la cabeza la estructura entera antes de haber visto nada.
+
+   El modelo no cambia: sigue siendo una cadena de niveles y una asignación
+   de columna a nivel. Lo único que cambia es el ritmo al que se construye. *@
 
 <div class="dsrc">
 
-    <div class="dsrc-head">
+    <ol class="dsrc-steps">
 
-        <div class="dsrc-segmented">
-
+        <li class="@StepClass(WizardStep.Source, 0)">
             <button type="button"
-                    class="@(_kind == DatasetSourceKind.Json ? "is-on" : "")"
-                    @onclick="() => SwitchTo(DatasetSourceKind.Json)">
-                <i class="fa-solid fa-code"></i>
-                JSON
+                    @onclick="() => GoToStepAsync(WizardStep.Source, 0)">
+                <span class="dsrc-step-dot">1</span>
+                Datos
             </button>
+        </li>
 
-            <button type="button"
-                    class="@(_kind == DatasetSourceKind.Tabular ? "is-on" : "")"
-                    @onclick="() => SwitchTo(DatasetSourceKind.Tabular)">
-                <i class="fa-solid fa-table"></i>
-                SQL / CSV
-            </button>
-
-        </div>
-
-        <p class="dsrc-hint">
-            @(_kind == DatasetSourceKind.Json
-                ? "Pega un documento de ejemplo con la estructura que ya usa tu sistema."
-                : "Pega el resultado de tu consulta tal cual. Desde SSMS, copia la rejilla con cabeceras.")
-        </p>
-
-        <button type="button"
-                class="dsrc-example"
-                @onclick="LoadExample">
-            <i class="fa-solid fa-flask"></i>
-            Ejemplo
-        </button>
-
-    </div>
-
-
-    @if (_kind == DatasetSourceKind.Json)
-    {
-        <textarea class="dsrc-input"
-                  rows="@Rows"
-                  spellcheck="false"
-                  value="@_json"
-                  @onchange="JsonChanged"></textarea>
-    }
-    else
-    {
-        <textarea class="dsrc-input"
-                  rows="@Rows"
-                  spellcheck="false"
-                  value="@_raw"
-                  @onchange="RawChanged"
-                  placeholder="Factura&#9;Cliente&#9;Albaran_codigo&#9;Articulo&#9;Cantidad"></textarea>
-
-        @if (_payload is not null && _payload.Rows.Count > 0)
+        @for (var index = 0; index < _levels.Count; index++)
         {
-            <div class="dsrc-panel">
+            var depth = index;
 
-                <div class="dsrc-panel-head">
+            <li class="@StepClass(WizardStep.Level, depth)">
+                <button type="button"
+                        @onclick="() => GoToStepAsync(WizardStep.Level, depth)">
+                    <span class="dsrc-step-dot">@(depth + 2)</span>
+                    @GetLevelDisplayName(_levels[depth])
+                </button>
+            </li>
+        }
 
-                    <span class="dsrc-metric">
-                        <strong>@_payload.Rows.Count</strong> filas
-                    </span>
+        <li class="@StepClass(WizardStep.Review, 0)">
+            <button type="button"
+                    disabled="@(!CanReview)"
+                    @onclick="() => GoToStepAsync(WizardStep.Review, 0)">
+                <span class="dsrc-step-dot">
+                    <i class="fa-solid fa-check"></i>
+                </span>
+                Revisar
+            </button>
+        </li>
 
-                    <span class="dsrc-metric">
-                        <strong>@_payload.Columns.Count</strong> columnas
-                    </span>
+    </ol>
 
-                    <i class="fa-solid fa-arrow-right-long"></i>
 
-                    <span class="dsrc-metric is-result">
-                        <strong>@_documents.Count</strong>
-                        documento@(_documents.Count == 1 ? "" : "s")
-                    </span>
+    @* ------------------------------------------------------ paso: datos *@
 
-                    @if (_levels.Count > 1)
-                    {
-                        <span class="dsrc-metric">
-                            <strong>@(_levels.Count - 1)</strong>
-                            nivel@(_levels.Count - 1 == 1 ? "" : "es") anidado@(_levels.Count - 1 == 1 ? "" : "s")
-                        </span>
-                    }
+    @if (_step == WizardStep.Source)
+    {
+        <div class="dsrc-panel">
+
+            <div class="dsrc-head">
+
+                <div class="dsrc-segmented">
+
+                    <button type="button"
+                            class="@(_kind == DatasetSourceKind.Json ? "is-on" : "")"
+                            @onclick="() => SwitchTo(DatasetSourceKind.Json)">
+                        <i class="fa-solid fa-code"></i>
+                        JSON
+                    </button>
+
+                    <button type="button"
+                            class="@(_kind == DatasetSourceKind.Tabular ? "is-on" : "")"
+                            @onclick="() => SwitchTo(DatasetSourceKind.Tabular)">
+                        <i class="fa-solid fa-table"></i>
+                        SQL / CSV
+                    </button>
 
                 </div>
 
+                <p class="dsrc-hint">
+                    @(_kind == DatasetSourceKind.Json
+                        ? "Pega un documento de ejemplo con la estructura que ya usa tu sistema."
+                        : "Pega el resultado de tu consulta tal cual. Desde SSMS, copia la rejilla con cabeceras.")
+                </p>
 
-                @* ---------------------------------------- estructura ----- *@
+                <button type="button"
+                        class="dsrc-example"
+                        @onclick="LoadExample">
+                    <i class="fa-solid fa-flask"></i>
+                    Ejemplo
+                </button>
 
-                <div class="dsrc-field">
+            </div>
 
-                    <label>Estructura</label>
+            @if (_kind == DatasetSourceKind.Json)
+            {
+                <textarea class="dsrc-input"
+                          rows="@Rows"
+                          spellcheck="false"
+                          value="@_json"
+                          @onchange="JsonChanged"></textarea>
+            }
+            else
+            {
+                <textarea class="dsrc-input"
+                          rows="@Rows"
+                          spellcheck="false"
+                          value="@_raw"
+                          @onchange="RawChanged"
+                          placeholder="Factura&#9;Cliente&#9;Albaran_codigo&#9;Articulo&#9;Cantidad"></textarea>
 
-                    <div class="dsrc-levels">
+                @if (_payload is not null && _payload.Rows.Count > 0)
+                {
+                    <div class="dsrc-summary">
 
-                        @foreach (var level in _levels)
+                        <span class="dsrc-metric">
+                            <strong>@_payload.Rows.Count</strong> filas
+                        </span>
+
+                        <span class="dsrc-metric">
+                            <strong>@_payload.Columns.Count</strong> columnas
+                        </span>
+
+                        @if (!string.IsNullOrWhiteSpace(_reason))
                         {
-                            <div class="dsrc-level"
-                                 style="@Indent(level)">
-
-                                <span class="dsrc-level-icon">
-                                    @if (level.Depth == 0)
-                                    {
-                                        <i class="fa-solid fa-file-lines"></i>
-                                    }
-                                    else
-                                    {
-                                        <i class="fa-solid fa-layer-group"></i>
-                                    }
-                                </span>
-
-                                @if (level.Depth == 0)
-                                {
-                                    <span class="dsrc-level-name is-root">
-                                        Documento
-                                    </span>
-                                }
-                                else
-                                {
-                                    <input class="dsrc-level-name"
-                                           value="@level.Name"
-                                           @onchange="e => LevelNameChanged(level, e)" />
-
-                                    <span class="dsrc-level-tag">array</span>
-                                }
-
-                                <span class="dsrc-level-key">
-                                    <label>Agrupar por</label>
-
-                                    <select value="@(level.KeyColumn?.ToString() ?? "")"
-                                            @onchange="e => LevelKeyChanged(level, e)">
-
-                                        <option value="">
-                                            @(level.Depth == 0
-                                                ? "— (un solo documento)"
-                                                : "— (una fila = un elemento)")
-                                        </option>
-
-                                        @foreach (var ordinal in ColumnsOf(level))
-                                        {
-                                            <option value="@ordinal">
-                                                @_payload.Columns[ordinal].Name
-                                            </option>
-                                        }
-
-                                    </select>
-                                </span>
-
-                                <span class="dsrc-level-count">
-                                    @ColumnsOf(level).Count col.
-                                </span>
-
-                                @if (level.Depth > 0 && level == _levels[^1])
-                                {
-                                    <button type="button"
-                                            class="dsrc-level-remove"
-                                            title="Quitar este nivel y subir sus columnas"
-                                            @onclick="RemoveDeepestLevel">
-                                        <i class="fa-solid fa-xmark"></i>
-                                    </button>
-                                }
-
-                            </div>
+                            <span class="dsrc-reason">@_reason</span>
                         }
 
-                        <button type="button"
-                                class="dsrc-level-add"
-                                @onclick="AddLevel">
-                            <i class="fa-solid fa-plus"></i>
-                            Añadir nivel dentro de @(_levels[^1].Depth == 0 ? "el documento" : _levels[^1].Name)
-                        </button>
-
-                    </div>
-
-                </div>
-
-
-                @if (!string.IsNullOrWhiteSpace(_structureWarning))
-                {
-                    <div class="dsrc-warn">
-                        @_structureWarning
                     </div>
                 }
+            }
+
+        </div>
+    }
+    else if (_step == WizardStep.Level && ActiveLevel is { } level)
+    {
+        // Paso de nivel: se edita uno cada vez, empezando por el documento.
+
+        var available = AvailableOrdinals(level);
+
+        <div class="dsrc-panel">
+
+            <header class="dsrc-level-head">
+
+                <span class="dsrc-level-icon">
+                    <i class="@GetLevelIcon(level)"></i>
+                </span>
+
+                @if (level.Depth == 0)
+                {
+                    <div class="dsrc-level-title">
+                        <strong>Documento</strong>
+                        <span>
+                            Los datos que se repiten en todas las filas: son la
+                            cabecera del documento.
+                        </span>
+                    </div>
+                }
+                else
+                {
+                    <div class="dsrc-level-title">
+                        <input value="@level.Name"
+                               placeholder="nombre de la colección"
+                               @onchange="e => LevelNameChanged(level, e)" />
+                        <span>
+                            Se repetirá dentro de
+                            @(GetLevelDisplayName(_levels[level.Depth - 1]) + ".")
+                        </span>
+                    </div>
+
+                    <button type="button"
+                            class="dsrc-mini-button is-danger"
+                            title="Quitar este nivel y devolver sus columnas"
+                            @onclick="RemoveActiveLevelAsync">
+                        <i class="fa-solid fa-xmark"></i>
+                        Quitar nivel
+                    </button>
+                }
+
+            </header>
 
 
-                <div class="dsrc-panel-foot">
+            <div class="dsrc-field">
 
-                    <span class="dsrc-reason">
-                        @_reason
-                    </span>
+                <label>
+                    @(level.Depth == 0
+                        ? "¿Qué columna identifica cada documento?"
+                        : $"¿Qué columna identifica cada {GetLevelDisplayName(level)}?")
+                </label>
 
-                    <div class="dsrc-links">
+                <select value="@(level.KeyColumn?.ToString() ?? "")"
+                        @onchange="e => LevelKeyChangedAsync(level, e)">
 
-                        <button type="button"
-                                class="dsrc-link"
-                                @onclick="() => _showColumns = !_showColumns">
-                            <i class="@(_showColumns ? "fa-solid fa-chevron-up" : "fa-solid fa-sliders")"></i>
-                            Asignar columnas
-                        </button>
+                    <option value="">
+                        @(level.Depth == 0
+                            ? "— Todas las filas son un solo documento"
+                            : "— Cada fila es un elemento")
+                    </option>
 
-                        @if (ShowPreview && _documents.Count > 0)
+                    @foreach (var ordinal in available)
+                    {
+                        <option value="@ordinal">
+                            @_payload!.Columns[ordinal].Name
+                        </option>
+                    }
+
+                </select>
+
+                @if (KeyHint is not null)
+                {
+                    <p class="dsrc-key-hint">
+                        <i class="fa-solid fa-lightbulb"></i>
+                        @KeyHint
+                    </p>
+                }
+
+            </div>
+
+
+            <div class="dsrc-field">
+
+                <div class="dsrc-field-head">
+
+                    <label>
+                        Campos de este nivel
+                        <em>@ColumnsOf(level).Count de @available.Count</em>
+                    </label>
+
+                    <div class="dsrc-field-actions">
+
+                        @if (SuggestedOrdinals.Count > 0)
                         {
                             <button type="button"
-                                    class="dsrc-link"
-                                    @onclick="OpenPreviewModal">
-                                <i class="fa-solid fa-code"></i>
-                                Ver modelo
+                                    class="dsrc-mini-button"
+                                    @onclick="() => ApplySuggestionAsync(level)">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                Marcar las @SuggestedOrdinals.Count sugeridas
                             </button>
                         }
 
+                        <button type="button"
+                                class="dsrc-mini-button"
+                                @onclick="() => SelectAllAsync(level, available)">
+                            Todas
+                        </button>
+
+                        <button type="button"
+                                class="dsrc-mini-button"
+                                @onclick="() => ClearAllAsync(level)">
+                            Ninguna
+                        </button>
+
                     </div>
 
                 </div>
 
+                <p class="dsrc-legend">
+                    Ordenadas de menos a más valores distintos: arriba las que
+                    no cambian nunca, abajo las que cambian en cada fila.
+                </p>
 
-                @* ---------------------------------------- columnas ------- *@
-
-                @if (_showColumns)
+                @if (available.Count == 0)
                 {
-                    <div class="dsrc-column-designer is-simplified">
+                    <div class="dsrc-empty">
+                        No quedan columnas sin colocar. Vuelve a un nivel
+                        anterior si quieres liberar alguna.
+                    </div>
+                }
+                else
+                {
+                    <div class="dsrc-columns">
 
-                        <div class="dsrc-column-toolbar is-simplified">
+                        @foreach (var ordinal in available)
+                        {
+                            var column = _payload!.Columns[ordinal];
+                            var assigned = IsAssignedTo(ordinal, level);
 
-                            <div class="dsrc-column-search">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-                                <input type="search"
-                                       value="@_columnSearch"
-                                       @oninput="ColumnSearchChanged"
-                                       placeholder="Buscar columnas..." />
-                            </div>
+                            <label class="@ColumnClass(ordinal, level)"
+                                   @key="ordinal">
 
-                            <div class="dsrc-column-sort">
-                                <label>Orden</label>
-                                <select value="@_columnSort"
-                                        @onchange="ColumnSortChanged">
-                                    <option value="@ColumnSortMode.Original">Original</option>
-                                    <option value="@ColumnSortMode.Alphabetical">A-Z</option>
-                                    <option value="@ColumnSortMode.Type">Tipo</option>
-                                </select>
-                            </div>
-
-                            <label class="dsrc-compact-toggle">
                                 <input type="checkbox"
-                                       checked="@_compactColumns"
-                                       @onchange="e => _compactColumns = GetBool(e.Value)" />
-                                Compacto
-                            </label>
+                                       checked="@assigned"
+                                       @onchange="e => ToggleColumnAsync(level, ordinal, GetBool(e.Value))" />
 
-                        </div>
+                                <span class="dsrc-column-body">
 
-                        <div class="dsrc-bulkbar is-simplified">
+                                    <span class="dsrc-column-top">
+                                        <code>@column.Name</code>
 
-                            <div class="dsrc-selection-summary">
-                                <strong>@_selectedColumns.Count</strong>
-                                seleccionada@(_selectedColumns.Count == 1 ? "" : "s")
+                                        @if (level.KeyColumn == ordinal)
+                                        {
+                                            <span class="dsrc-badge is-key">clave</span>
+                                        }
 
-                                @if (TotalVisibleColumns != _payload.Columns.Count)
-                                {
-                                    <span>
-                                        · @TotalVisibleColumns visible@((TotalVisibleColumns == 1) ? "" : "s")
+                                        <span class="@CardinalityClass(ordinal)">
+                                            @CardinalityLabel(ordinal)
+                                        </span>
                                     </span>
-                                }
-                            </div>
 
-                            <div class="dsrc-bulk-actions">
+                                    <span class="dsrc-column-sample">
+                                        @SampleOf(ordinal)
+                                    </span>
 
-                                <button type="button"
-                                        class="dsrc-mini-button"
-                                        disabled="@(TotalVisibleColumns == 0)"
-                                        @onclick="SelectVisibleColumns">
-                                    Seleccionar visibles
-                                </button>
+                                </span>
 
-                                <button type="button"
-                                        class="dsrc-mini-button"
-                                        disabled="@(_selectedColumns.Count == 0)"
-                                        @onclick="ClearSelectedColumns">
-                                    Limpiar
-                                </button>
+                                <em>@column.Type</em>
 
-                                <button type="button"
-                                        class="dsrc-assign-button"
-                                        disabled="@(_selectedColumns.Count == 0)"
-                                        @onclick="OpenMoveColumnsModal">
-                                    <i class="fa-solid fa-arrow-right-arrow-left"></i>
-                                    Mover a nivel
-                                </button>
-
-                            </div>
-
-                        </div>
-
-                        <div class="dsrc-column-groups">
-                            @foreach (var group in GetColumnGroups())
-                            {
-                                <section class="@GetColumnGroupClass(group)"
-                                         @key="group.Path">
-
-                                    <header class="dsrc-column-group-head">
-
-                                        <div class="dsrc-column-group-title">
-                                            <span class="dsrc-column-group-icon">
-                                                <i class="@group.Icon"></i>
-                                            </span>
-
-                                            <div>
-                                                <strong>@group.Label</strong>
-                                                <span>@GetGroupDescription(group)</span>
-                                            </div>
-                                        </div>
-
-                                        <div class="dsrc-column-group-actions">
-                                            <span>@group.Ordinals.Count columna@(group.Ordinals.Count == 1 ? "" : "s")</span>
-
-                                            <button type="button"
-                                                    disabled="@(group.Ordinals.Count == 0)"
-                                                    @onclick="() => SelectGroupColumns(group)">
-                                                Seleccionar
-                                            </button>
-                                        </div>
-
-                                    </header>
-
-                                    @if (group.Ordinals.Count == 0)
-                                    {
-                                        <div class="dsrc-column-empty">
-                                            No hay columnas en este nivel con el filtro actual.
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="@GetColumnGridClass()">
-                                            @foreach (var ordinal in group.Ordinals)
-                                            {
-                                                var column = _payload.Columns[ordinal];
-                                                var assignment = _assignments[ordinal];
-
-                                                <article class="@GetColumnCardClass(ordinal)"
-                                                         @key="ordinal">
-
-                                                    <label class="dsrc-column-check"
-                                                           title="Seleccionar columna">
-                                                        <input type="checkbox"
-                                                               checked="@_selectedColumns.Contains(ordinal)"
-                                                               @onchange="e => ToggleColumnSelection(ordinal, GetBool(e.Value))" />
-                                                        <span></span>
-                                                    </label>
-
-                                                    <div class="dsrc-column-card-main">
-
-                                                        <div class="dsrc-column-card-top">
-                                                            <code title="@column.Name">@column.Name</code>
-
-                                                            @if (IsKeyColumn(ordinal))
-                                                            {
-                                                                <span class="dsrc-key">clave</span>
-                                                            }
-
-                                                            <em>@column.Type</em>
-                                                        </div>
-
-                                                        <div class="dsrc-column-card-meta">
-                                                            <span>Modelo</span>
-                                                            <strong title="@assignment.Name">@assignment.Name</strong>
-                                                        </div>
-
-                                                    </div>
-
-                                                    <div class="dsrc-column-card-actions">
-                                                        <button type="button"
-                                                                class="dsrc-icon-button"
-                                                                title="Editar nombre o nivel"
-                                                                @onclick="() => OpenColumnEditor(ordinal)">
-                                                            <i class="fa-solid fa-pen"></i>
-                                                        </button>
-                                                    </div>
-
-                                                </article>
-                                            }
-                                        </div>
-                                    }
-
-                                </section>
-                            }
-                        </div>
+                            </label>
+                        }
 
                     </div>
                 }
 
+            </div>
+
+
+            @if (UnassignedCount > 0)
+            {
+                <p class="dsrc-note">
+                    Quedan <strong>@UnassignedCount</strong> columnas sin
+                    colocar. Si finalizas ahora se quedarán fuera del modelo;
+                    el último paso te las enseña y te deja recuperarlas.
+                </p>
+            }
+
+        </div>
+    }
+    else if (_step == WizardStep.Review)
+    {
+        <div class="dsrc-panel">
+
+            <div class="dsrc-summary">
+
+                @if (_payload is not null)
+                {
+                    <span class="dsrc-metric">
+                        <strong>@_payload.Rows.Count</strong> filas
+                    </span>
+                }
+
+                <i class="fa-solid fa-arrow-right-long"></i>
+
+                <span class="dsrc-metric is-result">
+                    <strong>@_documents.Count</strong>
+                    documento@(_documents.Count == 1 ? "" : "s")
+                </span>
+
+                @if (_levels.Count > 1)
+                {
+                    <span class="dsrc-metric">
+                        <strong>@(_levels.Count - 1)</strong>
+                        nivel@(_levels.Count - 1 == 1 ? "" : "es") anidado@(_levels.Count - 1 == 1 ? "" : "s")
+                    </span>
+                }
 
             </div>
-        }
+
+            @if (!string.IsNullOrWhiteSpace(_structureWarning))
+            {
+                <div class="dsrc-warn">
+                    @_structureWarning
+                </div>
+            }
+
+            @if (_kind == DatasetSourceKind.Tabular && _levels.Count > 0 && UnassignedCount > 0)
+            {
+                var leftovers = UnassignedOrdinals();
+                var deepest = _levels[^1];
+
+                <div class="dsrc-warn dsrc-leftovers">
+
+                    <div class="dsrc-leftovers-head">
+
+                        <strong>
+                            @leftovers.Count columna@(leftovers.Count == 1 ? "" : "s")
+                            fuera del modelo
+                        </strong>
+
+                        <button type="button"
+                                class="dsrc-mini-button"
+                                @onclick="() => AddRemainingToLevelAsync(deepest)">
+                            <i class="fa-solid fa-plus"></i>
+                            Añadirlas a @GetLevelDisplayName(deepest)
+                        </button>
+
+                    </div>
+
+                    <div class="dsrc-leftovers-list">
+                        @foreach (var ordinal in leftovers)
+                        {
+                            <code @key="ordinal">@_payload!.Columns[ordinal].Name</code>
+                        }
+                    </div>
+
+                </div>
+            }
+
+            @if (_kind == DatasetSourceKind.Tabular)
+            {
+                <div class="dsrc-tree">
+
+                    @foreach (var node in _levels)
+                    {
+                        <section class="dsrc-tree-level"
+                                 style="@Indent(node)"
+                                 @key="node.Depth">
+
+                            <header>
+
+                                <span class="dsrc-level-icon">
+                                    <i class="@GetLevelIcon(node)"></i>
+                                </span>
+
+                                <strong>@GetLevelDisplayName(node)</strong>
+
+                                @if (node.Depth > 0)
+                                {
+                                    <span class="dsrc-badge">array</span>
+                                }
+
+                                @if (node.KeyColumn is not null)
+                                {
+                                    <span class="dsrc-tree-key">
+                                        agrupado por
+                                        <code>@_payload!.Columns[node.KeyColumn.Value].Name</code>
+                                    </span>
+                                }
+
+                                <button type="button"
+                                        class="dsrc-mini-button"
+                                        @onclick="() => GoToStepAsync(WizardStep.Level, node.Depth)">
+                                    <i class="fa-solid fa-pen"></i>
+                                    Editar
+                                </button>
+
+                            </header>
+
+                            @if (ColumnsOf(node).Count == 0)
+                            {
+                                <div class="dsrc-empty is-compact">
+                                    Sin columnas.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="dsrc-tree-fields">
+
+                                    @foreach (var ordinal in ColumnsOf(node))
+                                    {
+                                        <div class="dsrc-tree-field" @key="ordinal">
+
+                                            <code>@_payload!.Columns[ordinal].Name</code>
+
+                                            <i class="fa-solid fa-arrow-right-long"></i>
+
+                                            <input value="@_assignments[ordinal].Name"
+                                                   @onchange="e => FieldNameChanged(ordinal, e)" />
+
+                                        </div>
+                                    }
+
+                                </div>
+                            }
+
+                        </section>
+                    }
+
+                </div>
+            }
+
+            @if (ShowPreview && _documents.Count > 0)
+            {
+                <div class="dsrc-field">
+
+                    <div class="dsrc-field-head">
+
+                        <label>Modelo generado</label>
+
+                        @if (_documents.Count > 1)
+                        {
+                            <div class="dsrc-doc-tabs">
+                                @for (var i = 0; i < Math.Min(_documents.Count, 12); i++)
+                                {
+                                    var index = i;
+
+                                    <button type="button"
+                                            class="@(index == _selected ? "is-on" : "")"
+                                            @onclick="() => _selected = index">
+                                        @(index + 1)
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                    </div>
+
+                    <pre class="dsrc-json">@Pretty(_documents[SafeSelectedIndex])</pre>
+
+                </div>
+            }
+
+        </div>
     }
 
 
@@ -410,205 +513,60 @@
     }
 
 
-    @if (ShowPreview && _kind == DatasetSourceKind.Json && _documents.Count > 0)
-    {
-        <button type="button"
-                class="dsrc-link dsrc-preview-open"
-                @onclick="OpenPreviewModal">
-            <i class="fa-solid fa-code"></i>
-            Ver modelo resultante
-        </button>
-    }
-
-
-    @if (_showPreview && ShowPreview && _documents.Count > 0)
-    {
-        <div class="dsrc-modal-backdrop"
-             @onclick="ClosePreviewModal">
-
-            <section class="dsrc-modal dsrc-preview-modal"
-                     @onclick:stopPropagation="true">
-
-                <header class="dsrc-modal-head">
-                    <div>
-                        <strong>Modelo generado</strong>
-                        <span>Previsualización del JSON que recibirá el diseñador.</span>
-                    </div>
-
-                    <button type="button"
-                            class="dsrc-modal-close"
-                            @onclick="ClosePreviewModal">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                </header>
-
-                @if (_documents.Count > 1)
-                {
-                    <div class="dsrc-doc-tabs">
-                        @for (var i = 0; i < Math.Min(_documents.Count, 12); i++)
-                        {
-                            var index = i;
-
-                            <button type="button"
-                                    class="@(index == _selected ? "is-on" : "")"
-                                    @onclick="() => _selected = index">
-                                @(index + 1)
-                            </button>
-                        }
-                    </div>
-                }
-
-                <pre class="dsrc-json dsrc-json-modal">@Pretty(_documents[SafeSelectedIndex])</pre>
-
-                <footer class="dsrc-modal-actions">
-                    <button type="button"
-                            class="dsrc-mini-button"
-                            @onclick="CopyCurrentPreviewAsync">
-                        <i class="fa-solid fa-copy"></i>
-                        Copiar JSON
-                    </button>
-
-                    <button type="button"
-                            class="dsrc-assign-button"
-                            @onclick="ClosePreviewModal">
-                        Cerrar
-                    </button>
-                </footer>
-
-            </section>
-
-        </div>
-    }
-
-
-    @if (_showMoveModal)
-    {
-        <div class="dsrc-modal-backdrop"
-             @onclick="CloseMoveColumnsModal">
-
-            <section class="dsrc-modal dsrc-move-modal"
-                     @onclick:stopPropagation="true">
-
-                <header class="dsrc-modal-head">
-                    <div>
-                        <strong>Mover columnas</strong>
-                        <span>@_selectedColumns.Count columna@(_selectedColumns.Count == 1 ? "" : "s") seleccionada@(_selectedColumns.Count == 1 ? "" : "s")</span>
-                    </div>
-
-                    <button type="button"
-                            class="dsrc-modal-close"
-                            @onclick="CloseMoveColumnsModal">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                </header>
-
-                <div class="dsrc-target-grid">
-                    @foreach (var target in AssignmentTargets())
-                    {
-                        <button type="button"
-                                class="@GetTargetCardClass(target)"
-                                @onclick="() => AssignSelectedFromModal(target.Path)">
-                            <i class="@target.Icon"></i>
-                            <strong>@target.Label</strong>
-                            <span>@GetTargetDescription(target)</span>
-                        </button>
-                    }
-                </div>
-
-            </section>
-
-        </div>
-    }
-
-
-    @if (_editingColumnOrdinal is not null &&
-         _payload is not null &&
-         _editingColumnOrdinal.Value >= 0 &&
-         _editingColumnOrdinal.Value < _payload.Columns.Count)
-    {
-        var editingOrdinal = _editingColumnOrdinal.Value;
-        var editingColumn = _payload.Columns[editingOrdinal];
-
-        <div class="dsrc-modal-backdrop"
-             @onclick="CloseColumnEditor">
-
-            <section class="dsrc-modal dsrc-column-edit-modal"
-                     @onclick:stopPropagation="true">
-
-                <header class="dsrc-modal-head">
-                    <div>
-                        <strong>Configurar columna</strong>
-                        <span>@editingColumn.Name · @editingColumn.Type</span>
-                    </div>
-
-                    <button type="button"
-                            class="dsrc-modal-close"
-                            @onclick="CloseColumnEditor">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                </header>
-
-                <div class="dsrc-edit-form">
-
-                    <label>
-                        Nombre en el modelo
-                        <input value="@_editingColumnName"
-                               @oninput="e => _editingColumnName = e.Value?.ToString() ?? string.Empty" />
-                    </label>
-
-                    <label>
-                        Nivel
-                        <select value="@_editingColumnLevelPath"
-                                @onchange="e => _editingColumnLevelPath = e.Value?.ToString() ?? string.Empty">
-                            @foreach (var target in AssignmentTargets())
-                            {
-                                <option value="@target.Path">
-                                    @target.Label
-                                </option>
-                            }
-                        </select>
-                    </label>
-
-                    @if (IsKeyColumn(editingOrdinal))
-                    {
-                        <div class="dsrc-warn is-compact">
-                            Esta columna se está usando como clave de agrupación. Si la mueves a otro nivel, revisa la estructura.
-                        </div>
-                    }
-
-                </div>
-
-                <footer class="dsrc-modal-actions">
-                    <button type="button"
-                            class="dsrc-mini-button"
-                            @onclick="CloseColumnEditor">
-                        Cancelar
-                    </button>
-
-                    <button type="button"
-                            class="dsrc-assign-button"
-                            @onclick="SaveColumnEditor">
-                        Guardar cambios
-                    </button>
-                </footer>
-
-            </section>
-
-        </div>
-    }
-
+    @* ------------------------------------------------------- navegación *@
 
     <div class="dsrc-actions">
 
-        @ChildContent
+        @if (_step != WizardStep.Source)
+        {
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="BackAsync">
+                <i class="fa-solid fa-arrow-left"></i>
+                Atrás
+            </button>
+        }
 
-        <button type="button"
-                class="primary-button"
-                disabled="@(!CanContinue)"
-                @onclick="EmitAsync">
-            <i class="fa-solid fa-arrow-right"></i>
-            @ContinueText
-        </button>
+        <span class="dsrc-actions-spacer"></span>
+
+        @if (_step == WizardStep.Source)
+        {
+            <button type="button"
+                    class="primary-button"
+                    disabled="@(!CanLeaveSource)"
+                    @onclick="LeaveSourceAsync">
+                Continuar
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        }
+        else if (_step == WizardStep.Level)
+        {
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="AddLevelAsync">
+                <i class="fa-solid fa-plus"></i>
+                Añadir nivel dentro
+            </button>
+
+            <button type="button"
+                    class="primary-button"
+                    @onclick="FinishAsync">
+                Finalizar
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        }
+        else
+        {
+            @ChildContent
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@(!CanContinue)"
+                    @onclick="EmitAsync">
+                <i class="fa-solid fa-arrow-right"></i>
+                @ContinueText
+            </button>
+        }
 
     </div>
 
@@ -646,14 +604,28 @@
     private string _reason = string.Empty;
 
     private TabularPayload? _payload;
+    private DataSetSchema? _dataSchema;
+
+    /// <summary>
+    /// Copia de las filas como array, que es lo que pide el sugeridor. Se
+    /// guarda una vez y no en cada paso: con miles de filas, rehacerla en
+    /// cada render se nota.
+    /// </summary>
+    private List<object?[]> _rows = [];
+
+    /// <summary>
+    /// Valores distintos por columna en toda la muestra. Es lo que permite
+    /// ordenar el listado de menos a más variación y decir de un vistazo
+    /// cuáles son datos de cabecera y cuáles de detalle.
+    ///
+    /// Se calcula una vez al parsear: hacerlo en cada render con unos miles
+    /// de filas se nota.
+    /// </summary>
+    private readonly Dictionary<int, int> _distinct = [];
 
     /// <summary>
     /// Cadena lineal de niveles: documento → albaran → lines. Cada uno es
     /// hijo del anterior.
-    ///
-    /// El modelo (DataMappingNode) admite hermanos, pero la pantalla no los
-    /// ofrece todavía: el caso de "líneas sueltas además de albaranes" hay
-    /// que montarlo a mano por ahora.
     /// </summary>
     private readonly List<LevelState> _levels = [];
 
@@ -669,35 +641,84 @@
     private DataMapping? _mapping;
 
     private int _selected;
-    private bool _showColumns;
-    private bool _showPreview;
 
-    private readonly HashSet<int> _selectedColumns = [];
-    private string _columnSearch = string.Empty;
-    private ColumnSortMode _columnSort = ColumnSortMode.Original;
-    private bool _compactColumns;
-    private string _targetLevelPath = string.Empty;
-    private bool _showMoveModal;
-    private int? _editingColumnOrdinal;
-    private string _editingColumnName = string.Empty;
-    private string _editingColumnLevelPath = string.Empty;
+    private WizardStep _step = WizardStep.Source;
+    private int _activeLevel;
 
+    /// <summary>
+    /// Candidatas a clave del nivel que se está editando, ya puntuadas.
+    /// </summary>
+    private IReadOnlyList<DataMappingKeyCandidate> _candidates = [];
 
-    private int TotalVisibleColumns =>
-        _payload is null
-            ? 0
-            : GetVisibleColumnOrdinals().Count;
+    /// <summary>
+    /// Columnas que el análisis propone para el nivel activo. En el
+    /// documento se marcan solas; a partir del primer nivel anidado se
+    /// ofrecen pero no se marcan, porque ahí la heurística acierta menos que
+    /// quien conoce los datos.
+    /// </summary>
+    private readonly HashSet<int> _suggested = [];
 
 
+    private LevelState? ActiveLevel =>
+        _activeLevel >= 0 && _activeLevel < _levels.Count
+            ? _levels[_activeLevel]
+            : null;
+
+    private IReadOnlySet<int> SuggestedOrdinals => _suggested;
 
     private int SafeSelectedIndex =>
         _documents.Count == 0
             ? 0
             : Math.Clamp(_selected, 0, _documents.Count - 1);
 
+    private bool CanLeaveSource =>
+        _kind == DatasetSourceKind.Json
+            ? _documents.Count > 0
+            : _payload is not null && _payload.Rows.Count > 0;
+
+    private bool CanReview =>
+        _kind == DatasetSourceKind.Json
+            ? _documents.Count > 0
+            : _levels.Count > 0;
+
     private bool CanContinue =>
         _documents.Count > 0 &&
         _schema is not null;
+
+    private int UnassignedCount =>
+        _assignments.Count(x => x.Value.LevelPath == IgnorePath);
+
+    private string? KeyHint
+    {
+        get
+        {
+            var level = ActiveLevel;
+
+            if (level is null || _payload is null)
+                return null;
+
+            if (level.KeyColumn is not null)
+            {
+                var chosen =
+                    _candidates.FirstOrDefault(x => x.Ordinal == level.KeyColumn.Value);
+
+                return chosen is null
+                    ? null
+                    : $"Agrupa las filas en {chosen.GroupCount} " +
+                      $"grupo{(chosen.GroupCount == 1 ? "" : "s")}, " +
+                      $"dejando {chosen.ConstantOrdinals.Count} columna" +
+                      $"{(chosen.ConstantOrdinals.Count == 1 ? "" : "s")} constante" +
+                      $"{(chosen.ConstantOrdinals.Count == 1 ? "" : "s")}.";
+            }
+
+            var best = _candidates.FirstOrDefault();
+
+            return best is null
+                ? null
+                : $"Sugerencia: '{best.Column}' agruparía las filas en " +
+                  $"{best.GroupCount} grupo{(best.GroupCount == 1 ? "" : "s")}.";
+        }
+    }
 
 
     // -------------------------------------------------------------- entrada
@@ -793,6 +814,11 @@
     }
 
 
+    /// <summary>
+    /// Sólo parsea y describe. La estructura no se toca todavía: eso es el
+    /// paso siguiente, y decidirlo aquí sería volver a hacerlo todo de una
+    /// vez.
+    /// </summary>
     private void AnalyzeTabular()
     {
         Reset();
@@ -814,90 +840,234 @@
         if (_payload.Rows.Count == 0)
         {
             _error = "No se ha encontrado ninguna fila de datos.";
+            _payload = null;
 
             return;
         }
 
-        var schema = _payload.ToSchema();
+        _dataSchema = _payload.ToSchema();
 
-        var rows =
+        _rows =
             _payload.Rows
                 .Select(row => row.ToArray())
                 .ToList();
 
-        var suggestion =
-            DataMappingSuggester.Suggest(schema, rows);
+        _distinct.Clear();
 
-        _reason = suggestion.Reason;
+        for (var ordinal = 0; ordinal < _payload.Columns.Count; ordinal++)
+        {
+            _assignments[ordinal] =
+                new Assignment
+                {
+                    LevelPath = IgnorePath,
+                    Name = DataMappingSuggester.ToCamelCase(
+                        _payload.Columns[ordinal].Name)
+                };
 
-        ApplySuggestion(schema, suggestion);
+            var position = ordinal;
 
-        Build();
+            _distinct[ordinal] =
+                _rows
+                    .Select(row => row[position]?.ToString() ?? "\u0000")
+                    .Distinct(StringComparer.Ordinal)
+                    .Count();
+        }
+
+        var best =
+            DataMappingSuggester
+                .RankKeyCandidates(
+                    _dataSchema,
+                    _rows,
+                    AllOrdinals(),
+                    [])
+                .FirstOrDefault();
+
+        _reason =
+            best is null
+                ? "Ninguna columna agrupa las filas: cada fila sería un documento."
+                : $"'{best.Column}' agruparía {_rows.Count} filas en " +
+                  $"{best.GroupCount} documento(s).";
+    }
+
+
+    // --------------------------------------------------------- navegación
+
+    private async Task LeaveSourceAsync()
+    {
+        if (!CanLeaveSource)
+            return;
+
+        if (_kind == DatasetSourceKind.Json)
+        {
+            _step = WizardStep.Review;
+            return;
+        }
+
+        if (_levels.Count == 0)
+            StartDocumentLevel();
+
+        _activeLevel = 0;
+        _step = WizardStep.Level;
+
+        RefreshSuggestion();
+
+        await Task.CompletedTask;
+    }
+
+
+    private async Task BackAsync()
+    {
+        if (_step == WizardStep.Review)
+        {
+            if (_kind == DatasetSourceKind.Json || _levels.Count == 0)
+            {
+                _step = WizardStep.Source;
+                return;
+            }
+
+            await GoToStepAsync(WizardStep.Level, _levels.Count - 1);
+            return;
+        }
+
+        if (_step == WizardStep.Level && _activeLevel > 0)
+        {
+            await GoToStepAsync(WizardStep.Level, _activeLevel - 1);
+            return;
+        }
+
+        _step = WizardStep.Source;
+    }
+
+
+    private async Task GoToStepAsync(
+        WizardStep step,
+        int level)
+    {
+        switch (step)
+        {
+            case WizardStep.Source:
+                _step = WizardStep.Source;
+                break;
+
+            case WizardStep.Level when level >= 0 && level < _levels.Count:
+                _activeLevel = level;
+                _step = WizardStep.Level;
+                RefreshSuggestion();
+                break;
+
+            case WizardStep.Review when CanReview:
+                await FinishAsync();
+                break;
+        }
     }
 
 
     /// <summary>
-    /// Traduce los niveles sugeridos al estado editable de la pantalla.
+    /// El nivel raíz sí llega propuesto: lo que se repite en todas las filas
+    /// es la cabecera del documento sin ambigüedad posible, y hacer marcarlo
+    /// a mano sería trabajo por nada.
     /// </summary>
-    private void ApplySuggestion(
-        DataSetSchema schema,
-        DataMappingSuggestion suggestion)
+    private void StartDocumentLevel()
     {
-        _levels.Clear();
-        _assignments.Clear();
+        _levels.Add(
+            new LevelState
+            {
+                Depth = 0,
+                Name = string.Empty
+            });
 
-        var depth = 0;
+        var best =
+            DataMappingSuggester
+                .RankKeyCandidates(_dataSchema!, _rows, AllOrdinals(), [])
+                .FirstOrDefault();
 
-        foreach (var level in suggestion.Levels)
+        var proposed =
+            best is null
+                ? DataMappingSuggester.ConstantColumns(_rows, AllOrdinals())
+                : best.ConstantOrdinals;
+
+        _levels[0].KeyColumn = best?.Ordinal;
+
+        foreach (var ordinal in proposed)
+            _assignments[ordinal].LevelPath = _levels[0].Path;
+    }
+
+
+    private async Task AddLevelAsync()
+    {
+        var parent = ActiveLevel;
+
+        if (parent is null)
+            return;
+
+        // Sólo se puede profundizar desde el último nivel: la cadena no
+        // admite hermanos y meter uno por el medio dejaría huérfano lo de
+        // abajo.
+        if (parent.Depth != _levels.Count - 1)
         {
-            _levels.Add(
-                new LevelState
-                {
-                    Depth = depth,
-                    Name = level.Name,
-
-                    KeyColumn = level.KeyColumn is null
-                        ? null
-                        : schema.IndexOf(level.KeyColumn)
-                });
-
-            depth++;
+            await GoToStepAsync(WizardStep.Level, _levels.Count - 1);
+            return;
         }
 
-        if (_levels.Count == 0)
+        var name = SuggestLevelName();
+
+        _levels.Add(
+            new LevelState
+            {
+                Depth = parent.Depth + 1,
+                Name = name
+            });
+
+        _activeLevel = _levels.Count - 1;
+        _step = WizardStep.Level;
+
+        RefreshSuggestion();
+    }
+
+
+    private async Task RemoveActiveLevelAsync()
+    {
+        var level = ActiveLevel;
+
+        if (level is null || level.Depth == 0)
+            return;
+
+        // Se quitan también los de debajo: sin su padre no tienen dónde
+        // colgar.
+        for (var depth = _levels.Count - 1; depth >= level.Depth; depth--)
         {
-            _levels.Add(
-                new LevelState
-                {
-                    Depth = 0,
-                    Name = string.Empty
-                });
+            var removed = _levels[depth];
+
+            foreach (var assignment in _assignments.Values)
+            {
+                if (assignment.LevelPath == removed.Path)
+                    assignment.LevelPath = IgnorePath;
+            }
+
+            _levels.RemoveAt(depth);
         }
 
-        // Asignación por defecto: cada columna al nivel donde el sugeridor la
-        // dejó constante.
-        for (var ordinal = 0; ordinal < schema.Columns.Count; ordinal++)
+        await GoToStepAsync(WizardStep.Level, _levels.Count - 1);
+    }
+
+
+    private async Task FinishAsync()
+    {
+        if (_kind == DatasetSourceKind.Json)
         {
-            var name = schema.Columns[ordinal].Name;
-
-            var levelIndex =
-                suggestion.Levels
-                    .Select((level, index) => (level, index))
-                    .Where(x => x.level.Columns.Contains(name))
-                    .Select(x => x.index)
-                    .DefaultIfEmpty(_levels.Count - 1)
-                    .First();
-
-            _assignments[ordinal] =
-                new Assignment
-                {
-                    LevelPath = _levels[Math.Min(levelIndex, _levels.Count - 1)].Path,
-                    Name = DataMappingSuggester.ToCamelCase(name)
-                };
+            _step = WizardStep.Review;
+            return;
         }
 
-        _targetLevelPath = _levels.LastOrDefault()?.Path ?? string.Empty;
-        _selectedColumns.Clear();
+        // Lo que no se ha marcado se queda FUERA del modelo. Colocarlo solo
+        // en el último nivel convertía cualquier descuido en campos que
+        // nadie había pedido, y encima en el sitio más difícil de ver.
+        // El paso de revisión lo enseña y ofrece añadirlo de una vez.
+        Build();
+
+        _step = WizardStep.Review;
+
+        await Task.CompletedTask;
     }
 
 
@@ -917,15 +1087,10 @@
                 : DataMappingSuggester.ToCamelCase(value.Trim());
 
         RepathAssignments(previousPath, level);
-
-        if (_targetLevelPath == previousPath)
-            _targetLevelPath = level.Path;
-
-        Build();
     }
 
 
-    private void LevelKeyChanged(
+    private async Task LevelKeyChangedAsync(
         LevelState level,
         ChangeEventArgs e)
     {
@@ -936,443 +1101,383 @@
                 ? null
                 : int.Parse(value);
 
-        Build();
+        // La clave pertenece al nivel que agrupa: si no, el modelo sale sin
+        // el número de factura dentro de la factura.
+        if (level.KeyColumn is not null)
+            _assignments[level.KeyColumn.Value].LevelPath = level.Path;
+
+        RefreshSuggestion();
+
+        await Task.CompletedTask;
     }
 
 
-    private void AddLevel()
+    /// <summary>
+    /// Recalcula candidatas y propuesta para el nivel activo, contando sólo
+    /// con lo que todavía está libre.
+    /// </summary>
+    private void RefreshSuggestion()
     {
-        var parent = _levels[^1];
+        _suggested.Clear();
+        _candidates = [];
 
-        _levels.Add(
-            new LevelState
-            {
-                Depth = parent.Depth + 1,
-                Name = $"nivel{parent.Depth + 1}"
-            });
+        var level = ActiveLevel;
 
-        _targetLevelPath = _levels[^1].Path;
+        if (level is null || _dataSchema is null || _rows.Count == 0)
+            return;
+
+        var available = AvailableOrdinals(level);
+
+        var usedKeys =
+            _levels
+                .Where(x => x.Depth < level.Depth)
+                .Select(x => x.KeyColumn)
+                .Where(x => x is not null)
+                .Select(x => x!.Value)
+                .ToList();
+
+        _candidates =
+            DataMappingSuggester.RankKeyCandidates(
+                _dataSchema,
+                _rows,
+                available,
+                usedKeys);
+
+        var chosen =
+            level.KeyColumn is null
+                ? _candidates.FirstOrDefault()
+                : _candidates.FirstOrDefault(x => x.Ordinal == level.KeyColumn.Value);
+
+        var proposed =
+            chosen?.ConstantOrdinals
+            ?? DataMappingSuggester.ConstantColumns(_rows, available);
+
+        foreach (var ordinal in proposed)
+            _suggested.Add(ordinal);
+    }
+
+
+    private string SuggestLevelName()
+    {
+        var used =
+            _levels
+                .Select(x => x.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var candidate = PrefixName();
+
+        if (!string.IsNullOrWhiteSpace(candidate) && used.Add(candidate))
+            return candidate;
+
+        var index = _levels.Count;
+
+        while (!used.Add($"nivel{index}"))
+            index++;
+
+        return $"nivel{index}";
+    }
+
+
+    /// <summary>
+    /// Albaran_codigo y Albaran_fecha sugieren "albaran". Sólo vale si lo
+    /// comparten dos columnas: con una sola es casualidad.
+    /// </summary>
+    private string PrefixName()
+    {
+        if (_payload is null)
+            return string.Empty;
+
+        var free =
+            _assignments
+                .Where(x => x.Value.LevelPath == IgnorePath)
+                .Select(x => x.Key);
+
+        var dominant =
+            free
+                .Select(ordinal => _payload.Columns[ordinal].Name)
+                .Select(PrefixOf)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .GroupBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .Where(x => x.Count() >= 2)
+                .OrderByDescending(x => x.Count())
+                .FirstOrDefault();
+
+        return dominant is null
+            ? string.Empty
+            : DataMappingSuggester.ToCamelCase(dominant.Key);
+    }
+
+
+    private static string PrefixOf(
+        string columnName)
+    {
+        var separator = columnName.IndexOfAny(['_', '.', '-']);
+
+        return separator > 0
+            ? columnName[..separator]
+            : string.Empty;
+    }
+
+
+    // ------------------------------------------------------------- columnas
+
+    private async Task ToggleColumnAsync(
+        LevelState level,
+        int ordinal,
+        bool selected)
+    {
+        _assignments[ordinal].LevelPath =
+            selected
+                ? level.Path
+                : IgnorePath;
+
+        // Quitar del nivel la columna que lo agrupa deja una estructura que
+        // no se sostiene, así que la clave se suelta con ella.
+        if (!selected && level.KeyColumn == ordinal)
+        {
+            level.KeyColumn = null;
+
+            RefreshSuggestion();
+        }
+
+        await Task.CompletedTask;
+    }
+
+
+    private async Task ApplySuggestionAsync(
+        LevelState level)
+    {
+        foreach (var ordinal in _suggested)
+            _assignments[ordinal].LevelPath = level.Path;
+
+        await Task.CompletedTask;
+    }
+
+
+    private async Task SelectAllAsync(
+        LevelState level,
+        IReadOnlyList<int> available)
+    {
+        foreach (var ordinal in available)
+            _assignments[ordinal].LevelPath = level.Path;
+
+        await Task.CompletedTask;
+    }
+
+
+    private async Task ClearAllAsync(
+        LevelState level)
+    {
+        foreach (var ordinal in ColumnsOf(level))
+            _assignments[ordinal].LevelPath = IgnorePath;
+
+        level.KeyColumn = null;
+
+        RefreshSuggestion();
+
+        await Task.CompletedTask;
+    }
+
+
+    private async Task AddRemainingToLevelAsync(
+        LevelState level)
+    {
+        foreach (var assignment in _assignments.Values)
+        {
+            if (assignment.LevelPath == IgnorePath)
+                assignment.LevelPath = level.Path;
+        }
+
+        Build();
+
+        await Task.CompletedTask;
+    }
+
+
+    private void FieldNameChanged(
+        int ordinal,
+        ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        _assignments[ordinal].Name =
+            string.IsNullOrWhiteSpace(value)
+                ? DataMappingSuggester.ToCamelCase(_payload!.Columns[ordinal].Name)
+                : value.Trim();
 
         Build();
     }
 
 
     /// <summary>
-    /// Al quitar el nivel más profundo, sus columnas suben al padre en vez de
-    /// perderse.
+    /// Lo que este nivel puede usar: lo libre más lo que ya tiene. Lo que se
+    /// colocó arriba no reaparece, que es lo que hace que la lista se vaya
+    /// acortando paso a paso.
+    ///
+    /// Se ordena de menos a más valores distintos. Arriba quedan las que no
+    /// cambian nunca, que son las candidatas naturales de este nivel, y
+    /// abajo las que cambian en cada fila, que son detalle. El orden del
+    /// modelo generado NO sale de aquí: ese sigue siendo el de la consulta.
     /// </summary>
-    private void RemoveDeepestLevel()
+    private List<int> AvailableOrdinals(
+        LevelState level) =>
+        _assignments
+            .Where(x =>
+                x.Value.LevelPath == IgnorePath ||
+                x.Value.LevelPath == level.Path)
+            .Select(x => x.Key)
+            .OrderBy(DistinctOf)
+            .ThenBy(x => x)
+            .ToList();
+
+
+    private int DistinctOf(
+        int ordinal) =>
+        _distinct.TryGetValue(ordinal, out var count)
+            ? count
+            : 0;
+
+
+    /// <summary>
+    /// Columnas que no se han colocado en ningún nivel.
+    /// </summary>
+    private List<int> UnassignedOrdinals() =>
+        _assignments
+            .Where(x => x.Value.LevelPath == IgnorePath)
+            .Select(x => x.Key)
+            .OrderBy(x => x)
+            .ToList();
+
+
+    private List<int> AllOrdinals() =>
+        _payload is null
+            ? []
+            : Enumerable.Range(0, _payload.Columns.Count).ToList();
+
+
+    private bool IsAssignedTo(
+        int ordinal,
+        LevelState level) =>
+        _assignments.TryGetValue(ordinal, out var assignment) &&
+        assignment.LevelPath == level.Path;
+
+
+    private List<int> ColumnsOf(
+        LevelState level) =>
+        _assignments
+            .Where(x => x.Value.LevelPath == level.Path)
+            .Select(x => x.Key)
+            .OrderBy(x => x)
+            .ToList();
+
+
+    private string SampleOf(
+        int ordinal)
     {
-        if (_levels.Count <= 1)
-            return;
+        if (_payload is null || _payload.Rows.Count == 0)
+            return string.Empty;
 
-        var removed = _levels[^1];
-        var parent = _levels[^2];
+        var value = _payload.Rows[0][ordinal]?.ToString();
 
-        _levels.RemoveAt(_levels.Count - 1);
+        return string.IsNullOrWhiteSpace(value)
+            ? "—"
+            : value.Length > 32
+                ? value[..32] + "…"
+                : value;
+    }
+
+
+    private string ColumnClass(
+        int ordinal,
+        LevelState level)
+    {
+        var css = "dsrc-column";
+
+        if (IsAssignedTo(ordinal, level))
+            css += " is-on";
+
+        if (level.KeyColumn == ordinal)
+            css += " is-key";
+        else if (_suggested.Contains(ordinal))
+            css += " is-suggested";
+
+        return css;
+    }
+
+
+    /// <summary>
+    /// Cuántos valores distintos tiene la columna, dicho en palabras. Es el
+    /// dato que más ayuda a colocarla: una que no cambia nunca es cabecera,
+    /// y una que cambia en cada fila es detalle.
+    /// </summary>
+    private string CardinalityLabel(
+        int ordinal)
+    {
+        var count = DistinctOf(ordinal);
+
+        if (count <= 1)
+            return "siempre igual";
+
+        return count >= _rows.Count
+            ? "distinta en cada fila"
+            : $"{count} valores";
+    }
+
+
+    private string CardinalityClass(
+        int ordinal)
+    {
+        var count = DistinctOf(ordinal);
+
+        var css = "dsrc-badge";
+
+        if (count <= 1)
+            css += " is-constant";
+        else if (count >= _rows.Count)
+            css += " is-unique";
+        else
+            css += " is-partial";
+
+        return css;
+    }
+
+
+    private string StepClass(
+        WizardStep step,
+        int level)
+    {
+        var css = "dsrc-step";
+
+        if (_step == step && (step != WizardStep.Level || _activeLevel == level))
+            css += " is-on";
+
+        return css;
+    }
+
+
+    private void RepathAssignments(
+        string previousPath,
+        LevelState level)
+    {
+        // Renombrar un nivel cambia su ruta, así que hay que reapuntar lo
+        // que colgaba de ella.
+        var newPath = level.Path;
 
         foreach (var assignment in _assignments.Values)
         {
-            if (assignment.LevelPath == removed.Path)
-                assignment.LevelPath = parent.Path;
-        }
-
-        if (_targetLevelPath == removed.Path)
-            _targetLevelPath = parent.Path;
-
-        _selectedColumns.Clear();
-
-        Build();
-    }
-
-
-    private void LevelAssigned(
-        int ordinal,
-        ChangeEventArgs e)
-    {
-        _assignments[ordinal].LevelPath =
-            e.Value?.ToString() ?? _levels[0].Path;
-
-        Build();
-    }
-
-
-    private void NameChanged(
-        int ordinal,
-        ChangeEventArgs e)
-    {
-        _assignments[ordinal].Name =
-            e.Value?.ToString() ?? string.Empty;
-
-        Build();
-    }
-
-
-    // ------------------------------------------------------------- columnas
-
-    private void ColumnSearchChanged(
-        ChangeEventArgs e)
-    {
-        _columnSearch = e.Value?.ToString() ?? string.Empty;
-
-        PruneSelectedColumns();
-    }
-
-
-    private void ColumnSortChanged(
-        ChangeEventArgs e)
-    {
-        if (Enum.TryParse<ColumnSortMode>(
-                e.Value?.ToString(),
-                out var mode))
-        {
-            _columnSort = mode;
+            if (assignment.LevelPath == previousPath)
+                assignment.LevelPath = newPath;
         }
     }
 
 
-    private void TargetLevelChanged(
-        ChangeEventArgs e)
-    {
-        _targetLevelPath = e.Value?.ToString() ?? string.Empty;
-
-        EnsureValidTargetLevel();
-    }
-
-
-    private void ToggleColumnSelection(
-        int ordinal,
-        bool selected)
-    {
-        if (selected)
-            _selectedColumns.Add(ordinal);
-        else
-            _selectedColumns.Remove(ordinal);
-    }
-
-
-    private void SelectVisibleColumns()
-    {
-        foreach (var ordinal in GetVisibleColumnOrdinals())
-            _selectedColumns.Add(ordinal);
-    }
-
-
-    private void SelectGroupColumns(
-        ColumnGroup group)
-    {
-        foreach (var ordinal in group.Ordinals)
-            _selectedColumns.Add(ordinal);
-    }
-
-
-    private void ClearSelectedColumns()
-    {
-        _selectedColumns.Clear();
-    }
-
-
-    private void AssignSelectedToTarget()
-    {
-        AssignSelectedTo(_targetLevelPath);
-    }
-
-
-    private void AssignSelectedTo(
-        string levelPath)
-    {
-        if (_selectedColumns.Count == 0)
-            return;
-
-        if (!AssignmentTargets().Any(x => x.Path == levelPath))
-            levelPath = string.Empty;
-
-        foreach (var ordinal in _selectedColumns.ToList())
-        {
-            if (!_assignments.TryGetValue(ordinal, out var assignment))
-                continue;
-
-            assignment.LevelPath = levelPath;
-        }
-
-        _targetLevelPath = levelPath;
-        _selectedColumns.Clear();
-
-        Build();
-    }
-
-
-
-
-    private void OpenPreviewModal()
-    {
-        if (_documents.Count == 0)
-            return;
-
-        _showPreview = true;
-    }
-
-
-    private void ClosePreviewModal()
-    {
-        _showPreview = false;
-    }
-
-
-    private async Task CopyCurrentPreviewAsync()
-    {
-        if (_documents.Count == 0)
-            return;
-
-        await JS.InvokeVoidAsync(
-            "navigator.clipboard.writeText",
-            Pretty(_documents[SafeSelectedIndex]));
-    }
-
-
-    private void OpenMoveColumnsModal()
-    {
-        if (_selectedColumns.Count == 0)
-            return;
-
-        EnsureValidTargetLevel();
-
-        _showMoveModal = true;
-    }
-
-
-    private void CloseMoveColumnsModal()
-    {
-        _showMoveModal = false;
-    }
-
-
-    private void AssignSelectedFromModal(
-        string levelPath)
-    {
-        AssignSelectedTo(levelPath);
-
-        _showMoveModal = false;
-    }
-
-
-    private void OpenColumnEditor(
-        int ordinal)
-    {
-        if (_payload is null ||
-            !_assignments.TryGetValue(ordinal, out var assignment))
-        {
-            return;
-        }
-
-        _editingColumnOrdinal = ordinal;
-        _editingColumnName = assignment.Name;
-        _editingColumnLevelPath = assignment.LevelPath;
-    }
-
-
-    private void CloseColumnEditor()
-    {
-        _editingColumnOrdinal = null;
-        _editingColumnName = string.Empty;
-        _editingColumnLevelPath = string.Empty;
-    }
-
-
-    private void SaveColumnEditor()
-    {
-        if (_payload is null || _editingColumnOrdinal is null)
-            return;
-
-        var ordinal = _editingColumnOrdinal.Value;
-
-        if (!_assignments.TryGetValue(ordinal, out var assignment))
-            return;
-
-        assignment.Name = string.IsNullOrWhiteSpace(_editingColumnName)
-            ? DataMappingSuggester.ToCamelCase(_payload.Columns[ordinal].Name)
-            : _editingColumnName.Trim();
-
-        assignment.LevelPath = AssignmentTargets().Any(x => x.Path == _editingColumnLevelPath)
-            ? _editingColumnLevelPath
-            : string.Empty;
-
-        CloseColumnEditor();
-
-        Build();
-    }
-    private void EnsureValidTargetLevel()
-    {
-        if (AssignmentTargets().Any(x => x.Path == _targetLevelPath))
-            return;
-
-        _targetLevelPath = _levels.LastOrDefault()?.Path ?? string.Empty;
-    }
-
-
-    private void PruneSelectedColumns()
-    {
-        if (_payload is null)
-        {
-            _selectedColumns.Clear();
-            return;
-        }
-
-        var visible =
-            GetVisibleColumnOrdinals()
-                .ToHashSet();
-
-        _selectedColumns.RemoveWhere(x => !visible.Contains(x));
-    }
-
-
-    private List<int> GetVisibleColumnOrdinals()
-    {
-        if (_payload is null)
-            return [];
-
-        return SortColumnOrdinals(
-                Enumerable.Range(0, _payload.Columns.Count)
-                    .Where(ColumnMatchesSearch))
-            .ToList();
-    }
-
-
-    private List<int> GetVisibleColumnOrdinalsForPath(
-        string path)
-    {
-        return SortColumnOrdinals(
-                _assignments
-                    .Where(x => x.Value.LevelPath == path)
-                    .Select(x => x.Key)
-                    .Where(ColumnMatchesSearch))
-            .ToList();
-    }
-
-
-    private IEnumerable<int> SortColumnOrdinals(
-        IEnumerable<int> ordinals)
-    {
-        if (_payload is null)
-            return [];
-
-        return _columnSort switch
-        {
-            ColumnSortMode.Alphabetical =>
-                ordinals
-                    .OrderBy(x => _payload.Columns[x].Name, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(x => x),
-
-            ColumnSortMode.Type =>
-                ordinals
-                    .OrderBy(x => _payload.Columns[x].Type.ToString(), StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(x => _payload.Columns[x].Name, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(x => x),
-
-            _ =>
-                ordinals.OrderBy(x => x)
-        };
-    }
-
-
-    private bool ColumnMatchesSearch(
-        int ordinal)
-    {
-        if (_payload is null)
-            return false;
-
-        if (string.IsNullOrWhiteSpace(_columnSearch))
-            return true;
-
-        var search = _columnSearch.Trim();
-
-        var column = _payload.Columns[ordinal];
-        var assignment = _assignments[ordinal];
-        var level = FindLevelByPath(assignment.LevelPath);
-
-        return Contains(column.Name, search) ||
-               Contains(assignment.Name, search) ||
-               Contains(column.Type.ToString(), search) ||
-               Contains(level is null ? "Ignorar" : GetLevelDisplayName(level), search);
-    }
-
-
-    private List<ColumnGroup> GetColumnGroups()
-    {
-        var groups = new List<ColumnGroup>();
-
-        foreach (var level in _levels)
-        {
-            groups.Add(
-                new ColumnGroup
-                {
-                    Path = level.Path,
-                    Label = GetLevelDisplayName(level),
-                    Icon = GetLevelIcon(level),
-                    Depth = level.Depth,
-                    IsIgnored = false,
-                    Ordinals = GetVisibleColumnOrdinalsForPath(level.Path)
-                });
-        }
-
-        var ignored =
-            GetVisibleColumnOrdinalsForPath(IgnorePath);
-
-        if (ignored.Count > 0 || _assignments.Values.Any(x => x.LevelPath == IgnorePath))
-        {
-            groups.Add(
-                new ColumnGroup
-                {
-                    Path = IgnorePath,
-                    Label = "Ignorar",
-                    Icon = "fa-solid fa-eye-slash",
-                    Depth = _levels.Count,
-                    IsIgnored = true,
-                    Ordinals = ignored
-                });
-        }
-
-        return groups;
-    }
-
-
-    private IReadOnlyList<AssignmentTarget> AssignmentTargets()
-    {
-        var targets =
-            _levels
-                .Select(level =>
-                    new AssignmentTarget
-                    {
-                        Path = level.Path,
-                        Label = GetLevelDisplayName(level),
-                        Icon = GetLevelIcon(level),
-                        IsIgnored = false
-                    })
-                .ToList();
-
-        targets.Add(
-            new AssignmentTarget
-            {
-                Path = IgnorePath,
-                Label = "Ignorar",
-                Icon = "fa-solid fa-eye-slash",
-                IsIgnored = true
-            });
-
-        return targets;
-    }
-
-
-    private LevelState? FindLevelByPath(
-        string path) =>
-        _levels.FirstOrDefault(x => x.Path == path);
-
-
-    private string GetLevelDisplayName(
+    private static string GetLevelDisplayName(
         LevelState level) =>
         level.Depth == 0
             ? "Documento"
-            : level.Name;
+            : string.IsNullOrWhiteSpace(level.Name)
+                ? $"nivel{level.Depth}"
+                : level.Name;
 
 
     private static string GetLevelIcon(
@@ -1385,147 +1490,14 @@
         };
 
 
-    private static string GetGroupDescription(
-        ColumnGroup group)
-    {
-        if (group.IsIgnored)
-            return "No se incluirán en el modelo generado";
-
-        return group.Depth switch
-        {
-            0 => "Campos únicos del documento",
-            1 => "Primera colección agrupada",
-            _ => "Colección anidada de detalle"
-        };
-    }
-
-
-    private static string GetColumnGroupClass(
-        ColumnGroup group)
-    {
-        var css = "dsrc-column-group";
-
-        if (group.IsIgnored)
-            css += " is-ignored";
-        else if (group.Depth == 0)
-            css += " is-root";
-        else if (group.Depth == 1)
-            css += " is-level-one";
-        else
-            css += " is-level-deep";
-
-        return css;
-    }
-
-
-    private string GetColumnGridClass() =>
-        _compactColumns
-            ? "dsrc-column-grid is-compact"
-            : "dsrc-column-grid";
-
-
-    private string GetColumnCardClass(
-        int ordinal)
-    {
-        var css = "dsrc-column-card";
-
-        if (_selectedColumns.Contains(ordinal))
-            css += " is-selected";
-
-        if (_assignments.TryGetValue(ordinal, out var assignment) &&
-            assignment.LevelPath == IgnorePath)
-        {
-            css += " is-ignored";
-        }
-
-        if (IsKeyColumn(ordinal))
-            css += " is-key";
-
-        return css;
-    }
-
-
-    private static string GetQuickTargetClass(
-        AssignmentTarget target)
-    {
-        var css = "dsrc-quick-target";
-
-        if (target.IsIgnored)
-            css += " is-ignore";
-
-        return css;
-    }
-
-
-
-
-    private static string GetTargetCardClass(
-        AssignmentTarget target)
-    {
-        var css = "dsrc-target-card";
-
-        if (target.IsIgnored)
-            css += " is-ignore";
-
-        return css;
-    }
-
-
-    private static string GetTargetDescription(
-        AssignmentTarget target)
-    {
-        if (target.IsIgnored)
-            return "Excluir del modelo";
-
-        return target.Label == "Documento"
-            ? "Campo único de cabecera"
-            : "Colección del modelo";
-    }
-    private static bool Contains(
-        string? source,
-        string value) =>
-        !string.IsNullOrWhiteSpace(source) &&
-        source.Contains(value, StringComparison.OrdinalIgnoreCase);
+    private static string Indent(
+        LevelState level) =>
+        $"margin-left:{level.Depth * 20}px";
 
 
     private static bool GetBool(
         object? value) =>
         value is bool boolean && boolean;
-
-
-    private void RepathAssignments(
-        string previousPath,
-        LevelState level)
-    {
-        // Renombrar un nivel cambia su ruta y la de sus descendientes, así
-        // que hay que reapuntar lo que colgaba de ellos.
-        var newPath = level.Path;
-
-        foreach (var assignment in _assignments.Values)
-        {
-            if (assignment.LevelPath == previousPath)
-                assignment.LevelPath = newPath;
-        }
-    }
-
-
-    private List<int> ColumnsOf(
-        LevelState level) =>
-        _assignments
-            .Where(x => x.Value.LevelPath == level.Path)
-            .Select(x => x.Key)
-            .OrderBy(x => x)
-            .ToList();
-
-
-    private bool IsKeyColumn(
-        int ordinal) =>
-        _levels.Any(x => x.KeyColumn == ordinal);
-
-
-    private static string Indent(
-        LevelState level) =>
-        $"margin-left:{level.Depth * 22}px";
 
 
     // ---------------------------------------------------------- construcción
@@ -1582,24 +1554,24 @@
             if (level.KeyColumn is null)
                 continue;
 
-            var assigned = ColumnsOf(level);
-
-            if (!assigned.Contains(level.KeyColumn.Value))
+            if (!ColumnsOf(level).Contains(level.KeyColumn.Value))
             {
                 var name =
                     _payload!.Columns[level.KeyColumn.Value].Name;
 
                 problems.Add(
                     $"La columna '{name}' agrupa " +
-                    $"{(level.Depth == 0 ? "el documento" : level.Name)} " +
+                    $"{GetLevelDisplayName(level)} " +
                     "pero está asignada a otro nivel.");
             }
         }
 
+        // Sólo se avisa de las colecciones vacías. Un documento sin campos
+        // propios es raro pero legítimo: hay informes que son sólo detalle.
         var empty =
             _levels
                 .Where(x => x.Depth > 0 && ColumnsOf(x).Count == 0)
-                .Select(x => x.Name)
+                .Select(GetLevelDisplayName)
                 .ToList();
 
         if (empty.Count > 0)
@@ -1700,21 +1672,29 @@
         _schema = null;
         _mapping = null;
         _payload = null;
+        _dataSchema = null;
+        _rows = [];
         _levels.Clear();
         _assignments.Clear();
-        _selectedColumns.Clear();
-        _targetLevelPath = string.Empty;
-        _showMoveModal = false;
-        _editingColumnOrdinal = null;
-        _editingColumnName = string.Empty;
-        _editingColumnLevelPath = string.Empty;
+        _candidates = [];
+        _suggested.Clear();
         _selected = 0;
+        _activeLevel = 0;
+        _step = WizardStep.Source;
     }
 
 
     private static string Pretty(
         JsonElement element) =>
         JsonSerializer.Serialize(element, PrettyOptions);
+
+
+    private enum WizardStep
+    {
+        Source,
+        Level,
+        Review
+    }
 
 
     private sealed class LevelState
@@ -1744,41 +1724,5 @@
         public string LevelPath { get; set; } = string.Empty;
 
         public string Name { get; set; } = string.Empty;
-    }
-
-
-    private enum ColumnSortMode
-    {
-        Original,
-        Alphabetical,
-        Type
-    }
-
-
-    private sealed class AssignmentTarget
-    {
-        public required string Path { get; init; }
-
-        public required string Label { get; init; }
-
-        public required string Icon { get; init; }
-
-        public bool IsIgnored { get; init; }
-    }
-
-
-    private sealed class ColumnGroup
-    {
-        public required string Path { get; init; }
-
-        public required string Label { get; init; }
-
-        public required string Icon { get; init; }
-
-        public required int Depth { get; init; }
-
-        public required bool IsIgnored { get; init; }
-
-        public required List<int> Ordinals { get; init; }
     }
 }

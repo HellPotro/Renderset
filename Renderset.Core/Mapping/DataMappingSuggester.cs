@@ -109,6 +109,68 @@ public static class DataMappingSuggester
 
 
     /// <summary>
+    /// Puntúa las claves posibles de UN nivel, sin construir nada debajo.
+    ///
+    /// Es la misma puntuación que usa <see cref="Suggest"/>, expuesta para que
+    /// una pantalla pueda ir nivel a nivel: enseña lo que quedaría constante
+    /// con cada clave y deja que el usuario decida, en vez de aceptar de una
+    /// vez toda la jerarquía adivinada.
+    /// </summary>
+    /// <param name="available">
+    /// Columnas que todavía no se han colocado en un nivel superior.
+    /// </param>
+    /// <param name="usedKeys">
+    /// Claves ya consumidas por los niveles de arriba: volver a agrupar por
+    /// ellas no separaría nada.
+    /// </param>
+    public static IReadOnlyList<DataMappingKeyCandidate> RankKeyCandidates(
+        DataSetSchema schema,
+        IReadOnlyList<object?[]> rows,
+        IReadOnlyCollection<int> available,
+        IReadOnlyCollection<int> usedKeys)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        ArgumentNullException.ThrowIfNull(rows);
+
+        if (rows.Count == 0 || available.Count == 0)
+            return [];
+
+        return RankCandidates(
+            schema,
+            rows,
+            Enumerable.Range(0, rows.Count).ToList(),
+            available.ToList(),
+            usedKeys);
+    }
+
+
+    /// <summary>
+    /// Columnas cuyo valor no cambia en ninguna fila.
+    ///
+    /// Es la respuesta a "qué se repite siempre" cuando no hay agrupación de
+    /// por medio: con un solo documento en la muestra no hay candidata a
+    /// clave, pero los datos de cabecera siguen siendo reconocibles.
+    /// </summary>
+    public static IReadOnlyList<int> ConstantColumns(
+        IReadOnlyList<object?[]> rows,
+        IReadOnlyCollection<int> available)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+
+        if (rows.Count == 0)
+            return [];
+
+        return available
+            .Where(ordinal =>
+                rows
+                    .Select(row => Key(row[ordinal]))
+                    .Distinct()
+                    .Count() <= 1)
+            .ToList();
+    }
+
+
+    /// <summary>
     /// Construye un nivel y, si las columnas que aún varían admiten otra
     /// agrupación, se llama a sí misma para el siguiente.
     /// </summary>
@@ -169,8 +231,8 @@ public static class DataMappingSuggester
 
         var keyOrdinal = best.Ordinal;
 
-        var constant = best.ConstantOrdinals;
-        var varying = best.VaryingOrdinals;
+        var constant = best.ConstantOrdinals.ToList();
+        var varying = best.VaryingOrdinals.ToList();
 
         var current = new DataMappingNode
         {

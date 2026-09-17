@@ -19,7 +19,16 @@ public sealed class DataMappingKeyCandidate
 
     public IReadOnlyList<string> VaryingColumns { get; init; } = [];
 
-    internal List<int> ConstantOrdinals { get; init; } = [];
+    /// <summary>
+    /// Columnas que quedan constantes dentro de cada grupo, es decir, las
+    /// que pertenecen a este nivel. Son públicas porque el asistente de la
+    /// pantalla las usa para proponer la selección paso a paso.
+    /// </summary>
+    public IReadOnlyList<int> ConstantOrdinals { get; init; } = [];
 
-    internal List<int> VaryingOrdinals { get; init; } = [];
+    /// <summary>
+    /// Columnas que siguen variando dentro del grupo, es decir, las que
+    /// corresponden al detalle de debajo.
+    /// </summary>
+    public IReadOnlyList<int> VaryingOrdinals { get; init; } = [];
 }
