@@ -82,6 +82,12 @@ public sealed class ReportConfigurationComposer
         // posición daría cabeceras imposibles de explicar.
         if (effective.Header.Lines.Count == 0)
             effective.Header.Lines = blockConfiguration.Lines;
+
+        // Las columnas siguen el mismo criterio que Lines: o las define el
+        // preset completo o las hereda completas del bloque. Mezclar columnas
+        // o líneas por posición haría imposible razonar de dónde sale cada una.
+        if (effective.Header.Columns.Count == 0)
+            effective.Header.Columns = blockConfiguration.Columns;
     }
 
     private static void ApplyFooterBlock(

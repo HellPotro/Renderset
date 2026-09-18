@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Renderset.Core.Configurations;
 using Renderset.Core.Definitions;
+using Renderset.Core.Localization;
 using Renderset.Core.Services;
 
 namespace Renderset.Tests.Core;
@@ -63,6 +64,61 @@ public sealed class ReportConfigurationResolverTests
         var action = () => _sut.Resolve(definition, configuration);
 
         action.Should().Throw<InvalidOperationException>();
+    }
+
+
+    [Fact]
+    public void Resolve_ShouldResolveHeaderColumnsAndKeepLegacyLinesSeparate()
+    {
+        var definition = CreateDefinition();
+        var configuration = CreateConfiguration();
+        configuration.Header = new ReportHeaderConfiguration
+        {
+            Lines =
+            [
+                new ReportHeaderLineConfiguration
+                {
+                    Id = "legacy",
+                    TextKey = "header.line.legacy",
+                    Order = 10
+                }
+            ],
+            Columns =
+            [
+                new ReportHeaderColumnConfiguration
+                {
+                    Id = "left",
+                    Width = 55,
+                    Lines =
+                    [
+                        new ReportHeaderLineConfiguration
+                        {
+                            Id = "company",
+                            TextKey = "header.line.company",
+                            Order = 10
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var catalog = new ReportTextCatalog(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["header.line.legacy"] = "Legacy",
+                ["header.line.company"] = "ORAN"
+            });
+
+        var result = _sut.Resolve(
+            definition,
+            configuration,
+            catalog: catalog);
+
+        result.Header!.Lines.Should().ContainSingle();
+        result.Header.Columns.Should().ContainSingle();
+        result.Header.Columns[0].Width.Should().Be(55);
+        result.Header.Columns[0].Lines.Should().ContainSingle();
+        result.Header.Columns[0].Lines[0].Text.Should().Be("ORAN");
     }
 
     private static ReportDefinition CreateDefinition() =>

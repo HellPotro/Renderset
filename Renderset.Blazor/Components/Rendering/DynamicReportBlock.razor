@@ -1,10 +1,11 @@
 @using Renderset.Core.Blocks
 @using Renderset.Core.Configurations
+@using Renderset.Core.Definitions
 @using Renderset.Core.Resolved
 
 @if (Block.Type == ReportBlockType.Text && Block.Text is not null)
 {
-    <section class="dynamic-report-content-block dynamic-report-text-block @GetTextStyleClass(Block.Text.Style)">
+    <section class="dynamic-report-content-block dynamic-report-text-block @GetTextStyleClass(Block.Text.Style) @GetAlignmentClass(Block.Text.Alignment)">
 
         @if (!string.IsNullOrWhiteSpace(Block.Text.Title))
         {
@@ -34,5 +35,14 @@
             ReportTextBlockStyle.Warning => "dynamic-report-text-block-warning",
             ReportTextBlockStyle.Success => "dynamic-report-text-block-success",
             _ => "dynamic-report-text-block-default"
+        };
+
+    private static string GetAlignmentClass(
+        ReportHorizontalAlignment? alignment) =>
+        alignment switch
+        {
+            ReportHorizontalAlignment.Center => "is-align-center",
+            ReportHorizontalAlignment.Right => "is-align-right",
+            _ => "is-align-left"
         };
 }

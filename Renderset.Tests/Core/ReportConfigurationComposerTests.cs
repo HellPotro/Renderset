@@ -144,6 +144,88 @@ public sealed class ReportConfigurationComposerTests
         action.Should().Throw<InvalidOperationException>();
     }
 
+
+    [Fact]
+    public void Compose_ShouldApplyHeaderColumnsAsOneBlock()
+    {
+        var configuration = CreateConfiguration();
+        configuration.Header = new ReportHeaderConfiguration
+        {
+            BlockId = "oran-header"
+        };
+
+        var block = new ReportBlock
+        {
+            Id = "oran-header",
+            Name = "ORAN Header",
+            Type = ReportBlockType.Header,
+            ConfigurationJson = """
+            {
+              "columns": [
+                {
+                  "id": "left",
+                  "align": "Left",
+                  "width": 60,
+                  "lines": [
+                    { "id": "company", "textKey": "header.line.company", "order": 10 }
+                  ]
+                },
+                {
+                  "id": "right",
+                  "align": "Right",
+                  "width": 40,
+                  "lines": []
+                }
+              ]
+            }
+            """
+        };
+
+        var result = _sut.Compose(configuration, block);
+
+        result.Header!.Columns.Should().HaveCount(2);
+        result.Header.Columns[0].Id.Should().Be("left");
+        result.Header.Columns[0].Width.Should().Be(60);
+        result.Header.Columns[1].Align.Should().Be(Renderset.Core.Definitions.ReportHorizontalAlignment.Right);
+    }
+
+    [Fact]
+    public void Compose_ShouldKeepPresetHeaderColumnsOverBlockColumns()
+    {
+        var configuration = CreateConfiguration();
+        configuration.Header = new ReportHeaderConfiguration
+        {
+            BlockId = "oran-header",
+            Columns =
+            [
+                new ReportHeaderColumnConfiguration
+                {
+                    Id = "preset",
+                    Width = 100
+                }
+            ]
+        };
+
+        var block = new ReportBlock
+        {
+            Id = "oran-header",
+            Name = "ORAN Header",
+            Type = ReportBlockType.Header,
+            ConfigurationJson = """
+            {
+              "columns": [
+                { "id": "block", "width": 100, "lines": [] }
+              ]
+            }
+            """
+        };
+
+        var result = _sut.Compose(configuration, block);
+
+        result.Header!.Columns.Should().ContainSingle();
+        result.Header.Columns[0].Id.Should().Be("preset");
+    }
+
     private static ReportConfiguration CreateConfiguration() =>
         new()
         {

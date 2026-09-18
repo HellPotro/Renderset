@@ -1,4 +1,4 @@
-﻿using Renderset.Core.Definitions;
+using Renderset.Core.Definitions;
 
 namespace Renderset.Core.Resolved;
 
@@ -31,4 +31,10 @@ public sealed class ResolvedReportHeader
     /// Líneas de datos ya traducidas y en orden. Las vacías no llegan aquí.
     /// </summary>
     public List<ResolvedReportHeaderLine> Lines { get; set; } = [];
+
+    /// <summary>
+    /// Si hay columnas, el renderer usa este diseño avanzado. Si está vacío,
+    /// conserva el camino legacy basado en Lines.
+    /// </summary>
+    public List<ResolvedReportHeaderColumn> Columns { get; set; } = [];
 }

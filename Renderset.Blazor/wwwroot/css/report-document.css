@@ -359,3 +359,51 @@
         break-inside: avoid;
     }
 }
+
+/* ---------- Header columns ---------- */
+
+.report-header-columns {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    margin-top: 10px;
+    width: 100%;
+}
+
+.report-header-column {
+    min-width: 0;
+    flex-grow: 1;
+}
+
+.report-header-column.is-align-left,
+.dynamic-report-text-block.is-align-left {
+    text-align: left;
+}
+
+.report-header-column.is-align-center,
+.dynamic-report-text-block.is-align-center {
+    text-align: center;
+}
+
+.report-header-column.is-align-right,
+.dynamic-report-text-block.is-align-right {
+    text-align: right;
+}
+
+/* En stacked el contenido puede seguir usando columnas: centrar el bloque de
+   cabecera no debe forzar la alineación elegida dentro de cada columna. */
+.report-header.is-stacked .report-header-columns {
+    align-self: stretch;
+}
+
+@media (max-width: 640px) {
+    .report-header-columns {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .report-header-column {
+        flex-basis: auto !important;
+        width: 100%;
+    }
+}

@@ -1,4 +1,4 @@
-﻿using Renderset.Core.Blocks;
+using Renderset.Core.Blocks;
 using Renderset.Core.Configurations;
 using Renderset.Core.Definitions;
 using Renderset.Core.Localization;
@@ -621,7 +621,8 @@ public sealed class ReportConfigurationResolver
             Text = texts.Resolve(
                 configuration.TextKey,
                 configuration.Text),
-            Style = configuration.Style
+            Style = configuration.Style,
+            Alignment = configuration.Alignment
         };
     }
 
@@ -679,6 +680,10 @@ public sealed class ReportConfigurationResolver
                 texts,
                 configuration),
 
+            Columns = ResolveHeaderColumns(
+                texts,
+                configuration),
+
             Fields = definition.Fields
                 .OrderBy(x => x.Order)
                 .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
@@ -719,6 +724,38 @@ public sealed class ReportConfigurationResolver
                 Style = line.Style
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+            .ToList();
+    }
+
+    private static List<ResolvedReportHeaderColumn> ResolveHeaderColumns(
+        ReportTextCatalog texts,
+        ReportHeaderConfiguration? configuration)
+    {
+        if (configuration is null ||
+            configuration.Columns.Count == 0)
+        {
+            return [];
+        }
+
+        return configuration.Columns
+            .Select(column => new ResolvedReportHeaderColumn
+            {
+                Id = column.Id,
+                Align = column.Align,
+                Width = Math.Clamp(column.Width, 1, 100),
+                Lines = column.Lines
+                    .OrderBy(x => x.Order)
+                    .Select(line => new ResolvedReportHeaderLine
+                    {
+                        Text = texts.Resolve(
+                            line.TextKey,
+                            string.Empty),
+                        Style = line.Style
+                    })
+                    .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+                    .ToList()
+            })
+            .Where(x => x.Lines.Count > 0)
             .ToList();
     }
 

@@ -1,4 +1,4 @@
-﻿@using System.Text
+@using System.Text
 @using Renderset.Core.Definitions
 @using Renderset.Core.Resolved
 
@@ -31,8 +31,28 @@
                 </div>
             }
 
-            @if (Header.Lines.Count > 0)
+            @if (Header.Columns.Count > 0)
             {
+                <div class="report-header-columns">
+                    @foreach (var column in Header.Columns)
+                    {
+                        <div class="report-header-column @AlignmentClass(column.Align)"
+                             style="@ColumnStyle(column)">
+                            @foreach (var line in column.Lines)
+                            {
+                                <div class="report-header-line @LineClass(line.Style)">
+                                    @line.Text
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else if (Header.Lines.Count > 0)
+            {
+                @* El camino legacy permanece separado a propósito: una cabecera
+                   guardada antes de existir Columns debe generar el mismo DOM y
+                   por tanto conservar exactamente el mismo aspecto. *@
                 <div class="report-header-lines">
 
                     @foreach (var line in Header.Lines)
@@ -107,6 +127,19 @@
         Header?.LogoMaxHeight is > 0
             ? $"max-height:{Header.LogoMaxHeight}px;"
             : null;
+
+    private static string ColumnStyle(
+        ResolvedReportHeaderColumn column) =>
+        $"flex-basis:{Math.Clamp(column.Width, 1, 100)}%;";
+
+    private static string AlignmentClass(
+        ReportHorizontalAlignment alignment) =>
+        alignment switch
+        {
+            ReportHorizontalAlignment.Center => "is-align-center",
+            ReportHorizontalAlignment.Right => "is-align-right",
+            _ => "is-align-left"
+        };
 
     private static string LineClass(
         ReportHeaderLineStyle style) =>

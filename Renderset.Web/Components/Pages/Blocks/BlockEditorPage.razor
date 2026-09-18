@@ -1,4 +1,4 @@
-﻿@page "/blocks/new"
+@page "/blocks/new"
 @page "/blocks/{BlockId}"
 
 @using System.Text.Json
@@ -262,102 +262,235 @@
 
                         <div class="form-group">
 
-                            <label>Datos de la empresa</label>
+                            <div class="form-label-row">
+                                <div>
+                                    <label>Contenido de cabecera</label>
+                                    <small>
+                                        Usa columnas cuando necesites repartir información
+                                        a izquierda y derecha. Las cabeceras antiguas siguen
+                                        usando una única lista de líneas.
+                                    </small>
+                                </div>
 
-                            <div class="header-line-presets">
-
-                                @foreach (var preset in HeaderLinePresets)
+                                @if (_header.Columns.Count == 0)
                                 {
                                     <button type="button"
-                                            class="header-line-preset"
-                                            title="Añadir una línea de @preset.Label"
-                                            @onclick="() => AddPresetLine(preset)">
-
-                                        <i class="fa-solid fa-plus"></i>
-                                        @preset.Label
-
+                                            class="secondary-button"
+                                            @onclick="EnableHeaderColumns">
+                                        <i class="fa-solid fa-columns"></i>
+                                        Usar columnas
                                     </button>
                                 }
-
-                                <button type="button"
-                                        class="header-line-preset"
-                                        @onclick="() => AddHeaderLine()">
-
-                                    <i class="fa-solid fa-plus"></i>
-                                    Línea vacía
-
-                                </button>
-
+                                else
+                                {
+                                    <button type="button"
+                                            class="secondary-button"
+                                            @onclick="DisableHeaderColumns">
+                                        <i class="fa-solid fa-bars"></i>
+                                        Volver a una columna
+                                    </button>
+                                }
                             </div>
 
-                            @if (_header.Lines.Count == 0)
+                            @if (_header.Columns.Count == 0)
                             {
-                                <small>
-                                    Cada línea es un texto libre que puede llevar
-                                    variables del tenant, por ejemplo
-                                    CIF: &#123;&#123;company.cif&#125;&#125;.
-                                </small>
-                            }
+                                <div class="header-line-presets">
 
-                            @foreach (var line in OrderedHeaderLines)
-                            {
-                                <div class="header-line-row" @key="line.Id">
-
-                                    <input type="text"
-                                           value="@HeaderLineText(line)"
-                                           @onchange="e => HeaderLineTextChanged(line, e)"
-                                           placeholder="Texto de la línea" />
-
-                                    <VariablePicker Variables="_variables"
-                                                    Selected="variable => InsertHeaderLineVariableAsync(line, variable)" />
-
-                                    <select value="@line.Style"
-                                            @onchange="e => HeaderLineStyleChanged(line, e)">
-
-                                        <option value="@ReportHeaderLineStyle.Normal">
-                                            Normal
-                                        </option>
-
-                                        <option value="@ReportHeaderLineStyle.Strong">
-                                            Destacado
-                                        </option>
-
-                                        <option value="@ReportHeaderLineStyle.Muted">
-                                            Secundario
-                                        </option>
-
-                                        <option value="@ReportHeaderLineStyle.Small">
-                                            Pequeño
-                                        </option>
-
-                                    </select>
-
-                                    <div class="header-line-actions">
-
+                                    @foreach (var preset in HeaderLinePresets)
+                                    {
                                         <button type="button"
-                                                title="Subir"
-                                                disabled="@(!CanMoveHeaderLine(line, -1))"
-                                                @onclick="() => MoveHeaderLine(line, -1)">
-                                            <i class="fa-solid fa-arrow-up"></i>
-                                        </button>
+                                                class="header-line-preset"
+                                                title="Añadir una línea de @preset.Label"
+                                                @onclick="() => AddPresetLine(preset)">
 
-                                        <button type="button"
-                                                title="Bajar"
-                                                disabled="@(!CanMoveHeaderLine(line, 1))"
-                                                @onclick="() => MoveHeaderLine(line, 1)">
-                                            <i class="fa-solid fa-arrow-down"></i>
-                                        </button>
+                                            <i class="fa-solid fa-plus"></i>
+                                            @preset.Label
 
-                                        <button type="button"
-                                                class="is-danger"
-                                                title="Quitar línea"
-                                                @onclick="() => RemoveHeaderLine(line)">
-                                            <i class="fa-solid fa-trash"></i>
                                         </button>
+                                    }
 
-                                    </div>
+                                    <button type="button"
+                                            class="header-line-preset"
+                                            @onclick="() => AddHeaderLine()">
+
+                                        <i class="fa-solid fa-plus"></i>
+                                        Línea vacía
+
+                                    </button>
 
                                 </div>
+
+                                @if (_header.Lines.Count == 0)
+                                {
+                                    <small>
+                                        Cada línea es un texto libre que puede llevar
+                                        variables del tenant, por ejemplo
+                                        CIF: &#123;&#123;company.cif&#125;&#125;.
+                                    </small>
+                                }
+
+                                @foreach (var line in OrderedHeaderLines)
+                                {
+                                    <div class="header-line-row" @key="line.Id">
+
+                                        <input type="text"
+                                               value="@HeaderLineText(line)"
+                                               @onchange="e => HeaderLineTextChanged(line, e)"
+                                               placeholder="Texto de la línea" />
+
+                                        <VariablePicker Variables="_variables"
+                                                        Selected="variable => InsertHeaderLineVariableAsync(line, variable)" />
+
+                                        <select value="@line.Style"
+                                                @onchange="e => HeaderLineStyleChanged(line, e)">
+
+                                            <option value="@ReportHeaderLineStyle.Normal">Normal</option>
+                                            <option value="@ReportHeaderLineStyle.Strong">Destacado</option>
+                                            <option value="@ReportHeaderLineStyle.Muted">Secundario</option>
+                                            <option value="@ReportHeaderLineStyle.Small">Pequeño</option>
+
+                                        </select>
+
+                                        <div class="header-line-actions">
+                                            <button type="button"
+                                                    title="Subir"
+                                                    disabled="@(!CanMoveHeaderLine(line, -1))"
+                                                    @onclick="() => MoveHeaderLine(line, -1)">
+                                                <i class="fa-solid fa-arrow-up"></i>
+                                            </button>
+                                            <button type="button"
+                                                    title="Bajar"
+                                                    disabled="@(!CanMoveHeaderLine(line, 1))"
+                                                    @onclick="() => MoveHeaderLine(line, 1)">
+                                                <i class="fa-solid fa-arrow-down"></i>
+                                            </button>
+                                            <button type="button"
+                                                    class="is-danger"
+                                                    title="Quitar línea"
+                                                    @onclick="() => RemoveHeaderLine(line)">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="header-columns-editor">
+                                    @foreach (var column in _header.Columns)
+                                    {
+                                        var columnIndex = _header.Columns.IndexOf(column);
+
+                                        <section class="header-column-card" @key="column.Id">
+                                            <header>
+                                                <div>
+                                                    <strong>Columna @(columnIndex + 1)</strong>
+                                                    <span>@column.Lines.Count línea(s)</span>
+                                                </div>
+
+                                                <button type="button"
+                                                        class="icon-button is-danger"
+                                                        title="Quitar columna"
+                                                        disabled="@(_header.Columns.Count <= 1)"
+                                                        @onclick="() => RemoveHeaderColumn(column)">
+                                                    <i class="fa-solid fa-trash"></i>
+                                                </button>
+                                            </header>
+
+                                            <div class="header-column-options">
+                                                <label>
+                                                    <span>Alineación</span>
+                                                    <select value="@column.Align"
+                                                            @onchange="e => HeaderColumnAlignmentChanged(column, e)">
+                                                        <option value="@ReportHorizontalAlignment.Left">Izquierda</option>
+                                                        <option value="@ReportHorizontalAlignment.Center">Centro</option>
+                                                        <option value="@ReportHorizontalAlignment.Right">Derecha</option>
+                                                    </select>
+                                                </label>
+
+                                                <label>
+                                                    <span>Ancho (%)</span>
+                                                    <input type="number"
+                                                           min="10"
+                                                           max="100"
+                                                           step="5"
+                                                           value="@column.Width"
+                                                           @onchange="e => HeaderColumnWidthChanged(column, e)" />
+                                                </label>
+                                            </div>
+
+                                            <div class="header-line-presets">
+                                                @foreach (var preset in HeaderLinePresets)
+                                                {
+                                                    <button type="button"
+                                                            class="header-line-preset"
+                                                            @onclick="() => AddPresetLine(column, preset)">
+                                                        <i class="fa-solid fa-plus"></i>
+                                                        @preset.Label
+                                                    </button>
+                                                }
+
+                                                <button type="button"
+                                                        class="header-line-preset"
+                                                        @onclick="() => AddHeaderLine(column)">
+                                                    <i class="fa-solid fa-plus"></i>
+                                                    Línea vacía
+                                                </button>
+                                            </div>
+
+                                            @foreach (var line in OrderedColumnHeaderLines(column))
+                                            {
+                                                <div class="header-line-row" @key="line.Id">
+                                                    <input type="text"
+                                                           value="@HeaderLineText(line)"
+                                                           @onchange="e => HeaderLineTextChanged(line, e)"
+                                                           placeholder="Texto de la línea" />
+
+                                                    <VariablePicker Variables="_variables"
+                                                                    Selected="variable => InsertHeaderLineVariableAsync(line, variable)" />
+
+                                                    <select value="@line.Style"
+                                                            @onchange="e => HeaderLineStyleChanged(line, e)">
+                                                        <option value="@ReportHeaderLineStyle.Normal">Normal</option>
+                                                        <option value="@ReportHeaderLineStyle.Strong">Destacado</option>
+                                                        <option value="@ReportHeaderLineStyle.Muted">Secundario</option>
+                                                        <option value="@ReportHeaderLineStyle.Small">Pequeño</option>
+                                                    </select>
+
+                                                    <div class="header-line-actions">
+                                                        <button type="button"
+                                                                title="Subir"
+                                                                disabled="@(!CanMoveHeaderLine(column, line, -1))"
+                                                                @onclick="() => MoveHeaderLine(column, line, -1)">
+                                                            <i class="fa-solid fa-arrow-up"></i>
+                                                        </button>
+                                                        <button type="button"
+                                                                title="Bajar"
+                                                                disabled="@(!CanMoveHeaderLine(column, line, 1))"
+                                                                @onclick="() => MoveHeaderLine(column, line, 1)">
+                                                            <i class="fa-solid fa-arrow-down"></i>
+                                                        </button>
+                                                        <button type="button"
+                                                                class="is-danger"
+                                                                title="Quitar línea"
+                                                                @onclick="() => RemoveHeaderLine(column, line)">
+                                                            <i class="fa-solid fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </section>
+                                    }
+                                </div>
+
+                                <button type="button"
+                                        class="secondary-button header-column-add"
+                                        disabled="@(_header.Columns.Count >= 4)"
+                                        @onclick="AddHeaderColumn">
+                                    <i class="fa-solid fa-plus"></i>
+                                    Añadir columna
+                                </button>
                             }
 
                         </div>
@@ -534,6 +667,17 @@
                                 <option value="@ReportTextBlockStyle.Information">Información</option>
                                 <option value="@ReportTextBlockStyle.Warning">Aviso</option>
                                 <option value="@ReportTextBlockStyle.Success">Correcto</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Alineación</label>
+
+                            <select value="@TextAlignmentValue"
+                                    @onchange="TextAlignmentChanged">
+                                <option value="@ReportHorizontalAlignment.Left">Izquierda</option>
+                                <option value="@ReportHorizontalAlignment.Center">Centro</option>
+                                <option value="@ReportHorizontalAlignment.Right">Derecha</option>
                             </select>
                         </div>
 
@@ -1154,6 +1298,223 @@
     }
 
 
+    private IEnumerable<ReportHeaderLineConfiguration> OrderedColumnHeaderLines(
+        ReportHeaderColumnConfiguration column) =>
+        column.Lines.OrderBy(x => x.Order);
+
+
+    /// <summary>
+    /// Activar columnas es una migración explícita del bloque que se está
+    /// editando: las líneas actuales pasan a la primera columna y se crea una
+    /// segunda vacía. Mientras el usuario no pulse aquí, el JSON legacy no
+    /// cambia y el renderer sigue usando exactamente el camino anterior.
+    /// </summary>
+    private void EnableHeaderColumns()
+    {
+        if (_header.Columns.Count > 0)
+            return;
+
+        var first = CreateHeaderColumn(50);
+        first.Lines = _header.Lines;
+
+        _header.Columns =
+        [
+            first,
+            CreateHeaderColumn(50)
+        ];
+
+        _header.Lines = [];
+    }
+
+
+    private void DisableHeaderColumns()
+    {
+        if (_header.Columns.Count == 0)
+            return;
+
+        _header.Lines = _header.Columns
+            .SelectMany(x => x.Lines.OrderBy(line => line.Order))
+            .ToList();
+
+        NormalizeHeaderLineOrders();
+        _header.Columns = [];
+    }
+
+
+    private void AddHeaderColumn()
+    {
+        if (_header.Columns.Count >= 4)
+            return;
+
+        _header.Columns.Add(CreateHeaderColumn(50));
+        DistributeHeaderColumnWidths();
+    }
+
+
+    private static ReportHeaderColumnConfiguration CreateHeaderColumn(
+        int width) =>
+        new()
+        {
+            Id = Guid.NewGuid().ToString("N")[..8],
+            Width = width,
+            Align = ReportHorizontalAlignment.Left
+        };
+
+
+    private void RemoveHeaderColumn(
+        ReportHeaderColumnConfiguration column)
+    {
+        if (_header.Columns.Count <= 1)
+            return;
+
+        // Igual que al borrar una línea, los resources no se eliminan aquí:
+        // podrían existir traducciones en culturas que no están cargadas.
+        _header.Columns.Remove(column);
+        DistributeHeaderColumnWidths();
+    }
+
+
+    private void DistributeHeaderColumnWidths()
+    {
+        if (_header.Columns.Count == 0)
+            return;
+
+        var width = 100 / _header.Columns.Count;
+        var remainder = 100 - (width * _header.Columns.Count);
+
+        for (var i = 0; i < _header.Columns.Count; i++)
+        {
+            _header.Columns[i].Width =
+                width + (i == _header.Columns.Count - 1 ? remainder : 0);
+        }
+    }
+
+
+    private void HeaderColumnAlignmentChanged(
+        ReportHeaderColumnConfiguration column,
+        ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ReportHorizontalAlignment>(
+                e.Value?.ToString(),
+                out var alignment))
+        {
+            column.Align = alignment;
+        }
+    }
+
+
+    private static void HeaderColumnWidthChanged(
+        ReportHeaderColumnConfiguration column,
+        ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var width))
+            return;
+
+        column.Width = Math.Clamp(width, 10, 100);
+    }
+
+
+    private void AddPresetLine(
+        ReportHeaderColumnConfiguration column,
+        HeaderLinePreset preset)
+    {
+        var token = SuggestVariableToken(preset.Hints);
+
+        AddHeaderLine(
+            column,
+            preset.Prefix + (token ?? string.Empty),
+            preset.Style);
+    }
+
+
+    private void AddHeaderLine(
+        ReportHeaderColumnConfiguration column,
+        string? text = null,
+        ReportHeaderLineStyle style = ReportHeaderLineStyle.Normal)
+    {
+        var line =
+            new ReportHeaderLineConfiguration
+            {
+                Id = Guid.NewGuid().ToString("N")[..8],
+                Style = style,
+                Order = column.Lines.Count == 0
+                    ? 10
+                    : column.Lines.Max(x => x.Order) + 10
+            };
+
+        line.TextKey =
+            ReportTextKeys.HeaderLine(line.Id);
+
+        column.Lines.Add(line);
+
+        if (!string.IsNullOrWhiteSpace(text))
+            _texts.SetText(line.TextKey, text);
+    }
+
+
+    private static bool CanMoveHeaderLine(
+        ReportHeaderColumnConfiguration column,
+        ReportHeaderLineConfiguration line,
+        int direction)
+    {
+        var ordered =
+            column.Lines
+                .OrderBy(x => x.Order)
+                .ToList();
+
+        var index = ordered.IndexOf(line);
+        var target = index + direction;
+
+        return index >= 0 &&
+               target >= 0 &&
+               target < ordered.Count;
+    }
+
+
+    private static void MoveHeaderLine(
+        ReportHeaderColumnConfiguration column,
+        ReportHeaderLineConfiguration line,
+        int direction)
+    {
+        var ordered =
+            column.Lines
+                .OrderBy(x => x.Order)
+                .ToList();
+
+        var index = ordered.IndexOf(line);
+        var target = index + direction;
+
+        if (index < 0 ||
+            target < 0 ||
+            target >= ordered.Count)
+        {
+            return;
+        }
+
+        (ordered[index], ordered[target]) =
+            (ordered[target], ordered[index]);
+
+        column.Lines = ordered;
+
+        for (var i = 0; i < column.Lines.Count; i++)
+            column.Lines[i].Order = (i + 1) * 10;
+    }
+
+
+    private static void RemoveHeaderLine(
+        ReportHeaderColumnConfiguration column,
+        ReportHeaderLineConfiguration line)
+    {
+        column.Lines = column.Lines
+            .Where(x => !ReferenceEquals(x, line))
+            .OrderBy(x => x.Order)
+            .ToList();
+
+        for (var i = 0; i < column.Lines.Count; i++)
+            column.Lines[i].Order = (i + 1) * 10;
+    }
+
+
     private string HeaderLineText(
         ReportHeaderLineConfiguration line) =>
         BlockText(line.TextKey);
@@ -1338,6 +1699,21 @@
         }
     }
 
+    private string TextAlignmentValue =>
+        (_text.Alignment ?? ReportHorizontalAlignment.Left).ToString();
+
+
+    private void TextAlignmentChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ReportHorizontalAlignment>(
+                e.Value?.ToString(),
+                out var alignment))
+        {
+            _text.Alignment = alignment;
+        }
+    }
+
+
     private Task InsertTextTitleVariableAsync(ReportVariable variable)
     {
         var value = AppendVariable(TextBlockTitleValue, variable.Key);
@@ -1391,6 +1767,12 @@
 
             foreach (var line in _header.Lines)
                 line.TextKey ??= ReportTextKeys.HeaderLine(line.Id);
+
+            foreach (var column in _header.Columns)
+            {
+                foreach (var line in column.Lines)
+                    line.TextKey ??= ReportTextKeys.HeaderLine(line.Id);
+            }
 
             return;
         }

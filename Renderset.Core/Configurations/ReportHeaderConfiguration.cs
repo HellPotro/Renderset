@@ -38,4 +38,10 @@ public sealed class ReportHeaderConfiguration
     /// define ninguna, se quedan las del bloque.
     /// </summary>
     public List<ReportHeaderLineConfiguration> Lines { get; set; } = [];
+
+    /// <summary>
+    /// Diseño avanzado de la cabecera. Mientras esté vacío se conserva el
+    /// render histórico de Title / Subtitle / Lines exactamente igual.
+    /// </summary>
+    public List<ReportHeaderColumnConfiguration> Columns { get; set; } = [];
 }

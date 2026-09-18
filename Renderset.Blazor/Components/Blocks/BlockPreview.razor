@@ -204,6 +204,25 @@
                     Style = line.Style
                 })
                 .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+                .ToList(),
+
+            Columns = Header.Columns
+                .Select(column => new ResolvedReportHeaderColumn
+                {
+                    Id = column.Id,
+                    Align = column.Align,
+                    Width = Math.Clamp(column.Width, 1, 100),
+                    Lines = column.Lines
+                        .OrderBy(x => x.Order)
+                        .Select(line => new ResolvedReportHeaderLine
+                        {
+                            Text = Resolve(line.TextKey) ?? string.Empty,
+                            Style = line.Style
+                        })
+                        .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+                        .ToList()
+                })
+                .Where(x => x.Lines.Count > 0)
                 .ToList()
         };
     }
@@ -237,7 +256,8 @@
                 {
                     Title = Resolve(Text.TitleKey),
                     Text = Resolve(Text.TextKey) ?? string.Empty,
-                    Style = Text.Style
+                    Style = Text.Style,
+                    Alignment = Text.Alignment
                 }
         };
     }

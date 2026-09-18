@@ -1,3 +1,5 @@
+using Renderset.Core.Definitions;
+
 namespace Renderset.Core.Configurations;
 
 public sealed class ReportTextBlockConfiguration
@@ -20,6 +22,12 @@ public sealed class ReportTextBlockConfiguration
     public string Text { get; set; } = string.Empty;
 
     public ReportTextBlockStyle Style { get; set; } = ReportTextBlockStyle.Default;
+
+    /// <summary>
+    /// Nullable para que los bloques guardados antes de existir esta opción
+    /// sigan serializándose y pintándose como hasta ahora.
+    /// </summary>
+    public ReportHorizontalAlignment? Alignment { get; set; }
 }
 
 public enum ReportTextBlockStyle
