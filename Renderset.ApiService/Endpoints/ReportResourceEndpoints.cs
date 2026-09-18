@@ -168,6 +168,13 @@ public static class ReportResourceEndpoints
                 request.Scope,
                 cancellationToken);
 
+        var onlyKeys =
+            request.Keys is { Count: > 0 }
+                ? new HashSet<string>(
+                    request.Keys,
+                    StringComparer.OrdinalIgnoreCase)
+                : null;
+
         var sourceResources =
             resources
                 .Where(x =>
@@ -175,7 +182,8 @@ public static class ReportResourceEndpoints
                         x.Culture,
                         request.SourceCulture,
                         StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrWhiteSpace(x.Value))
+                    !string.IsNullOrWhiteSpace(x.Value) &&
+                    (onlyKeys is null || onlyKeys.Contains(x.Key)))
                 .OrderBy(x => x.Key)
                 .ToList();
 

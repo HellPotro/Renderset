@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Renderset.Core.Localization;
 using Renderset.Core.Resources;
+using Renderset.Core.Variables;
 using Renderset.Infrastructure.Persistence;
 using Renderset.Infrastructure.Persistence.Entities;
 
@@ -70,11 +71,39 @@ public sealed class EfReportResourceRepository
             await _contextFactory.CreateDbContextAsync(
                 cancellationToken);
 
-        return await context.ReportResources
-            .AsNoTracking()
-            .Where(x =>
-                x.TenantId == tenantId &&
-                x.Active)
+        // El agrupado se hace en memoria y no en SQL porque hay que descartar
+        // las claves cuyo texto es sólo un marcador de variable, y eso no se
+        // puede expresar en una consulta. Se traen únicamente las cuatro
+        // columnas que intervienen: son los recursos de un tenant, no una
+        // tabla de movimientos.
+        var rows =
+            await context.ReportResources
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.Active)
+                .Select(x => new
+                {
+                    x.Scope,
+                    x.ResourceKey,
+                    x.Culture,
+                    x.Value,
+                    x.Source
+                })
+                .ToListAsync(cancellationToken);
+
+        // Una clave que en algún idioma es sólo un marcador no tiene nada que
+        // traducir en ninguno: el texto viene de la variable. Contarla como
+        // pendiente dejaría una cobertura que nunca puede llegar al 100% por
+        // mucho que se traduzca.
+        var excluded =
+            rows
+                .Where(x => ReportVariableTemplate.IsOnlyTokens(x.Value))
+                .Select(x => (x.Scope, x.ResourceKey))
+                .ToHashSet();
+
+        return rows
+            .Where(x => !excluded.Contains((x.Scope, x.ResourceKey)))
             .GroupBy(x => new
             {
                 x.Scope,
@@ -85,10 +114,10 @@ public sealed class EfReportResourceRepository
                 Scope = g.Key.Scope,
                 Culture = g.Key.Culture,
                 TotalKeys = g.Count(),
-                TranslatedKeys = g.Count(x => x.Value != null && x.Value != ""),
+                TranslatedKeys = g.Count(x => !string.IsNullOrEmpty(x.Value)),
                 MachineKeys = g.Count(x => x.Source == ReportResourceSource.Machine)
             })
-            .ToListAsync(cancellationToken);
+            .ToList();
     }
 
     public async Task SaveAsync(

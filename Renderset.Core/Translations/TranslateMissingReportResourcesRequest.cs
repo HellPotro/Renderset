@@ -17,4 +17,14 @@ public sealed class TranslateMissingReportResourcesRequest
     /// Por seguridad, false por defecto. Si se activa, pisa traducciones existentes.
     /// </summary>
     public bool OverwriteExistingValues { get; set; }
+
+    /// <summary>
+    /// Limita la traducción a estas claves. Vacío o nulo traduce el ámbito
+    /// entero, que es como se comportaba antes de existir este filtro.
+    ///
+    /// Sirve para traducir una fila suelta sin arrastrar el diccionario
+    /// completo, que es lo que haría falta para eso si sólo se pudiera
+    /// filtrar por ámbito.
+    /// </summary>
+    public List<string>? Keys { get; set; }
 }

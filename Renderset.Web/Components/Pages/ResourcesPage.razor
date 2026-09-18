@@ -4,6 +4,7 @@
 @using Renderset.Core.Reports
 @using Renderset.Core.Resources
 @using Renderset.Core.Translations
+@using Renderset.Core.Variables
 
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
@@ -117,6 +118,15 @@
                    placeholder="Filtrar por clave o por texto" />
         </div>
 
+        <button type="button"
+                class="secondary-button"
+                disabled="@(_isBusy || BaseCulture is null)"
+                title="Traduce, desde el idioma base, todas las claves que falten en cualquier idioma"
+                @onclick="TranslateEverythingAsync">
+            <i class="fa-solid fa-language"></i>
+            Rellenar todos los huecos
+        </button>
+
         <label class="dict-toggle">
             <input type="checkbox"
                    checked="@_onlyPending"
@@ -138,6 +148,8 @@
             @foreach (var culture in _cultures)
             {
                 var visible = IsVisible(culture);
+
+                <div class="dict-chip-wrap" @key="culture.Culture">
 
                 <button type="button"
                         class="@ChipClass(culture, visible)"
@@ -175,6 +187,52 @@
                     </span>
 
                 </button>
+
+                @if (!culture.IsDefault)
+                {
+                    <button type="button"
+                            class="dict-lang-menu-toggle"
+                            title="Rellenar huecos de @culture.DisplayName"
+                            @onclick="() => ToggleLanguageMenu(culture.Culture)">
+                        <i class="fa-solid fa-ellipsis"></i>
+                    </button>
+
+                    @if (_openMenu == culture.Culture)
+                    {
+                        <div class="dict-lang-panel">
+
+                            <span class="dict-lang-panel-title">
+                                Rellenar huecos desde
+                            </span>
+
+                            @foreach (var source in _cultures.Where(x => x.Culture != culture.Culture))
+                            {
+                                <div class="dict-lang-panel-row">
+
+                                    <span>@source.DisplayName</span>
+
+                                    <button type="button"
+                                            title="Copiar el texto original tal cual"
+                                            disabled="@_isBusy"
+                                            @onclick="() => CopyMissingAsync(source.Culture, culture.Culture)">
+                                        <i class="fa-regular fa-copy"></i>
+                                    </button>
+
+                                    <button type="button"
+                                            title="Traducir con Azure"
+                                            disabled="@_isBusy"
+                                            @onclick="() => TranslateMissingAsync(source.Culture, culture.Culture)">
+                                        <i class="fa-solid fa-language"></i>
+                                    </button>
+
+                                </div>
+                            }
+
+                        </div>
+                    }
+                }
+
+                </div>
             }
 
         </div>
@@ -228,47 +286,6 @@
                                         <code>@culture.Culture</code>
                                     </div>
 
-                                    @if (!culture.IsDefault)
-                                    {
-                                        <details class="dict-lang-menu">
-
-                                            <summary title="Rellenar huecos">
-                                                <i class="fa-solid fa-ellipsis"></i>
-                                            </summary>
-
-                                            <div class="dict-lang-panel">
-
-                                                <span class="dict-lang-panel-title">
-                                                    Rellenar huecos desde
-                                                </span>
-
-                                                @foreach (var source in _cultures.Where(x => x.Culture != culture.Culture))
-                                                {
-                                                    <div class="dict-lang-panel-row">
-
-                                                        <span>@source.DisplayName</span>
-
-                                                        <button type="button"
-                                                                title="Copiar el texto original tal cual"
-                                                                disabled="@_isBusy"
-                                                                @onclick="() => CopyMissingAsync(source.Culture, culture.Culture)">
-                                                            <i class="fa-regular fa-copy"></i>
-                                                        </button>
-
-                                                        <button type="button"
-                                                                title="Traducir con Azure"
-                                                                disabled="@_isBusy"
-                                                                @onclick="() => TranslateMissingAsync(source.Culture, culture.Culture)">
-                                                            <i class="fa-solid fa-language"></i>
-                                                        </button>
-
-                                                    </div>
-                                                }
-
-                                            </div>
-
-                                        </details>
-                                    }
 
                                 </div>
 
@@ -333,11 +350,31 @@
                                 }
 
                                 <td class="dict-col-actions">
+
+                                    @if (IsTokenOnly(row))
+                                    {
+                                        <span class="dict-token-only"
+                                              title="El texto es sólo una variable: no se traduce aquí ni cuenta para la cobertura.">
+                                            <i class="fa-solid fa-code"></i>
+                                        </span>
+                                    }
+
+                                    @if (MissingCulturesOf(row).Count > 0)
+                                    {
+                                        <button type="button"
+                                                title="Traducir esta clave a los @MissingCulturesOf(row).Count idiomas que faltan"
+                                                disabled="@_isBusy"
+                                                @onclick="() => TranslateKeyEverywhereAsync(row)">
+                                            <i class="fa-solid fa-language"></i>
+                                        </button>
+                                    }
+
                                     <button type="button"
                                             title="Eliminar la clave en todos los idiomas"
                                             @onclick="() => DeleteKeyAsync(row.Key)">
                                         <i class="fa-solid fa-trash"></i>
                                     </button>
+
                                 </td>
 
                             </tr>
@@ -423,6 +460,16 @@
     /// aquí es lo que permite ver y editar un idioma al lado del otro.
     /// </summary>
     private List<KeyRow> _matrix = [];
+
+    /// <summary>
+    /// Idioma cuyo menú de relleno está abierto, o nulo si no hay ninguno.
+    ///
+    /// Antes era un &lt;details&gt;, que abre y cierra el navegador por su
+    /// cuenta: al terminar de traducir no había forma fiable de cerrarlo
+    /// desde aquí, porque el estado real vivía en el DOM y no en el
+    /// componente.
+    /// </summary>
+    private string? _openMenu;
 
     /// <summary>
     /// Ediciones pendientes, indexadas por clave|cultura. Se guardan todas
@@ -791,20 +838,39 @@
     }
 
 
+    /// <summary>
+    /// Porcentaje traducido, descontando las claves que no tienen nada que
+    /// traducir.
+    ///
+    /// Sin ese descuento, una clave cuyo texto es sólo una variable deja un
+    /// hueco permanente: no se manda al traductor, así que el porcentaje no
+    /// podría llegar al 100% por mucho que se trabajase.
+    /// </summary>
     private int Coverage(
         string culture)
     {
-        if (_matrix.Count == 0)
+        var countable =
+            _matrix
+                .Where(row => !IsTokenOnly(row))
+                .ToList();
+
+        if (countable.Count == 0)
             return 0;
 
         var translated =
-            _matrix.Count(row =>
+            countable.Count(row =>
                 !string.IsNullOrWhiteSpace(
                     CellValue(row.Key, culture)));
 
         return (int)Math.Round(
-            translated * 100d / _matrix.Count);
+            translated * 100d / countable.Count);
     }
+
+
+    private bool IsTokenOnly(
+        KeyRow row) =>
+        row.Values.Values.Any(x =>
+            ReportVariableTemplate.IsOnlyTokens(x.Value));
 
 
     // -------------------------------------------------------------- guardado
@@ -954,6 +1020,160 @@
     }
 
 
+    private TenantCulture? BaseCulture =>
+        _cultures.FirstOrDefault(x => x.IsDefault)
+        ?? _cultures.FirstOrDefault();
+
+
+    /// <summary>
+    /// Idiomas en los que esta clave no tiene texto todavía.
+    ///
+    /// Una clave que es sólo un marcador no cuenta: su texto sale de la
+    /// variable, así que traducirla no arreglaría nada y el botón prometería
+    /// algo que no puede cumplir.
+    /// </summary>
+    private List<string> MissingCulturesOf(
+        KeyRow row)
+    {
+        var baseCulture = BaseCulture;
+
+        if (baseCulture is null)
+            return [];
+
+        var source = CellValue(row.Key, baseCulture.Culture);
+
+        if (string.IsNullOrWhiteSpace(source) ||
+            ReportVariableTemplate.IsOnlyTokens(source))
+        {
+            return [];
+        }
+
+        return _cultures
+            .Where(x =>
+                !x.IsDefault &&
+                string.IsNullOrWhiteSpace(
+                    CellValue(row.Key, x.Culture)))
+            .Select(x => x.Culture)
+            .ToList();
+    }
+
+
+    /// <summary>
+    /// Traduce una sola clave a todos los idiomas donde falte.
+    ///
+    /// Va idioma por idioma porque el endpoint traduce a un destino cada
+    /// vez. Son cuatro o cinco llamadas y se resume en un aviso al final:
+    /// meter una lista de destinos en la API haría que el endpoint hiciera
+    /// dos cosas a cambio de ahorrar unos milisegundos.
+    /// </summary>
+    private async Task TranslateKeyEverywhereAsync(
+        KeyRow row)
+    {
+        await TranslateGapsAsync(
+            MissingCulturesOf(row),
+            [row.Key],
+            $"'{row.Key}'");
+    }
+
+
+    private async Task TranslateEverythingAsync()
+    {
+        var targets =
+            _cultures
+                .Where(x => !x.IsDefault)
+                .Select(x => x.Culture)
+                .ToList();
+
+        await TranslateGapsAsync(
+            targets,
+            keys: null,
+            what: "el diccionario");
+    }
+
+
+    private async Task TranslateGapsAsync(
+        IReadOnlyCollection<string> targets,
+        IReadOnlyCollection<string>? keys,
+        string what)
+    {
+        var baseCulture = BaseCulture;
+
+        if (baseCulture is null || targets.Count == 0)
+            return;
+
+        if (!await ConfirmDiscardAsync())
+            return;
+
+        _isBusy = true;
+
+        try
+        {
+            var translated = 0;
+            var failed = 0;
+
+            foreach (var target in targets)
+            {
+                var result =
+                    await Toasts.RunApiAsync(
+                        () => RenderSetApi.TranslateMissingResourcesAsync(
+                            CurrentTenant.Id,
+                            new TranslateMissingReportResourcesRequest
+                            {
+                                Scope = _scope,
+                                SourceCulture = baseCulture.Culture,
+                                TargetCulture = target,
+                                IncludeEmptyValues = true,
+                                OverwriteExistingValues = false,
+                                Keys = keys?.ToList()
+                            }),
+                        errorTitle: $"No se ha podido traducir a {target}");
+
+                // Un idioma que falla no debe abortar los demás: lo normal es
+                // que sea un problema de ese par de idiomas, no del lote.
+                if (result is null)
+                {
+                    failed++;
+                    continue;
+                }
+
+                translated += result.Translated;
+                failed += result.Failed;
+            }
+
+            Toasts.Success(
+                $"Traducidas {translated} claves de {what} desde " +
+                $"{baseCulture.DisplayName}. Revisa las marcadas como " +
+                "automáticas.");
+
+            if (failed > 0)
+                Toasts.Warning($"{failed} traducciones no se han podido aplicar.");
+
+            await LoadScopeAsync();
+        }
+        catch (Exception exception)
+        {
+            Toasts.Error(ToastServiceExtensions.Describe(exception));
+        }
+        finally
+        {
+            _isBusy = false;
+            _openMenu = null;
+        }
+    }
+
+
+    private void ToggleLanguageMenu(
+        string culture)
+    {
+        // Sólo uno abierto a la vez: son menús de la misma fila de cabecera
+        // y solapados no se leen.
+        _openMenu =
+            _openMenu == culture
+                ? null
+                : culture;
+    }
+
+
     private async Task CopyMissingAsync(
         string sourceCulture,
         string targetCulture)
@@ -994,6 +1214,7 @@
         finally
         {
             _isBusy = false;
+            _openMenu = null;
         }
     }
 
@@ -1042,6 +1263,7 @@
         finally
         {
             _isBusy = false;
+            _openMenu = null;
         }
     }
 

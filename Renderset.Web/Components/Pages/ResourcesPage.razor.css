@@ -358,35 +358,41 @@ thead .dict-col-key {
 
 /* ------------------------------------------------ menu de relleno por idioma */
 
-.dict-lang-menu summary {
+.dict-lang-menu-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 24px;
     height: 24px;
+    border: 0;
     border-radius: 6px;
+    background: transparent;
     color: #7c8b93;
-    font-size: 12px;
     cursor: pointer;
-    list-style: none;
+    font-size: 12px;
 }
 
-    .dict-lang-menu summary::-webkit-details-marker {
-        display: none;
-    }
-
-    .dict-lang-menu summary:hover {
+    .dict-lang-menu-toggle:hover {
         background: #e4ecee;
         color: #23333c;
     }
 
-.dict-lang-menu {
+/* El panel vive junto al chip y NO dentro de la tabla. La tabla necesita
+   overflow-x para el scroll horizontal, y CSS no permite recortar en un eje
+   y desbordar en el otro: en cuanto un eje es auto, el otro también recorta.
+   Dentro de la tabla el panel se cortaba por abajo en cuanto había pocas
+   filas. */
+
+.dict-chip-wrap {
     position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
 }
 
 .dict-lang-panel {
     position: absolute;
-    top: 28px;
+    top: calc(100% + 6px);
     right: 0;
     z-index: 20;
     min-width: 230px;
@@ -597,4 +603,15 @@ thead .dict-col-key {
         right: 16px;
         left: 16px;
     }
+}
+
+
+.dict-token-only {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: #b6a06a;
+    font-size: 10px;
 }
