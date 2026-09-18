@@ -75,7 +75,7 @@
                     @foreach (var culture in _cultures)
                     {
                         <option value="@culture.Culture">
-                            @culture.DisplayName (@culture.Culture)
+                            @CultureFlag.For(culture.Culture) @culture.DisplayName (@culture.Culture)
                         </option>
                     }
 
@@ -582,6 +582,8 @@
                                       
                             <VariablePicker Variables="_variables"
                                             Selected="InsertFooterTextVariableAsync" />
+
+                            <VariableOnlyHint Text="@BlockText(ReportTextKeys.BlockText(_id))" />
                         </div>
 
                         <label class="toggle-row">
@@ -656,6 +658,8 @@
                             <small>
                                 Puedes insertar variables del tenant dentro del texto.
                             </small>
+
+                            <VariableOnlyHint Text="@TextBlockTextValue" />
                         </div>
 
                         <div class="form-group">
@@ -900,7 +904,8 @@
         return new ReportTextWorkspace(
             ReportResourceScope.Global,
             culture,
-            resources);
+            resources,
+            variables: _variables);
     }
 
 

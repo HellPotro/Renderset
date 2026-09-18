@@ -175,27 +175,42 @@ public sealed partial class AzureTranslationService : ITranslationService
             placeholders);
     }
 
+    /// <summary>
+    /// Devuelve los marcadores a su sitio.
+    ///
+    /// No se busca el texto exacto del marcador: el traductor lo trata como
+    /// una palabra desconocida y a veces le mete espacios o le cambia los
+    /// corchetes de sitio. Se localiza por su número, que es lo único que
+    /// siempre sobrevive, y así una restauración no falla en silencio
+    /// dejando "[[[RS_PLACEHOLDER_0]]]" guardado en el diccionario.
+    /// </summary>
     private static string RestorePlaceholders(
         string text,
         IReadOnlyDictionary<string, string> placeholders)
     {
-        var result =
-            text;
+        if (placeholders.Count == 0)
+            return text;
 
-        foreach (var placeholder in placeholders)
-        {
-            result =
-                result.Replace(
-                    placeholder.Key,
-                    placeholder.Value,
-                    StringComparison.OrdinalIgnoreCase);
-        }
+        return RestoreRegex().Replace(
+            text,
+            match =>
+            {
+                var token =
+                    $"[[[RS_PLACEHOLDER_{match.Groups["index"].Value}]]]";
 
-        return result;
+                return placeholders.TryGetValue(token, out var original)
+                    ? original
+                    : match.Value;
+            });
     }
 
     [GeneratedRegex(@"\{\{\s*[^{}]+?\s*\}\}|\{\d+\}", RegexOptions.Compiled)]
     private static partial Regex PlaceholderRegex();
+
+    [GeneratedRegex(
+        @"\[{2,4}\s*RS[\s_]*PLACEHOLDER[\s_]*(?<index>\d+)\s*\]{2,4}",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex RestoreRegex();
 
     private sealed record ProtectedTranslationItem(
         TranslationItem Item,

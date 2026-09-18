@@ -29,6 +29,7 @@ public static class ReportBlockEndpoints
             async (
                 string tenantId,
                 string blockId,
+                string? culture,
                 IReportBlockRepository blockRepository,
                 IReportVariableResolver variableResolver,
                 CancellationToken cancellationToken) =>
@@ -46,6 +47,7 @@ public static class ReportBlockEndpoints
                     await variableResolver.ResolveAsync(
                         tenantId,
                         block.ConfigurationJson,
+                        culture,
                         cancellationToken);
 
                 var resolved =

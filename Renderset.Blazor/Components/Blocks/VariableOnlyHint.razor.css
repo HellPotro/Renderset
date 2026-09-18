@@ -1,0 +1,17 @@
+.variable-only-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin-top: 6px;
+    padding: 7px 9px;
+    border: 1px solid #ead9b6;
+    border-radius: 6px;
+    background: #fdfaf2;
+    color: #8a6d2e;
+    font-size: 10.5px;
+    line-height: 1.45;
+}
+
+    .variable-only-hint i {
+        margin-top: 2px;
+    }

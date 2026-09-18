@@ -1,0 +1,67 @@
+﻿.culture-flag-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 3px;
+    background: #f5f7f8;
+    box-shadow: 0 0 0 1px rgba(25, 45, 55, .10);
+}
+
+    .culture-flag-icon img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+    }
+
+    /* tamaños */
+
+    .culture-flag-icon.is-small {
+        width: 16px;
+        height: 12px;
+    }
+
+    .culture-flag-icon.is-medium {
+        width: 18px;
+        height: 13px;
+    }
+
+    .culture-flag-icon.is-large {
+        width: 24px;
+        height: 18px;
+    }
+
+
+/* fallback para culturas sin región */
+
+.culture-flag-code {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 3px;
+    background: #eef3f5;
+    color: #60737d;
+    font-weight: 800;
+    letter-spacing: .04em;
+}
+
+    .culture-flag-code.is-small {
+        min-width: 12px;
+        height: 8px;
+        font-size: 5px;
+    }
+
+    .culture-flag-code.is-medium {
+        min-width: 18px;
+        height: 13px;
+        font-size: 8px;
+    }
+
+    .culture-flag-code.is-large {
+        min-width: 24px;
+        height: 18px;
+        font-size: 9px;
+    }

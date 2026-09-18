@@ -1,6 +1,7 @@
 using Renderset.Core.Localization;
 using Renderset.Core.Resources;
 using Renderset.Core.Translations;
+using Renderset.Core.Variables;
 
 namespace Renderset.Api.Endpoints;
 
@@ -217,6 +218,16 @@ public static class ReportResourceEndpoints
                 }
             }
 
+            // Un valor que es sólo marcadores no tiene lenguaje dentro. Se
+            // queda como está: traducirlo no puede mejorarlo y sí romperlo,
+            // y si el texto tiene que cambiar de idioma es la variable la
+            // que debe ser traducible, no esta fila.
+            if (ReportVariableTemplate.IsOnlyTokens(source.Value))
+            {
+                skipped++;
+                continue;
+            }
+
             itemsToTranslate.Add(
                 new TranslationItem
                 {
@@ -259,6 +270,12 @@ public static class ReportResourceEndpoints
 
         var resourcesToSave =
             translated
+                // Si la traducción no trae los mismos marcadores que el
+                // original, el proveedor se los ha comido o los ha
+                // traducido. Guardarla dejaría un texto que se ve bien en
+                // el diccionario y sale con llaves en el PDF, que es la
+                // forma más cara de descubrir el problema.
+                .Where(KeepsItsTokens)
                 .Select(result =>
                 {
                     sourceByKey.TryGetValue(
@@ -293,6 +310,22 @@ public static class ReportResourceEndpoints
                 Skipped = skipped,
                 Failed = itemsToTranslate.Count - resourcesToSave.Count
             });
+    }
+
+    private static bool KeepsItsTokens(
+        TranslationResult result)
+    {
+        var expected =
+            ReportVariableTemplate.ExtractTokens(result.SourceText);
+
+        if (expected.Count == 0)
+            return true;
+
+        var actual =
+            ReportVariableTemplate.ExtractTokens(result.TranslatedText);
+
+        return expected.Count == actual.Count &&
+               expected.All(actual.Contains);
     }
 
     private static async Task<IResult> DeleteAsync(

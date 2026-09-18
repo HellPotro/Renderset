@@ -1,0 +1,29 @@
+@using Renderset.Core.Variables
+
+@* Aviso cuando un campo de texto traducible no contiene más que una
+   variable.
+
+   No es un error: funciona y se resuelve bien. Pero deja el mismo texto
+   traducible en dos sitios, la fila del diccionario y la propia variable, y
+   quien traduzca no sabrá cuál tocar. Si sustituye el marcador por texto en
+   su idioma, además rompe el enlace sin enterarse. *@
+
+@if (ReportVariableTemplate.IsOnlyTokens(Text))
+{
+    <small class="variable-only-hint">
+
+        <i class="fa-solid fa-circle-info"></i>
+
+        Este texto es sólo una variable. Se guardará una entrada de
+        diccionario que no tiene nada que traducir: marca la variable como
+        traducible en su ficha, o escribe aquí la frase completa con la
+        variable dentro.
+
+    </small>
+}
+
+@code {
+
+    [Parameter]
+    public string? Text { get; set; }
+}

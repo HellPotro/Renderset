@@ -33,7 +33,8 @@ public sealed class EfReportVariableRepository
                 Key = x.VariableKey,
                 Value = x.Value,
                 Description = x.Description,
-                Type = x.Type
+                Type = x.Type,
+                Translatable = x.Translatable
             })
             .ToListAsync(cancellationToken);
     }
@@ -64,7 +65,8 @@ public sealed class EfReportVariableRepository
                 Key = entity.VariableKey,
                 Value = entity.Value,
                 Description = entity.Description,
-                Type = entity.Type
+                Type = entity.Type,
+                Translatable = entity.Translatable
             };
     }
 
@@ -94,6 +96,7 @@ public sealed class EfReportVariableRepository
                 Value = variable.Value,
                 Description = variable.Description,
                 Type = variable.Type,
+                Translatable = variable.Translatable,
                 Active = true,
                 CreatedAtUtc = DateTime.UtcNow
             };
@@ -105,6 +108,7 @@ public sealed class EfReportVariableRepository
             entity.Value = variable.Value;
             entity.Description = variable.Description;
             entity.Type = variable.Type;
+            entity.Translatable = variable.Translatable;
             entity.Active = true;
             entity.UpdatedAtUtc = DateTime.UtcNow;
         }

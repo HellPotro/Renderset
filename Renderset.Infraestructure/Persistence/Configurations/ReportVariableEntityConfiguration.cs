@@ -34,6 +34,11 @@ public sealed class ReportVariableEntityConfiguration
         builder.Property(x => x.Active)
             .HasDefaultValue(true);
 
+        // Por defecto no traducible: una variable existente no debe empezar
+        // a buscarse en el diccionario sólo porque se añada la columna.
+        builder.Property(x => x.Translatable)
+            .HasDefaultValue(false);
+
         builder.Property(x => x.CreatedAtUtc)
             .HasDefaultValueSql("SYSUTCDATETIME()");
 

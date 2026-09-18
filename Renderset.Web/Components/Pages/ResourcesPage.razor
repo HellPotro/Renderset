@@ -159,6 +159,7 @@
                     <span class="dict-chip-body">
 
                         <span class="dict-chip-name">
+                            <span aria-hidden="true">@CultureFlag.For(culture.Culture)</span>
                             @culture.DisplayName
                             <code>@culture.Culture</code>
                         </span>
@@ -219,7 +220,11 @@
                                 <div class="dict-lang-head">
 
                                     <div class="dict-lang-name">
-                                        <strong>@culture.DisplayName</strong>
+                                        <strong>
+                                            <CultureFlagIcon Culture="@culture.Culture"
+                                                Size="CultureFlagIcon.CultureFlagSize.Small" />
+                                            @culture.DisplayName
+                                        </strong>
                                         <code>@culture.Culture</code>
                                     </div>
 
@@ -778,6 +783,9 @@
 
         if (key.StartsWith("block.", StringComparison.OrdinalIgnoreCase))
             return "Bloques";
+
+        if (key.StartsWith("variable.", StringComparison.OrdinalIgnoreCase))
+            return "Variables";
 
         return "Otras";
     }

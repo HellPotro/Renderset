@@ -26,7 +26,7 @@ public sealed class ReportRenderService
     private readonly IReportPresetRepository _presets;
     private readonly IReportPresetProvider _presetProvider;
     private readonly IReportBlockRepository _blocks;
-    private readonly IReportVariableRepository _variables;
+    private readonly IReportVariableValues _variableValues;
     private readonly IReportTextCatalogFactory _catalogFactory;
     private readonly IReportConfigurationComposer _composer;
     private readonly IReportDocumentRenderer _documentRenderer;
@@ -42,7 +42,7 @@ public sealed class ReportRenderService
         IReportPresetRepository presets,
         IReportPresetProvider presetProvider,
         IReportBlockRepository blocks,
-        IReportVariableRepository variables,
+        IReportVariableValues variableValues,
         IReportTextCatalogFactory catalogFactory,
         IReportConfigurationComposer composer,
         IReportDocumentRenderer documentRenderer,
@@ -52,7 +52,7 @@ public sealed class ReportRenderService
         _presets = presets;
         _presetProvider = presetProvider;
         _blocks = blocks;
-        _variables = variables;
+        _variableValues = variableValues;
         _catalogFactory = catalogFactory;
         _composer = composer;
         _documentRenderer = documentRenderer;
@@ -121,13 +121,14 @@ public sealed class ReportRenderService
                 actual: preset.Configuration.ReportId);
         }
 
-        var variables =
-            await _variables.GetAllAsync(
-                tenantId,
-                cancellationToken);
-
+        // Los valores llegan ya resueltos para el idioma del documento: una
+        // variable marcada como traducible sale del diccionario común y no
+        // de su valor literal.
         var variableValues =
-            ReportVariableTemplate.ToDictionary(variables);
+            await _variableValues.GetAsync(
+                tenantId,
+                request.Context.Culture,
+                cancellationToken);
 
         var catalog =
             await BuildCatalogAsync(

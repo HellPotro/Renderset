@@ -29,8 +29,13 @@ public sealed class ReportTextWorkspace
         Scope = scope;
         Culture = culture;
 
+        // Se materializa porque hay que recorrerla dos veces: para el
+        // diccionario base y, más abajo, para traducir las que lo pidan.
+        var declared =
+            variables?.ToList() ?? [];
+
         _variables =
-            ReportVariableTemplate.ToDictionary(variables);
+            ReportVariableTemplate.ToDictionary(declared);
 
         _own = new Dictionary<string, string?>(
             StringComparer.OrdinalIgnoreCase);
@@ -56,7 +61,58 @@ public sealed class ReportTextWorkspace
 
             _own[resource.Key] = resource.Value;
         }
+
+        ApplyTranslatedVariables(declared);
     }
+
+
+    /// <summary>
+    /// Sustituye el valor literal de las variables traducibles por su texto
+    /// en la cultura de edición.
+    ///
+    /// Se hace aquí y no en la página para que el preview del diseñador y el
+    /// documento final digan lo mismo: el render resuelve las variables
+    /// contra el diccionario, y si el editor siguiera enseñando el literal,
+    /// cambiar de idioma no se notaría hasta generar el PDF.
+    ///
+    /// Va después de cargar los valores propios porque necesita consultarlos.
+    /// </summary>
+    private void ApplyTranslatedVariables(
+        IReadOnlyCollection<ReportVariable> variables)
+    {
+        foreach (var variable in variables)
+        {
+            if (!variable.Translatable ||
+                string.IsNullOrWhiteSpace(variable.Key))
+            {
+                continue;
+            }
+
+            var key = ReportTextKeys.Variable(variable.Key);
+
+            // Mismo orden que GetText: lo propio del ámbito manda sobre lo
+            // heredado, y si no hay ninguno se queda el valor literal.
+            if (_own.TryGetValue(key, out var own) &&
+                !string.IsNullOrWhiteSpace(own))
+            {
+                _variables[variable.Key] = own;
+                continue;
+            }
+
+            if (_inherited.TryGetValue(key, out var inherited) &&
+                !string.IsNullOrWhiteSpace(inherited))
+            {
+                _variables[variable.Key] = inherited;
+            }
+        }
+    }
+
+
+    /// <summary>
+    /// Valores de variables ya resueltos para esta cultura. Los usa el
+    /// preview para no recalcularlos por su cuenta y acabar discrepando.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> VariableValues => _variables;
 
     /// <summary>
     /// Área de trabajo sin persistencia, para usar el editor fuera de una

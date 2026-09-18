@@ -2200,12 +2200,32 @@
 
 .culture-name {
     display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+/* La bandera es un emoji, no un icono de fuente: se le da tamaño con
+   font-size y ancho fijo para que las filas no bailen cuando una cultura
+   neutra cae al código de idioma. */
+.culture-flag {
+    flex-shrink: 0;
+    width: 24px;
+    color: #55666d;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+}
+
+.culture-name-text {
+    display: flex;
     flex-direction: column;
     gap: 4px;
     min-width: 0;
 }
 
-    .culture-name code {
+    .culture-name-text code {
         overflow: hidden;
         color: #284955;
         font-size: 11px;
@@ -2214,7 +2234,7 @@
         white-space: nowrap;
     }
 
-    .culture-name small {
+    .culture-name-text small {
         overflow: hidden;
         color: #8c9a9f;
         font-size: 9px;
@@ -2243,6 +2263,26 @@
     font-weight: 700;
     text-transform: uppercase;
 }
+
+.variable-tags {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+/* La insignia de traducible es un enlace al diccionario: desde aquí lo que
+   quieres hacer a continuación es escribir la traducción. */
+.type-badge.is-translatable {
+    gap: 5px;
+    background: #eef3f6;
+    color: #00285a;
+    text-decoration: none;
+}
+
+    .type-badge.is-translatable:hover {
+        background: #e2ebf1;
+    }
 
 .culture-actions {
     display: flex;

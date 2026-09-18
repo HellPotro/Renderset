@@ -4,6 +4,7 @@
 @using System.Text.Json.Serialization
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
+@using Renderset.Blazor.Components.Localization
 @using Renderset.Blazor.Components.Rendering
 @using Renderset.Core.Blocks
 @using Renderset.Core.Composer
@@ -33,15 +34,15 @@
             {
                 <div class="report-editor-culture">
 
-                    <i class="fa-solid fa-language"></i>
+                    <i class="fa-solid fa-language"></i>                    
 
                     <select value="@Texts.Culture"
                             @onchange="CultureSelectedAsync">
 
                         @foreach (var culture in Cultures)
                         {
-                            <option value="@culture.Culture">
-                                @culture.DisplayName
+                            <option value="@culture.Culture">                                
+                                @CultureFlag.For(culture.Culture) @culture.DisplayName
                             </option>
                         }
 

@@ -14,6 +14,8 @@ public sealed class ReportVariableEntity
 
     public ReportVariableType Type { get; set; }
 
+    public bool Translatable { get; set; }
+
     public bool Active { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }

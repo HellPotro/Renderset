@@ -59,6 +59,56 @@ public static class ReportVariableTemplate
             });
     }
 
+    /// <summary>
+    /// Cierto cuando el texto no es más que marcadores y espacios, sin una
+    /// sola palabra propia.
+    ///
+    /// Un texto así no tiene nada que traducir: mandarlo a un traductor
+    /// automático es pagar una llamada para que adivine qué hacer con algo
+    /// que no es lenguaje, y la respuesta es impredecible.
+    /// </summary>
+    public static bool IsOnlyTokens(
+        string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        if (!HasTokens(text))
+            return false;
+
+        return string.IsNullOrWhiteSpace(
+            TokenRegex.Replace(text, string.Empty));
+    }
+
+
+    /// <summary>
+    /// Claves de los marcadores que aparecen en el texto, normalizadas.
+    ///
+    /// Sirve para comprobar que una traducción automática ha devuelto los
+    /// mismos marcadores que llevaba el original: si se han perdido o han
+    /// cambiado, el texto traducido está roto aunque lo parezca.
+    /// </summary>
+    public static IReadOnlyCollection<string> ExtractTokens(
+        string? text)
+    {
+        var keys = new HashSet<string>(
+            StringComparer.OrdinalIgnoreCase);
+
+        if (!HasTokens(text))
+            return keys;
+
+        foreach (Match match in TokenRegex.Matches(text!))
+        {
+            keys.Add(
+                match.Groups["key"]
+                    .Value
+                    .Trim());
+        }
+
+        return keys;
+    }
+
+
     public static Dictionary<string, string> ToDictionary(
         IEnumerable<ReportVariable>? variables)
     {

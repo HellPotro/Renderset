@@ -17,8 +17,7 @@
     sin depender de wwwroot.
   -->
 	<ItemGroup>
-		<EmbeddedResource Include="wwwroot\css\report-document.css"
-						  LogicalName="Renderset.Blazor.report-document.css" />
+		<EmbeddedResource Include="wwwroot\css\report-document.css" LogicalName="Renderset.Blazor.report-document.css" />
 	</ItemGroup>
 
 	<ItemGroup>

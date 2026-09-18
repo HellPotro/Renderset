@@ -108,8 +108,8 @@
      * pinta antes de que nadie haya mirado los textos y va siempre un
      * render por detrás.
      */
-    private Dictionary<string, string> _variableValues =
-        new(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyDictionary<string, string> _variableValues =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private ResolvedReportHeader? _resolvedHeader;
     private ResolvedReportFooter? _resolvedFooter;
     private ResolvedReportBlock _resolvedTextBlock = new()
@@ -160,8 +160,13 @@
     {
         _unresolved.Clear();
 
+        // El workspace ya los trae resueltos para su cultura. Se usa como
+        // reserva la lista cruda para los sitios que montan el preview sin
+        // área de trabajo, donde no hay idioma que aplicar.
         _variableValues =
-            ReportVariableTemplate.ToDictionary(Variables);
+            Texts.VariableValues.Count > 0
+                ? Texts.VariableValues
+                : ReportVariableTemplate.ToDictionary(Variables);
 
         _resolvedHeader = BuildHeader();
         _resolvedFooter = BuildFooter();

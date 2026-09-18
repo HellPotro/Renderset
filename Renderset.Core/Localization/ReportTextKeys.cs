@@ -51,6 +51,17 @@ public static class ReportTextKeys
     }
 
     /// <summary>
+    /// Clave del valor de una variable traducible. Vive en el ámbito global
+    /// del tenant, igual que la propia variable: no pertenece a ningún
+    /// report.
+    /// </summary>
+    public static string Variable(
+        string key)
+    {
+        return $"variable.{key}";
+    }
+
+    /// <summary>
     /// Clave de una línea de datos de cabecera. Cuelga del id de la línea y
     /// no del bloque: así el texto no se pierde mientras se crea el bloque,
     /// cuando todavía no hay identificador, y sobrevive a renombrados.

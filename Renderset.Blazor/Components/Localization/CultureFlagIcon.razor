@@ -1,0 +1,69 @@
+﻿@using Renderset.Core.Localization
+
+@if (!string.IsNullOrWhiteSpace(Region))
+{
+    <span class="@CssClass"
+          title="@Culture">
+
+        <img src="@FlagUrl"
+             alt="@Region.ToUpperInvariant()" />
+
+    </span>
+}
+else if (!string.IsNullOrWhiteSpace(LanguageCode))
+{
+    <span class="@CodeCssClass"
+          title="@Culture">
+        @LanguageCode
+    </span>
+}
+
+@code {
+
+    [Parameter]
+    public string? Culture { get; set; }
+
+    [Parameter]
+    public CultureFlagSize Size { get; set; } =
+        CultureFlagSize.Medium;
+
+    private string Region =>
+        CultureFlag
+            .RegionOf(Culture)
+            .ToLowerInvariant();
+
+    private string LanguageCode =>
+        string.IsNullOrWhiteSpace(Culture)
+            ? string.Empty
+            : Culture
+                .Split(
+                    ['-', '_'],
+                    StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault()?
+                .ToUpperInvariant()
+                ?? string.Empty;
+
+    private string FlagUrl =>
+        $"/flags/{Region}.svg";
+
+    private string SizeClass =>
+        Size switch
+        {
+            CultureFlagSize.Small => "is-small",
+            CultureFlagSize.Large => "is-large",
+            _ => "is-medium"
+        };
+
+    private string CssClass =>
+        $"culture-flag-icon {SizeClass}";
+
+    private string CodeCssClass =>
+        $"culture-flag-code {SizeClass}";
+
+    public enum CultureFlagSize
+    {
+        Small,
+        Medium,
+        Large
+    }
+}

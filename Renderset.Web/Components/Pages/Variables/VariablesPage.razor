@@ -92,6 +92,29 @@
                            placeholder="Nombre fiscal de la empresa" />
                 </div>
 
+
+                <div class="form-group editor-full">
+
+                    <label class="toggle-row">
+
+                        <input type="checkbox"
+                               checked="@_editing.Translatable"
+                               @onchange="TranslatableChanged" />
+
+                        <span>
+                            <strong>Cambia según el idioma</strong>
+
+                            <small>
+                                El valor se traduce en el diccionario común
+                                del tenant. Déjalo desmarcado para colores,
+                                URLs, números o nombres propios.
+                            </small>
+                        </span>
+
+                    </label>
+
+                </div>
+
             </div>
 
 
@@ -161,10 +184,22 @@
                     </div>
 
 
-                    <div>
+                    <div class="variable-tags">
+
                         <span class="type-badge">
                             @variable.Type
                         </span>
+
+                        @if (variable.Translatable)
+                        {
+                            <a class="type-badge is-translatable"
+                               href="/resources"
+                               title="Se traduce en el diccionario común">
+                                <i class="fa-solid fa-language"></i>
+                                traducible
+                            </a>
+                        }
+
                     </div>
 
 
@@ -260,7 +295,8 @@
                 Key = variable.Key,
                 Value = variable.Value,
                 Description = variable.Description,
-                Type = variable.Type
+                Type = variable.Type,
+                Translatable = variable.Translatable
             };
     }
 
@@ -290,6 +326,14 @@
             _editing.Value =
                 e.Value?.ToString();
         }
+    }
+
+
+    private void TranslatableChanged(
+        ChangeEventArgs e)
+    {
+        if (_editing is not null)
+            _editing.Translatable = e.Value is bool value && value;
     }
 
 

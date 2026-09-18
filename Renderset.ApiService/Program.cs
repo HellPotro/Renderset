@@ -38,6 +38,7 @@ builder.Services.AddScoped<IReportPresetAssignmentRepository, EfReportPresetAssi
 builder.Services.AddScoped<IReportPresetProvider, ReportPresetProvider>();
 builder.Services.AddScoped<IReportRepository, EfReportRepository>();
 builder.Services.AddScoped<IReportVariableRepository, EfReportVariableRepository>();
+builder.Services.AddScoped<IReportVariableValues, ReportVariableValues>();
 builder.Services.AddScoped<IReportVariableResolver, ReportVariableResolver>();
 builder.Services.AddScoped<IReportResourceRepository, EfReportResourceRepository>();
 builder.Services.AddScoped<ITenantCultureRepository, EfTenantCultureRepository>();
