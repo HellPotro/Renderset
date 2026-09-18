@@ -104,6 +104,8 @@ Content-Type: application/json
   },
   "output": {
     "format": "Html",
+    "includeToolbar": true,
+    "includeDocumentData": true,
     "fileName": "factura-060098.html"
   },
   "data": {

@@ -179,6 +179,8 @@ public sealed class ReportRenderService
                 data,
                 preset.Theme,
                 resolved.Name,
+                request.Output.IncludeToolbar,
+                request.Output.IncludeDocumentData,
                 cancellationToken);
 
         var document =

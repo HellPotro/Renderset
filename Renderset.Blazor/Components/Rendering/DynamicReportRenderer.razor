@@ -3,6 +3,10 @@
 @using Renderset.Core.Resolved
 @using Renderset.Core.Themes
 
+<CascadingValue Value="IncludeTableData"
+                Name="IncludeTableData"
+                IsFixed="true">
+
 <div class="dynamic-report"
      style="@ThemeStyle">
 
@@ -39,6 +43,8 @@
 
 </div>
 
+</CascadingValue>
+
 @code {
     [Parameter, EditorRequired]
     public ResolvedReportDefinition Report { get; set; } = default!;
@@ -48,6 +54,17 @@
 
     [Parameter]
     public ReportTheme Theme { get; set; } = new();
+
+    /// <summary>
+    /// Emite junto a cada tabla sus datos de origen en JSON, para que la
+    /// barra del documento pueda exportarlos con los valores reales en vez
+    /// de raspar el texto ya formateado de las celdas.
+    ///
+    /// Apagado en el preview del editor: allí nadie exporta y duplicaría los
+    /// datos en cada repintado.
+    /// </summary>
+    [Parameter]
+    public bool IncludeTableData { get; set; }
 
     private IEnumerable<ResolvedReportBodyItem> VisibleBodyItems =>
         Report.Body
