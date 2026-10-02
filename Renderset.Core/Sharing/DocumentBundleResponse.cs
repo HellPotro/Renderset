@@ -3,10 +3,10 @@ namespace Renderset.Core.Sharing;
 /// <summary>
 /// Respuesta de los endpoints de gestión de bundles.
 ///
-/// <see cref="Url"/> sólo viene al crear el bundle o renovar su enlace: el
-/// token no se guarda en claro, así que después no hay forma de volver a
-/// construir el enlace. Quien integra tiene que guardarlo en ese momento
-/// (o pedir uno nuevo, que invalida el anterior).
+/// <see cref="Url"/> se reconstruye a partir del token cifrado. Viene nula
+/// en los bundles creados antes de guardar el token cifrado, o si se han
+/// perdido las claves de Data Protection: el enlace que tenga el cliente
+/// sigue funcionando, pero para copiarlo hay que generar uno nuevo.
 /// </summary>
 public sealed class DocumentBundleResponse
 {

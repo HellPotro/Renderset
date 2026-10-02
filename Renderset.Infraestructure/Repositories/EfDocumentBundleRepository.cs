@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Renderset.Core.Paging;
 using Renderset.Core.Sharing;
 using Renderset.Infrastructure.Persistence;
 using Renderset.Infrastructure.Persistence.Entities;
@@ -35,6 +36,7 @@ public sealed class EfDocumentBundleRepository
                 Message = bundle.Message,
                 Culture = bundle.Culture,
                 TokenHash = bundle.TokenHash,
+                ProtectedToken = bundle.ProtectedToken,
                 TokenIssuedAtUtc = bundle.TokenIssuedAtUtc,
                 ExpiresAtUtc = bundle.ExpiresAtUtc,
                 RevokedAtUtc = bundle.RevokedAtUtc,
@@ -101,28 +103,87 @@ public sealed class EfDocumentBundleRepository
             : ToModel(entity);
     }
 
-    public async Task<IReadOnlyList<DocumentBundle>> ListAsync(
+    public async Task<PagedResult<DocumentBundle>> SearchAsync(
         string tenantId,
-        int take,
+        DocumentBundleQuery query,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(query);
+
         await using var context =
             await _contextFactory.CreateDbContextAsync(
                 cancellationToken);
 
-        var entities =
-            await context.DocumentBundles
+        var bundles =
+            context.DocumentBundles
                 .AsNoTracking()
-                .Include(x => x.Items)
-                .Where(x => x.TenantId == tenantId)
+                .Where(x => x.TenantId == tenantId);
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim();
+
+            bundles = bundles.Where(x =>
+                x.Title.Contains(search) ||
+                x.Items.Any(i =>
+                    i.DisplayName.Contains(search) ||
+                    i.DocumentId.Contains(search)));
+        }
+
+        // Mismas reglas que DocumentBundle.GetStatus, pero en SQL.
+        var now = query.NowUtc;
+
+        bundles = query.Status switch
+        {
+            DocumentBundleStatus.Revoked =>
+                bundles.Where(x => x.RevokedAtUtc != null),
+
+            DocumentBundleStatus.Expired =>
+                bundles.Where(x => x.RevokedAtUtc == null && x.ExpiresAtUtc <= now),
+
+            DocumentBundleStatus.Active =>
+                bundles.Where(x => x.RevokedAtUtc == null && x.ExpiresAtUtc > now),
+
+            _ => bundles
+        };
+
+        if (query.FromUtc is { } fromUtc)
+            bundles = bundles.Where(x => x.CreatedAtUtc >= fromUtc);
+
+        if (query.ToUtc is { } toUtc)
+            bundles = bundles.Where(x => x.CreatedAtUtc < toUtc);
+
+        if (query.Cursor is { } cursor)
+        {
+            var at = cursor.CreatedAtUtc;
+
+            var seen =
+                cursor.SeenIds
+                    .Select(x => Guid.TryParse(x, out var id) ? id : Guid.Empty)
+                    .Where(x => x != Guid.Empty)
+                    .ToList();
+
+            bundles = bundles.Where(x =>
+                x.CreatedAtUtc < at ||
+                (x.CreatedAtUtc == at && !seen.Contains(x.BundleId)));
+        }
+
+        var take = Math.Clamp(query.Take, 1, DocumentBundleQuery.MaxTake);
+
+        var entities =
+            await bundles
                 .OrderByDescending(x => x.CreatedAtUtc)
-                .Take(Math.Clamp(take, 1, 500))
+                .ThenByDescending(x => x.BundleId)
+                .Take(take + 1)
+                .Include(x => x.Items)
                 .AsSplitQuery()
                 .ToListAsync(cancellationToken);
 
-        return entities
-            .Select(ToModel)
-            .ToList();
+        return KeysetCursor.Page(
+            entities.Select(ToModel).ToList(),
+            take,
+            x => x.CreatedAtUtc,
+            x => x.Id.ToString("D"));
     }
 
     public async Task<bool> RevokeAsync(
@@ -156,6 +217,7 @@ public sealed class EfDocumentBundleRepository
         string tenantId,
         Guid bundleId,
         byte[] tokenHash,
+        string? protectedToken,
         DateTime issuedAtUtc,
         DateTime expiresAtUtc,
         CancellationToken cancellationToken = default)
@@ -172,6 +234,7 @@ public sealed class EfDocumentBundleRepository
                 .ExecuteUpdateAsync(
                     setters => setters
                         .SetProperty(x => x.TokenHash, tokenHash)
+                        .SetProperty(x => x.ProtectedToken, protectedToken)
                         .SetProperty(x => x.TokenIssuedAtUtc, issuedAtUtc)
                         .SetProperty(x => x.ExpiresAtUtc, expiresAtUtc)
                         .SetProperty(x => x.RevokedAtUtc, (DateTime?)null),
@@ -231,6 +294,7 @@ public sealed class EfDocumentBundleRepository
             Message = entity.Message,
             Culture = entity.Culture,
             TokenHash = entity.TokenHash,
+            ProtectedToken = entity.ProtectedToken,
             TokenIssuedAtUtc = AsUtc(entity.TokenIssuedAtUtc),
             ExpiresAtUtc = AsUtc(entity.ExpiresAtUtc),
             RevokedAtUtc = AsUtc(entity.RevokedAtUtc),

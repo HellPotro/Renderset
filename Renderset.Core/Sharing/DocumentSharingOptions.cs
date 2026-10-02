@@ -23,4 +23,13 @@ public sealed class DocumentSharingOptions
     /// host de la petición, que detrás de un proxy puede ser una IP interna.
     /// </summary>
     public string? PublicBaseUrl { get; set; }
+
+    /// <summary>
+    /// Carpeta donde guardar las claves de Data Protection con las que se
+    /// cifra el token para poder recuperar el enlace. Sin ella se usa la
+    /// ubicación por defecto del sistema, que en un contenedor se pierde al
+    /// redesplegar: los enlaces seguirían funcionando, pero no se podrían
+    /// volver a copiar desde RenderSet.
+    /// </summary>
+    public string? DataProtectionKeysPath { get; set; }
 }

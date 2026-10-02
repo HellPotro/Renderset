@@ -20,6 +20,13 @@ public interface IDocumentBundleService
         Guid bundleId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Token en claro del enlace actual, para construir la URL desde la
+    /// gestión. Nulo si no se puede recuperar.
+    /// </summary>
+    string? RecoverToken(
+        DocumentBundle bundle);
+
     Task<DocumentBundleOpenResult> OpenAsync(
         Guid bundleId,
         string? token,
@@ -64,6 +71,7 @@ public sealed class DocumentBundleService
     private readonly IRenderedDocumentRepository _documents;
     private readonly IReportRenderService _renderService;
     private readonly IDocumentSharingSettingsRepository _settings;
+    private readonly IBundleTokenProtector _protector;
     private readonly DocumentSharingOptions _options;
     private readonly TimeProvider _time;
 
@@ -72,9 +80,11 @@ public sealed class DocumentBundleService
         IRenderedDocumentRepository documents,
         IReportRenderService renderService,
         IDocumentSharingSettingsRepository settings,
+        IBundleTokenProtector protector,
         DocumentSharingOptions options,
         TimeProvider time)
     {
+        _protector = protector;
         _bundles = bundles;
         _documents = documents;
         _renderService = renderService;
@@ -176,6 +186,7 @@ public sealed class DocumentBundleService
                     items,
                     byId),
                 TokenHash = BundleToken.Hash(token),
+                ProtectedToken = _protector.Protect(token),
                 TokenIssuedAtUtc = now,
                 ExpiresAtUtc = expiresAtUtc!.Value,
                 CreatedAtUtc = now,
@@ -219,6 +230,7 @@ public sealed class DocumentBundleService
                 tenantId,
                 bundleId,
                 BundleToken.Hash(token),
+                _protector.Protect(token),
                 now,
                 expiresAtUtc!.Value,
                 cancellationToken);
@@ -249,6 +261,24 @@ public sealed class DocumentBundleService
             bundleId,
             UtcNow(),
             cancellationToken);
+    }
+
+    public string? RecoverToken(
+        DocumentBundle bundle)
+    {
+        ArgumentNullException.ThrowIfNull(bundle);
+
+        if (string.IsNullOrWhiteSpace(bundle.ProtectedToken))
+            return null;
+
+        var token = _protector.Unprotect(bundle.ProtectedToken);
+
+        // Se comprueba contra el hash: si el valor cifrado no corresponde al
+        // token vigente (una renovación a medias, una fila tocada a mano), es
+        // preferible no dar enlace a dar uno que no abre.
+        return BundleToken.Matches(token, bundle.TokenHash)
+            ? token
+            : null;
     }
 
     // ------------------------------------------------------------ público

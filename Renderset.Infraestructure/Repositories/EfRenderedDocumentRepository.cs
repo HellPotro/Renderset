@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Renderset.Core.Paging;
 using Renderset.Core.Rendering;
 using Renderset.Infrastructure.Persistence;
 using Renderset.Infrastructure.Persistence.Entities;
@@ -112,7 +113,7 @@ public sealed class EfRenderedDocumentRepository
             .ToList();
     }
 
-    public async Task<IReadOnlyList<RenderedDocumentSummary>> SearchAsync(
+    public async Task<PagedResult<RenderedDocumentSummary>> SearchAsync(
         string tenantId,
         RenderedDocumentQuery query,
         CancellationToken cancellationToken = default)
@@ -144,10 +145,30 @@ public sealed class EfRenderedDocumentRepository
                 x.DocumentId.Contains(search));
         }
 
+        if (query.FromUtc is { } fromUtc)
+            documents = documents.Where(x => x.CreatedAtUtc >= fromUtc);
+
+        if (query.ToUtc is { } toUtc)
+            documents = documents.Where(x => x.CreatedAtUtc < toUtc);
+
+        if (query.Cursor is { } cursor)
+        {
+            var at = cursor.CreatedAtUtc;
+            var seen = cursor.SeenIds.ToList();
+
+            documents = documents.Where(x =>
+                x.CreatedAtUtc < at ||
+                (x.CreatedAtUtc == at && !seen.Contains(x.DocumentId)));
+        }
+
+        var take = Math.Clamp(query.Take, 1, RenderedDocumentQuery.MaxTake);
+
+        // Una fila de más para saber si hay otra página sin hacer un COUNT.
         var rows =
             await documents
                 .OrderByDescending(x => x.CreatedAtUtc)
-                .Take(Math.Clamp(query.Take, 1, RenderedDocumentQuery.MaxTake))
+                .ThenByDescending(x => x.DocumentId)
+                .Take(take + 1)
                 .Select(x => new
                 {
                     x.DocumentId,
@@ -159,17 +180,24 @@ public sealed class EfRenderedDocumentRepository
                 })
                 .ToListAsync(cancellationToken);
 
-        return rows
-            .Select(x => new RenderedDocumentSummary
-            {
-                Id = x.DocumentId,
-                ReportId = x.ReportId,
-                Culture = x.Culture,
-                FileName = x.FileName,
-                Format = ParseFormat(x.Format),
-                CreatedAtUtc = DateTime.SpecifyKind(x.CreatedAtUtc, DateTimeKind.Utc)
-            })
-            .ToList();
+        var summaries =
+            rows
+                .Select(x => new RenderedDocumentSummary
+                {
+                    Id = x.DocumentId,
+                    ReportId = x.ReportId,
+                    Culture = x.Culture,
+                    FileName = x.FileName,
+                    Format = ParseFormat(x.Format),
+                    CreatedAtUtc = DateTime.SpecifyKind(x.CreatedAtUtc, DateTimeKind.Utc)
+                })
+                .ToList();
+
+        return KeysetCursor.Page(
+            summaries,
+            take,
+            x => x.CreatedAtUtc,
+            x => x.Id);
     }
 
     public async Task SaveAsync(

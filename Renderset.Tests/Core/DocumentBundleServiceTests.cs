@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Moq;
+using Renderset.Core.Paging;
 using Renderset.Core.Rendering;
 using Renderset.Core.Sharing;
 
@@ -16,6 +17,7 @@ public sealed class DocumentBundleServiceTests
     private readonly Mock<IRenderedDocumentRepository> _documents = new();
     private readonly Mock<IReportRenderService> _render = new();
     private readonly Mock<IDocumentSharingSettingsRepository> _settings = new();
+    private readonly ReversibleProtector _protector = new();
     private readonly FixedTimeProvider _time = new(Now);
     private readonly DocumentSharingOptions _options = new();
 
@@ -32,6 +34,7 @@ public sealed class DocumentBundleServiceTests
             _documents.Object,
             _render.Object,
             _settings.Object,
+            _protector,
             _options,
             _time);
 
@@ -446,6 +449,51 @@ public sealed class DocumentBundleServiceTests
         renewed.NotFound.Should().BeTrue();
     }
 
+    // ------------------------------------------------------------ recuperar
+
+    [Fact]
+    public async Task RecoverToken_ShouldReturnTheCurrentToken()
+    {
+        var sut = CreateSut();
+        var created = await sut.CreateAsync(Tenant, Request("doc-factura"));
+
+        sut.RecoverToken(_bundles.Single())
+            .Should()
+            .Be(created.Token);
+
+        _bundles.Single().ProtectedToken
+            .Should()
+            .NotBe(created.Token, "el token no se guarda en claro");
+    }
+
+    [Fact]
+    public async Task RecoverToken_ShouldFollowTheRenewedLink()
+    {
+        var sut = CreateSut();
+        var created = await sut.CreateAsync(Tenant, Request("doc-factura"));
+
+        var renewed =
+            await sut.RenewLinkAsync(
+                Tenant,
+                created.Bundle!.Id,
+                new RenewDocumentBundleLinkRequest());
+
+        sut.RecoverToken(_bundles.Single())
+            .Should()
+            .Be(renewed.Token);
+    }
+
+    [Fact]
+    public async Task RecoverToken_ShouldReturnNullWhenItCannotBeDecrypted()
+    {
+        var sut = CreateSut();
+        await sut.CreateAsync(Tenant, Request("doc-factura"));
+
+        _protector.Broken = true;
+
+        sut.RecoverToken(_bundles.Single()).Should().BeNull();
+    }
+
     // ------------------------------------------------------------ apoyo
 
     private static CreateDocumentBundleRequest Request(
@@ -497,6 +545,25 @@ public sealed class DocumentBundleServiceTests
             Content = "<html></html>",
             CreatedAtUtc = Now
         };
+
+
+    /// <summary>
+    /// Cifrado de pega: lo único que importa aquí es que sea reversible y
+    /// que no deje el token tal cual.
+    /// </summary>
+    private sealed class ReversibleProtector
+        : IBundleTokenProtector
+    {
+        public bool Broken { get; set; }
+
+        public string Protect(string token) =>
+            "p:" + new string(Enumerable.Reverse(token).ToArray());
+
+        public string? Unprotect(string protectedToken) =>
+            Broken || !protectedToken.StartsWith("p:")
+                ? null
+                : new string(Enumerable.Reverse(protectedToken[2..]).ToArray());
+    }
 
 
     private sealed class FixedTimeProvider(DateTime utcNow)
@@ -552,15 +619,20 @@ public sealed class DocumentBundleServiceTests
                     : null);
         }
 
-        public Task<IReadOnlyList<DocumentBundle>> ListAsync(
+        public Task<PagedResult<DocumentBundle>> SearchAsync(
             string tenantId,
-            int take,
+            DocumentBundleQuery query,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<DocumentBundle>>(
-                _items.Values
-                    .Where(x => x.TenantId == tenantId)
-                    .Take(take)
-                    .ToList());
+            Task.FromResult(
+                KeysetCursor.Page(
+                    _items.Values
+                        .Where(x => x.TenantId == tenantId)
+                        .OrderByDescending(x => x.CreatedAtUtc)
+                        .Take(query.Take + 1)
+                        .ToList(),
+                    query.Take,
+                    x => x.CreatedAtUtc,
+                    x => x.Id.ToString("D")));
 
         public Task<bool> RevokeAsync(
             string tenantId,
@@ -577,6 +649,7 @@ public sealed class DocumentBundleServiceTests
             string tenantId,
             Guid bundleId,
             byte[] tokenHash,
+            string? protectedToken,
             DateTime issuedAtUtc,
             DateTime expiresAtUtc,
             CancellationToken cancellationToken = default) =>
@@ -587,6 +660,7 @@ public sealed class DocumentBundleServiceTests
                     x => Copy(
                         x,
                         tokenHash: tokenHash,
+                        protectedToken: protectedToken,
                         issuedAtUtc: issuedAtUtc,
                         expiresAtUtc: expiresAtUtc,
                         clearRevocation: true)));
@@ -620,6 +694,7 @@ public sealed class DocumentBundleServiceTests
         private static DocumentBundle Copy(
             DocumentBundle source,
             byte[]? tokenHash = null,
+            string? protectedToken = null,
             DateTime? issuedAtUtc = null,
             DateTime? expiresAtUtc = null,
             DateTime? revokedAtUtc = null,
@@ -632,6 +707,7 @@ public sealed class DocumentBundleServiceTests
                 Message = source.Message,
                 Culture = source.Culture,
                 TokenHash = tokenHash ?? source.TokenHash,
+                ProtectedToken = protectedToken ?? source.ProtectedToken,
                 TokenIssuedAtUtc = issuedAtUtc ?? source.TokenIssuedAtUtc,
                 ExpiresAtUtc = expiresAtUtc ?? source.ExpiresAtUtc,
                 RevokedAtUtc = clearRevocation

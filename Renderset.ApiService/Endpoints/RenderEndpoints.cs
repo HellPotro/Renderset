@@ -1,3 +1,4 @@
+using Renderset.Core.Paging;
 using Renderset.Core.Rendering;
 
 namespace Renderset.Api.Endpoints;
@@ -85,28 +86,52 @@ public static class RenderEndpoints
 
     /// <summary>
     /// Listado de documentos emitidos, sin contenido, los más recientes
-    /// primero. Es lo que usa la pantalla de bundles para elegir documentos.
+    /// primero y paginado por cursor:
+    ///
+    ///     GET /api/documents/{tenantId}?search=&amp;reportId=&amp;fromUtc=&amp;toUtc=&amp;take=&amp;cursor=
+    ///
+    /// Devuelve { items, nextCursor }. Para la página siguiente se repite la
+    /// misma petición con cursor = nextCursor.
     /// </summary>
     private static async Task<IResult> SearchDocumentsAsync(
         string tenantId,
         string? search,
         string? reportId,
+        DateTimeOffset? fromUtc,
+        DateTimeOffset? toUtc,
         int? take,
+        string? cursor,
         IRenderedDocumentRepository documents,
         CancellationToken cancellationToken)
     {
-        var items =
+        KeysetCursor? decoded = null;
+
+        if (!string.IsNullOrWhiteSpace(cursor))
+        {
+            decoded = KeysetCursor.TryDecode(cursor);
+
+            if (decoded is null)
+                return BundleEndpoints.InvalidCursor();
+        }
+
+        // DateTimeOffset y no DateTime: con "2026-10-01T22:00:00Z" o con
+        // "+02:00" el instante es inequívoco, mientras que un DateTime sin
+        // zona depende de cómo lo interprete el binder.
+        var page =
             await documents.SearchAsync(
                 tenantId,
                 new RenderedDocumentQuery
                 {
                     Search = search,
                     ReportId = reportId,
-                    Take = take ?? 50
+                    FromUtc = fromUtc?.UtcDateTime,
+                    ToUtc = toUtc?.UtcDateTime,
+                    Take = take ?? 50,
+                    Cursor = decoded
                 },
                 cancellationToken);
 
-        return Results.Ok(items);
+        return Results.Ok(page);
     }
 
     /// <summary>

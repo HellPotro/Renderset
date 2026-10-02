@@ -1,3 +1,5 @@
+using Renderset.Core.Paging;
+using Renderset.Core.Rendering;
 using Renderset.Core.Sharing;
 
 namespace Renderset.Api.Endpoints;
@@ -6,8 +8,9 @@ namespace Renderset.Api.Endpoints;
 /// Gestión de bundles: crear, consultar, revocar y renovar el enlace.
 ///
 ///     POST /api/bundles/{tenantId}                         crea y devuelve el enlace
-///     GET  /api/bundles/{tenantId}?take=50                 últimos bundles
-///     GET  /api/bundles/{tenantId}/{bundleId}              estado y accesos
+///     GET  /api/bundles/{tenantId}?search=&status=&fromUtc=&toUtc=&take=&cursor=
+///                                                          listado paginado por cursor
+///     GET  /api/bundles/{tenantId}/{bundleId}              estado, accesos y enlace
 ///     POST /api/bundles/{tenantId}/{bundleId}/revoke       desactiva el enlace
 ///     POST /api/bundles/{tenantId}/{bundleId}/link         enlace nuevo, el viejo deja de valer
 /// </summary>
@@ -80,29 +83,63 @@ public static class BundleEndpoints
 
     private static async Task<IResult> ListAsync(
         string tenantId,
+        string? search,
+        DocumentBundleStatus? status,
+        DateTimeOffset? fromUtc,
+        DateTimeOffset? toUtc,
         int? take,
+        string? cursor,
+        HttpContext httpContext,
         IDocumentBundleRepository repository,
+        IDocumentBundleService bundles,
+        DocumentSharingOptions options,
         TimeProvider time,
         CancellationToken cancellationToken)
     {
-        var items =
-            await repository.ListAsync(
-                tenantId,
-                take ?? 50,
-                cancellationToken);
+        KeysetCursor? decoded = null;
+
+        if (!string.IsNullOrWhiteSpace(cursor))
+        {
+            decoded = KeysetCursor.TryDecode(cursor);
+
+            if (decoded is null)
+                return InvalidCursor();
+        }
 
         var now = time.GetUtcNow().UtcDateTime;
 
+        var page =
+            await repository.SearchAsync(
+                tenantId,
+                new DocumentBundleQuery
+                {
+                    Search = search,
+                    Status = status,
+                    FromUtc = fromUtc?.UtcDateTime,
+                    ToUtc = toUtc?.UtcDateTime,
+                    Take = take ?? 50,
+                    Cursor = decoded,
+                    NowUtc = now
+                },
+                cancellationToken);
+
         return Results.Ok(
-            items
-                .Select(x => DocumentBundleResponse.From(x, now))
-                .ToList());
+            new PagedResult<DocumentBundleResponse>
+            {
+                Items = page.Items
+                    .Select(x => ToResponse(x, now, httpContext, bundles, options))
+                    .ToList(),
+                NextCursor = page.NextCursor
+            });
     }
 
     private static async Task<IResult> GetAsync(
         string tenantId,
         Guid bundleId,
+        HttpContext httpContext,
         IDocumentBundleRepository repository,
+        IDocumentBundleService bundles,
+        DocumentSharingOptions options,
         TimeProvider time,
         CancellationToken cancellationToken)
     {
@@ -115,10 +152,51 @@ public static class BundleEndpoints
         return bundle is null
             ? Results.NotFound()
             : Results.Ok(
-                DocumentBundleResponse.From(
+                ToResponse(
                     bundle,
-                    time.GetUtcNow().UtcDateTime));
+                    time.GetUtcNow().UtcDateTime,
+                    httpContext,
+                    bundles,
+                    options));
     }
+
+    /// <summary>
+    /// Respuesta con el enlace recuperado del token cifrado. Si no se puede
+    /// recuperar (bundle antiguo, claves perdidas), Url va nula y la
+    /// pantalla ofrece generar uno nuevo.
+    /// </summary>
+    private static DocumentBundleResponse ToResponse(
+        DocumentBundle bundle,
+        DateTime nowUtc,
+        HttpContext httpContext,
+        IDocumentBundleService bundles,
+        DocumentSharingOptions options)
+    {
+        var token = bundles.RecoverToken(bundle);
+
+        return DocumentBundleResponse.From(
+            bundle,
+            nowUtc,
+            token is null
+                ? null
+                : ShareLinks.PublicBundleUrl(
+                    httpContext,
+                    options,
+                    bundle.Id,
+                    token));
+    }
+
+    internal static IResult InvalidCursor() =>
+        Results.BadRequest(
+            new[]
+            {
+                new RenderValidationError
+                {
+                    Code = "paging.invalid_cursor",
+                    Message = "El cursor no es válido. Vuelve a pedir la primera página.",
+                    Path = "cursor"
+                }
+            });
 
     private static async Task<IResult> RevokeAsync(
         string tenantId,

@@ -1,6 +1,7 @@
 using Refit;
 using Renderset.Core.Blocks;
 using Renderset.Core.Localization;
+using Renderset.Core.Paging;
 using Renderset.Core.Persistence;
 using Renderset.Core.Presets;
 using Renderset.Core.Rendering;
@@ -230,22 +231,38 @@ public interface IRenderSetApi
 
     #region Documents
 
+    /// <summary>
+    /// Paginado por cursor: para la página siguiente se repite la llamada
+    /// con cursor = NextCursor de la anterior. toUtc es exclusivo.
+    /// </summary>
     [Get("/api/documents/{tenantId}")]
-    Task<IReadOnlyList<RenderedDocumentSummary>> SearchDocumentsAsync(
+    Task<PagedResult<RenderedDocumentSummary>> SearchDocumentsAsync(
         string tenantId,
         [Query] string? search,
         [Query] string? reportId,
+        [Query(Format = "o")] DateTimeOffset? fromUtc,
+        [Query(Format = "o")] DateTimeOffset? toUtc,
         [Query] int? take,
+        [Query] string? cursor,
         CancellationToken cancellationToken = default);
 
     #endregion
 
     #region Bundles
 
+    /// <summary>
+    /// Paginado por cursor, igual que los documentos. Cada bundle trae su
+    /// Url si se puede recuperar.
+    /// </summary>
     [Get("/api/bundles/{tenantId}")]
-    Task<IReadOnlyList<DocumentBundleResponse>> GetBundlesAsync(
+    Task<PagedResult<DocumentBundleResponse>> GetBundlesAsync(
         string tenantId,
+        [Query] string? search,
+        [Query] DocumentBundleStatus? status,
+        [Query(Format = "o")] DateTimeOffset? fromUtc,
+        [Query(Format = "o")] DateTimeOffset? toUtc,
         [Query] int? take,
+        [Query] string? cursor,
         CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -1,3 +1,5 @@
+using Renderset.Core.Paging;
+
 namespace Renderset.Core.Sharing;
 
 public interface IDocumentBundleRepository
@@ -20,9 +22,9 @@ public interface IDocumentBundleRepository
         Guid bundleId,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<DocumentBundle>> ListAsync(
+    Task<PagedResult<DocumentBundle>> SearchAsync(
         string tenantId,
-        int take,
+        DocumentBundleQuery query,
         CancellationToken cancellationToken = default);
 
     Task<bool> RevokeAsync(
@@ -39,6 +41,7 @@ public interface IDocumentBundleRepository
         string tenantId,
         Guid bundleId,
         byte[] tokenHash,
+        string? protectedToken,
         DateTime issuedAtUtc,
         DateTime expiresAtUtc,
         CancellationToken cancellationToken = default);

@@ -1,0 +1,48 @@
+@*
+    Pie de un listado paginado por cursor: cuántos se ven y el botón para
+    pedir la página siguiente. No enseña total a propósito: la API no lo
+    calcula (contar todas las filas cuesta lo mismo que leerlas).
+*@
+
+<div class="load-more-footer">
+
+    <span>@Summary</span>
+
+    @if (HasMore)
+    {
+        <button type="button"
+                class="secondary-button"
+                disabled="@Loading"
+                @onclick="OnLoadMore">
+            @if (Loading)
+            {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+            }
+            Cargar más
+        </button>
+    }
+
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public int Shown { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Noun { get; set; } = default!;
+
+    [Parameter]
+    public bool HasMore { get; set; }
+
+    [Parameter]
+    public bool Loading { get; set; }
+
+    [Parameter]
+    public EventCallback OnLoadMore { get; set; }
+
+    private string Summary =>
+        HasMore
+            ? $"Mostrando {Shown} {Noun}, hay más"
+            : $"Mostrando {Shown} {Noun}";
+}

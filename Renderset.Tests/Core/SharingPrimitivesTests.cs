@@ -213,3 +213,89 @@ public sealed class DocumentSharingSettingsTests
         view.ExpiresAtUtc.Should().Be(new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc));
     }
 }
+
+
+public sealed class KeysetCursorTests
+{
+    private static readonly DateTime T0 =
+        new(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void Encode_ShouldRoundTrip()
+    {
+        var cursor =
+            new Renderset.Core.Paging.KeysetCursor
+            {
+                CreatedAtUtc = T0.AddTicks(1234567),
+                SeenIds = ["a", "b"]
+            };
+
+        var decoded =
+            Renderset.Core.Paging.KeysetCursor.TryDecode(cursor.Encode());
+
+        decoded!.CreatedAtUtc.Should().Be(cursor.CreatedAtUtc);
+        decoded.SeenIds.Should().Equal("a", "b");
+    }
+
+    [Theory]
+    [InlineData("no-es-un-cursor")]
+    [InlineData("e30")]
+    [InlineData("!!!")]
+    public void TryDecode_ShouldRejectGarbage(
+        string value)
+    {
+        Renderset.Core.Paging.KeysetCursor.TryDecode(value).Should().BeNull();
+    }
+
+    [Fact]
+    public void Page_ShouldOnlyReturnACursorWhenThereIsAnExtraRow()
+    {
+        var rows =
+            Enumerable.Range(0, 3)
+                .Select(i => (Id: $"d{i}", At: T0.AddMinutes(-i)))
+                .ToList();
+
+        var full =
+            Renderset.Core.Paging.KeysetCursor.Page(rows, 3, x => x.At, x => x.Id);
+
+        full.Items.Should().HaveCount(3);
+        full.HasMore.Should().BeFalse();
+
+        var partial =
+            Renderset.Core.Paging.KeysetCursor.Page(rows, 2, x => x.At, x => x.Id);
+
+        partial.Items.Should().HaveCount(2);
+
+        var next =
+            Renderset.Core.Paging.KeysetCursor.TryDecode(partial.NextCursor);
+
+        next!.CreatedAtUtc.Should().Be(T0.AddMinutes(-1));
+        next.SeenIds.Should().Equal("d1");
+    }
+
+    /// <summary>
+    /// Dos filas con el mismo instante en el borde de la página: el cursor
+    /// las recuerda para que la siguiente no las repita ni las pierda.
+    /// </summary>
+    [Fact]
+    public void Page_ShouldRememberEveryIdSharingTheLastTimestamp()
+    {
+        var rows =
+            new List<(string Id, DateTime At)>
+            {
+                ("a", T0),
+                ("b", T0.AddMinutes(-1)),
+                ("c", T0.AddMinutes(-1)),
+                ("d", T0.AddMinutes(-2))
+            };
+
+        var page =
+            Renderset.Core.Paging.KeysetCursor.Page(rows, 3, x => x.At, x => x.Id);
+
+        Renderset.Core.Paging.KeysetCursor
+            .TryDecode(page.NextCursor)!
+            .SeenIds
+            .Should()
+            .BeEquivalentTo("b", "c");
+    }
+}

@@ -9,9 +9,11 @@ namespace Renderset.Core.Sharing;
 /// ve exactamente lo que se le envió aunque después se retoque el diseño.
 ///
 /// El enlace se compone de dos partes: el <see cref="Id"/>, que identifica, y
-/// un token aleatorio, que autoriza. Del token sólo se guarda el hash: si
-/// alguien se lleva una copia de la base de datos no se lleva también los
-/// enlaces que se han mandado a los clientes.
+/// un token aleatorio, que autoriza. Para validar el acceso sólo se usa el
+/// hash. Aparte se guarda el token cifrado (<see cref="ProtectedToken"/>)
+/// para poder volver a abrir o copiar el enlace desde RenderSet; la clave
+/// de cifrado no está en la base de datos, así que una copia de la base de
+/// datos sola no da acceso a los enlaces.
 /// </summary>
 public sealed class DocumentBundle
 {
@@ -37,6 +39,13 @@ public sealed class DocumentBundle
     /// SHA-256 del token. Nunca el token en claro.
     /// </summary>
     public required byte[] TokenHash { get; init; }
+
+    /// <summary>
+    /// Token cifrado con <see cref="IBundleTokenProtector"/>. Nulo en los
+    /// bundles creados antes de existir: su enlace no se puede recuperar y
+    /// hay que generar uno nuevo.
+    /// </summary>
+    public string? ProtectedToken { get; init; }
 
     public DateTime TokenIssuedAtUtc { get; init; }
 

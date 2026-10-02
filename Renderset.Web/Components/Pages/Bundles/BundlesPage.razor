@@ -1,5 +1,6 @@
 @page "/bundles"
 
+@using Renderset.Core.Paging
 @using Renderset.Core.Rendering
 @using Renderset.Core.Reports
 @using Renderset.Core.Sharing
@@ -48,8 +49,8 @@
                     <strong>Enlace listo: @_lastLink.Title</strong>
                     <small>
                         Caduca el @FormatDate(_lastLink.ExpiresAtUtc).
-                        Guárdalo ahora: el enlace no se puede volver a
-                        consultar, sólo generar uno nuevo.
+                        También lo tienes en la lista de bundles para abrirlo
+                        o copiarlo cuando quieras.
                     </small>
                 </div>
 
@@ -70,7 +71,7 @@
 
                 <button type="button"
                         class="secondary-button"
-                        @onclick="CopyLinkAsync">
+                        @onclick="() => CopyAsync(_lastLink.Url)">
                     <i class="fa-regular fa-copy"></i>
                     Copiar
                 </button>
@@ -99,7 +100,7 @@
 
                 <h2>
                     Documentos emitidos
-                    <span class="bundles-count">@_documents.Count</span>
+                    <span class="bundles-count">@CountLabel(_documents.Count, _documentsCursor)</span>
                 </h2>
 
             </header>
@@ -109,10 +110,10 @@
                 <div class="bundles-search">
                     <i class="fa-solid fa-magnifying-glass"></i>
                     <input type="search"
-                           placeholder="Buscar por nombre de fichero o id"
-                           @bind="_search"
+                           placeholder="Nombre de fichero o id"
+                           @bind="_documentSearch"
                            @bind:event="oninput"
-                           @onkeydown="SearchKeyDownAsync" />
+                           @onkeydown="DocumentSearchKeyDownAsync" />
                 </div>
 
                 <select value="@_reportFilter"
@@ -127,15 +128,32 @@
 
                 </select>
 
+                <input type="date"
+                       title="Emitidos desde (incluido)"
+                       @bind="_documentsFrom"
+                       @bind:after="ReloadDocumentsAsync" />
+
+                <input type="date"
+                       title="Emitidos hasta (incluido)"
+                       @bind="_documentsTo"
+                       @bind:after="ReloadDocumentsAsync" />
+
                 <button type="button"
                         class="secondary-button"
-                        @onclick="LoadDocumentsAsync">
+                        @onclick="ReloadDocumentsAsync">
                     Buscar
                 </button>
 
             </div>
 
-            @if (_loadingDocuments)
+            @if (!DateRangeIsValid(_documentsFrom, _documentsTo))
+            {
+                <p class="bundles-inline-error">
+                    La fecha "desde" es posterior a "hasta".
+                </p>
+            }
+
+            @if (_loadingDocuments && _documents.Count == 0)
             {
                 <div class="page-state">Cargando documentos...</div>
             }
@@ -197,6 +215,12 @@
                     }
 
                 </div>
+
+                <LoadMoreFooter Shown="_documents.Count"
+                                Noun="documentos"
+                                HasMore="_documentsCursor is not null"
+                                Loading="_loadingDocuments"
+                                OnLoadMore="LoadMoreDocumentsAsync" />
             }
 
         </section>
@@ -335,28 +359,72 @@
     </div>
 
 
-    @* -------------------------------------------------------- recientes *@
+    @* -------------------------------------------------------- bundles *@
 
     <section class="editor-card bundles-recent">
 
         <header class="editor-card-header bundles-card-header">
 
-            <h2>Bundles recientes</h2>
-
-            <button type="button"
-                    class="icon-button"
-                    title="Recargar"
-                    @onclick="LoadBundlesAsync">
-                <i class="fa-solid fa-rotate"></i>
-            </button>
+            <h2>
+                Bundles
+                <span class="bundles-count">@CountLabel(_bundles.Count, _bundlesCursor)</span>
+            </h2>
 
         </header>
+
+        <div class="bundles-toolbar is-bundles">
+
+            <div class="bundles-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="search"
+                       placeholder="Título, documento o id"
+                       @bind="_bundleSearch"
+                       @bind:event="oninput"
+                       @onkeydown="BundleSearchKeyDownAsync" />
+            </div>
+
+            <select value="@(_bundleStatus?.ToString() ?? string.Empty)"
+                    @onchange="BundleStatusChangedAsync">
+                <option value="">Todos los estados</option>
+                <option value="@DocumentBundleStatus.Active">Activos</option>
+                <option value="@DocumentBundleStatus.Expired">Caducados</option>
+                <option value="@DocumentBundleStatus.Revoked">Revocados</option>
+            </select>
+
+            <input type="date"
+                   title="Creados desde (incluido)"
+                   @bind="_bundlesFrom"
+                   @bind:after="ReloadBundlesAsync" />
+
+            <input type="date"
+                   title="Creados hasta (incluido)"
+                   @bind="_bundlesTo"
+                   @bind:after="ReloadBundlesAsync" />
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="ReloadBundlesAsync">
+                Buscar
+            </button>
+
+        </div>
+
+        @if (!DateRangeIsValid(_bundlesFrom, _bundlesTo))
+        {
+            <p class="bundles-inline-error">
+                La fecha "desde" es posterior a "hasta".
+            </p>
+        }
 
         @if (_bundles.Count == 0)
         {
             <div class="bundles-empty">
                 <i class="fa-solid fa-link-slash"></i>
-                <p>Todavía no has creado ningún bundle.</p>
+                <p>
+                    @(_loadingBundles
+                        ? "Cargando bundles..."
+                        : "No hay bundles con ese filtro.")
+                </p>
             </div>
         }
         else
@@ -379,6 +447,7 @@
                         <div class="bundles-document">
                             <strong>@bundle.Title</strong>
                             <small>
+                                @FormatDate(bundle.CreatedAtUtc) ·
                                 @(string.Join(" · ", bundle.Documents.Select(x => x.DisplayName)))
                             </small>
                         </div>
@@ -398,6 +467,33 @@
                         </span>
 
                         <div class="bundles-row-actions">
+
+                            @if (!string.IsNullOrWhiteSpace(bundle.Url))
+                            {
+                                <a class="icon-button"
+                                   href="@bundle.Url"
+                                   target="_blank"
+                                   rel="noopener"
+                                   title="@(bundle.Status == DocumentBundleStatus.Active
+                                       ? "Abrir el enlace"
+                                       : "Abrir el enlace (el cliente verá que no está disponible)")">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                </a>
+
+                                <button type="button"
+                                        class="icon-button"
+                                        title="Copiar el enlace"
+                                        @onclick="() => CopyAsync(bundle.Url)">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="icon-button is-placeholder"
+                                      title="Este enlace no se puede recuperar. Genera uno nuevo con el botón de al lado.">
+                                    <i class="fa-solid fa-eye-slash"></i>
+                                </span>
+                            }
 
                             <button type="button"
                                     class="icon-button"
@@ -420,6 +516,12 @@
                 }
 
             </div>
+
+            <LoadMoreFooter Shown="_bundles.Count"
+                            Noun="bundles"
+                            HasMore="_bundlesCursor is not null"
+                            Loading="_loadingBundles"
+                            OnLoadMore="LoadMoreBundlesAsync" />
         }
 
     </section>
@@ -429,28 +531,38 @@
 
 @code {
 
-    private IReadOnlyList<RenderedDocumentSummary> _documents = [];
+    private const int PageSize = 50;
 
-    private IReadOnlyList<DocumentBundleResponse> _bundles = [];
+    private readonly List<RenderedDocumentSummary> _documents = [];
+
+    private readonly List<DocumentBundleResponse> _bundles = [];
+
+    private readonly List<SelectedDocument> _selection = [];
 
     private IReadOnlyList<Report> _reports = [];
 
     private DocumentSharingSettingsResponse? _sharing;
 
-    private readonly List<SelectedDocument> _selection = [];
-
-    private string _search = string.Empty;
-
+    // Filtros de documentos
+    private string _documentSearch = string.Empty;
     private string _reportFilter = string.Empty;
+    private DateOnly? _documentsFrom;
+    private DateOnly? _documentsTo;
+    private string? _documentsCursor;
+    private bool _loadingDocuments;
 
+    // Filtros de bundles
+    private string _bundleSearch = string.Empty;
+    private DocumentBundleStatus? _bundleStatus;
+    private DateOnly? _bundlesFrom;
+    private DateOnly? _bundlesTo;
+    private string? _bundlesCursor;
+    private bool _loadingBundles;
+
+    // Nuevo bundle
     private string _title = string.Empty;
-
     private string _message = string.Empty;
-
     private int? _expiresInDays;
-
-    private bool _loadingDocuments = true;
-
     private bool _creating;
 
     private CreatedLink? _lastLink;
@@ -486,8 +598,8 @@
         await Task.WhenAll(
             LoadReportsAsync(),
             LoadSharingAsync(),
-            LoadDocumentsAsync(),
-            LoadBundlesAsync());
+            ReloadDocumentsAsync(),
+            ReloadBundlesAsync());
     }
 
 
@@ -510,22 +622,48 @@
             errorTitle: "No se ha podido cargar la configuración de la página pública");
     }
 
-    private async Task LoadDocumentsAsync()
+    /// <summary>
+    /// Primera página con los filtros actuales. Cambiar un filtro siempre
+    /// empieza de cero: un cursor sólo vale para la consulta que lo generó.
+    /// </summary>
+    private Task ReloadDocumentsAsync() =>
+        LoadDocumentsAsync(append: false);
+
+    private Task LoadMoreDocumentsAsync() =>
+        LoadDocumentsAsync(append: true);
+
+    private async Task LoadDocumentsAsync(
+        bool append)
     {
+        if (!DateRangeIsValid(_documentsFrom, _documentsTo) ||
+            (append && _documentsCursor is null))
+        {
+            return;
+        }
+
         _loadingDocuments = true;
 
         try
         {
-            var documents = await Toasts.RunAsync(
+            var page = await Toasts.RunAsync(
                 () => RenderSetApi.SearchDocumentsAsync(
                     CurrentTenant.Id,
-                    string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
-                    string.IsNullOrWhiteSpace(_reportFilter) ? null : _reportFilter,
-                    100),
+                    NullIfBlank(_documentSearch),
+                    NullIfBlank(_reportFilter),
+                    StartOfDay(_documentsFrom),
+                    StartOfNextDay(_documentsTo),
+                    PageSize,
+                    append ? _documentsCursor : null),
                 errorTitle: "No se han podido cargar los documentos");
 
-            if (documents is not null)
-                _documents = documents;
+            if (page is null)
+                return;
+
+            if (!append)
+                _documents.Clear();
+
+            _documents.AddRange(page.Items);
+            _documentsCursor = page.NextCursor;
         }
         finally
         {
@@ -533,21 +671,63 @@
         }
     }
 
-    private async Task LoadBundlesAsync()
-    {
-        var bundles = await Toasts.RunAsync(
-            () => RenderSetApi.GetBundlesAsync(CurrentTenant.Id, 30),
-            errorTitle: "No se han podido cargar los bundles");
+    private Task ReloadBundlesAsync() =>
+        LoadBundlesAsync(append: false);
 
-        if (bundles is not null)
-            _bundles = bundles;
+    private Task LoadMoreBundlesAsync() =>
+        LoadBundlesAsync(append: true);
+
+    private async Task LoadBundlesAsync(
+        bool append)
+    {
+        if (!DateRangeIsValid(_bundlesFrom, _bundlesTo) ||
+            (append && _bundlesCursor is null))
+        {
+            return;
+        }
+
+        _loadingBundles = true;
+
+        try
+        {
+            var page = await Toasts.RunAsync(
+                () => RenderSetApi.GetBundlesAsync(
+                    CurrentTenant.Id,
+                    NullIfBlank(_bundleSearch),
+                    _bundleStatus,
+                    StartOfDay(_bundlesFrom),
+                    StartOfNextDay(_bundlesTo),
+                    PageSize,
+                    append ? _bundlesCursor : null),
+                errorTitle: "No se han podido cargar los bundles");
+
+            if (page is null)
+                return;
+
+            if (!append)
+                _bundles.Clear();
+
+            _bundles.AddRange(page.Items);
+            _bundlesCursor = page.NextCursor;
+        }
+        finally
+        {
+            _loadingBundles = false;
+        }
     }
 
-    private async Task SearchKeyDownAsync(
+    private async Task DocumentSearchKeyDownAsync(
         KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
-            await LoadDocumentsAsync();
+            await ReloadDocumentsAsync();
+    }
+
+    private async Task BundleSearchKeyDownAsync(
+        KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await ReloadBundlesAsync();
     }
 
     private async Task ReportFilterChangedAsync(
@@ -555,7 +735,20 @@
     {
         _reportFilter = e.Value?.ToString() ?? string.Empty;
 
-        await LoadDocumentsAsync();
+        await ReloadDocumentsAsync();
+    }
+
+    private async Task BundleStatusChangedAsync(
+        ChangeEventArgs e)
+    {
+        _bundleStatus =
+            Enum.TryParse<DocumentBundleStatus>(
+                e.Value?.ToString(),
+                out var status)
+                ? status
+                : null;
+
+        await ReloadBundlesAsync();
     }
 
 
@@ -613,17 +806,13 @@
                 new CreateDocumentBundleRequest
                 {
                     Title = _title.Trim(),
-                    Message = string.IsNullOrWhiteSpace(_message)
-                        ? null
-                        : _message.Trim(),
+                    Message = NullIfBlank(_message),
                     ExpiresInDays = _expiresInDays,
                     Items = _selection
                         .Select(x => new CreateDocumentBundleItem
                         {
                             DocumentId = x.Document.Id,
-                            DisplayName = string.IsNullOrWhiteSpace(x.DisplayName)
-                                ? null
-                                : x.DisplayName.Trim()
+                            DisplayName = NullIfBlank(x.DisplayName)
                         })
                         .ToList()
                 };
@@ -645,7 +834,7 @@
             _message = string.Empty;
             _expiresInDays = null;
 
-            await LoadBundlesAsync();
+            await ReloadBundlesAsync();
         }
         finally
         {
@@ -656,6 +845,14 @@
     private async Task RenewAsync(
         DocumentBundleResponse bundle)
     {
+        var confirmed =
+            await JS.InvokeAsync<bool>(
+                "confirm",
+                $"¿Generar un enlace nuevo para \"{bundle.Title}\"? El que tenga el cliente dejará de funcionar.");
+
+        if (!confirmed)
+            return;
+
         var renewed = await Toasts.RunApiAsync(
             () => RenderSetApi.RenewBundleLinkAsync(
                 CurrentTenant.Id,
@@ -669,7 +866,7 @@
 
         ShowLink(renewed);
 
-        await LoadBundlesAsync();
+        await ReloadBundlesAsync();
     }
 
     private async Task RevokeAsync(
@@ -691,7 +888,7 @@
             errorTitle: "No se ha podido revocar el enlace");
 
         if (revoked)
-            await LoadBundlesAsync();
+            await ReloadBundlesAsync();
     }
 
     private void ShowLink(
@@ -707,23 +904,63 @@
                 bundle.ExpiresAtUtc);
     }
 
-    private async Task CopyLinkAsync()
+    /// <summary>
+    /// El portapapeles del navegador sólo funciona en https o localhost. Si
+    /// falla, el toast lo dice y el enlace sigue a mano en la tarjeta o con
+    /// el botón de abrir.
+    /// </summary>
+    private async Task CopyAsync(
+        string? url)
     {
-        if (_lastLink is null)
+        if (string.IsNullOrWhiteSpace(url))
             return;
 
         await Toasts.RunAsync(
             async () => await JS.InvokeVoidAsync(
                 "navigator.clipboard.writeText",
-                _lastLink.Url),
+                url),
             success: "Enlace copiado.",
-            errorTitle: "No se ha podido copiar. Selecciónalo y cópialo a mano");
-
-        // El portapapeles del navegador sólo funciona en https o localhost.
-        // Con la API en http, el campo se selecciona solo al pulsar en él.
+            errorTitle: "No se ha podido copiar al portapapeles");
     }
 
+
     // ------------------------------------------------------------ formato
+
+    /// <summary>
+    /// Las fechas del filtro son días locales del usuario. "Desde el 1" es
+    /// desde las 00:00 locales del 1 y "hasta el 5" es hasta el inicio del
+    /// 6, para que el día 5 entre entero.
+    /// </summary>
+    private static DateTimeOffset? StartOfDay(
+        DateOnly? date) =>
+        date is { } value
+            ? new DateTimeOffset(
+                DateTime.SpecifyKind(
+                    value.ToDateTime(TimeOnly.MinValue),
+                    DateTimeKind.Local))
+            : null;
+
+    private static DateTimeOffset? StartOfNextDay(
+        DateOnly? date) =>
+        StartOfDay(date?.AddDays(1));
+
+    private static bool DateRangeIsValid(
+        DateOnly? from,
+        DateOnly? to) =>
+        from is null || to is null || from <= to;
+
+    private static string CountLabel(
+        int shown,
+        string? cursor) =>
+        cursor is null
+            ? shown.ToString()
+            : $"{shown}+";
+
+    private static string? NullIfBlank(
+        string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
 
     private string ReportName(
         string reportId) =>

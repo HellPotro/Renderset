@@ -69,5 +69,18 @@ public sealed class RenderedDocumentEntityConfiguration
             })
             .HasDatabaseName(
                 "IX_RenderedDocuments_Report");
+
+        // Listado paginado por fecha (pantalla de bundles). El INCLUDE y el
+        // orden descendente están en el script SQL; aquí basta con que EF
+        // conozca el índice.
+        builder.HasIndex(x =>
+            new
+            {
+                x.TenantId,
+                x.CreatedAtUtc,
+                x.DocumentId
+            })
+            .HasDatabaseName(
+                "IX_RenderedDocuments_Tenant_Created");
     }
 }

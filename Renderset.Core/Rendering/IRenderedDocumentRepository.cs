@@ -1,3 +1,5 @@
+using Renderset.Core.Paging;
+
 namespace Renderset.Core.Rendering;
 
 public interface IRenderedDocumentRepository
@@ -19,9 +21,10 @@ public interface IRenderedDocumentRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Listado para la pantalla de consulta, sin contenido.
+    /// Listado para la pantalla de consulta, sin contenido, paginado por
+    /// cursor.
     /// </summary>
-    Task<IReadOnlyList<RenderedDocumentSummary>> SearchAsync(
+    Task<PagedResult<RenderedDocumentSummary>> SearchAsync(
         string tenantId,
         RenderedDocumentQuery query,
         CancellationToken cancellationToken = default);

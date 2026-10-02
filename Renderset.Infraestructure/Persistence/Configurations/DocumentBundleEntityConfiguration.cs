@@ -40,6 +40,9 @@ public sealed class DocumentBundleEntityConfiguration
             .IsFixedLength()
             .IsRequired();
 
+        builder.Property(x => x.ProtectedToken)
+            .HasMaxLength(1000);
+
         builder.Property(x => x.CreatedAtUtc)
             .HasDefaultValueSql("SYSUTCDATETIME()");
 

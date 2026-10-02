@@ -17,6 +17,12 @@ public sealed class DocumentBundleEntity
     /// </summary>
     public byte[] TokenHash { get; set; } = default!;
 
+    /// <summary>
+    /// Token cifrado con Data Protection, para poder volver a abrir el enlace
+    /// desde la gestión. Nulo en bundles anteriores a esta columna.
+    /// </summary>
+    public string? ProtectedToken { get; set; }
+
     public DateTime TokenIssuedAtUtc { get; set; }
 
     public DateTime ExpiresAtUtc { get; set; }

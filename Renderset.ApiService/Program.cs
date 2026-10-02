@@ -1,7 +1,9 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Renderset.Api.Endpoints;
+using Renderset.Api.Sharing;
 using Renderset.Core.Blocks;
 using Renderset.Core.Localization;
 using Renderset.Core.Presets;
@@ -55,11 +57,29 @@ builder.Services.AddScoped<IReportRenderService, ReportRenderService>();
 
 builder.Services.AddSingleton(TimeProvider.System);
 
-builder.Services.AddSingleton(
+var documentSharing =
     builder.Configuration
         .GetSection(DocumentSharingOptions.SectionName)
         .Get<DocumentSharingOptions>()
-    ?? new DocumentSharingOptions());
+    ?? new DocumentSharingOptions();
+
+builder.Services.AddSingleton(documentSharing);
+
+// Cifra el token de los enlaces para poder volver a abrirlos desde la
+// gestión. El nombre de aplicación fijo hace que varias instancias de la API
+// compartan claves si comparten carpeta.
+var dataProtection =
+    builder.Services
+        .AddDataProtection()
+        .SetApplicationName("Renderset.ApiService");
+
+if (!string.IsNullOrWhiteSpace(documentSharing.DataProtectionKeysPath))
+{
+    dataProtection.PersistKeysToFileSystem(
+        new DirectoryInfo(documentSharing.DataProtectionKeysPath));
+}
+
+builder.Services.AddSingleton<IBundleTokenProtector, DataProtectionBundleTokenProtector>();
 
 builder.Services.AddScoped<IDocumentBundleRepository, EfDocumentBundleRepository>();
 builder.Services.AddScoped<IDocumentBundleService, DocumentBundleService>();
