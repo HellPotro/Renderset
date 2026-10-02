@@ -1,0 +1,777 @@
+@page "/bundles"
+
+@using Renderset.Core.Rendering
+@using Renderset.Core.Reports
+@using Renderset.Core.Sharing
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+
+<PageTitle>Documentos compartidos - RenderSet</PageTitle>
+
+<div class="page bundles-page">
+
+    <header class="page-header">
+
+        <div>
+            <h1>Documentos compartidos</h1>
+
+            <p>
+                Consulta los documentos emitidos y agrúpalos en un único
+                enlace para el cliente.
+            </p>
+        </div>
+
+        <div class="page-actions">
+            <a class="secondary-button"
+               href="/bundles/settings">
+                <i class="fa-solid fa-sliders"></i>
+                Página pública
+            </a>
+        </div>
+
+    </header>
+
+
+    @if (_lastLink is not null)
+    {
+        <section class="bundle-link-card">
+
+            <div class="bundle-link-heading">
+
+                <i class="fa-solid fa-link"></i>
+
+                <div>
+                    <strong>Enlace listo: @_lastLink.Title</strong>
+                    <small>
+                        Caduca el @FormatDate(_lastLink.ExpiresAtUtc).
+                        Guárdalo ahora: el enlace no se puede volver a
+                        consultar, sólo generar uno nuevo.
+                    </small>
+                </div>
+
+                <button type="button"
+                        class="icon-button"
+                        title="Cerrar"
+                        @onclick="() => _lastLink = null">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+
+            </div>
+
+            <div class="bundle-link-row">
+
+                <input readonly
+                       value="@_lastLink.Url"
+                       onfocus="this.select()" />
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="CopyLinkAsync">
+                    <i class="fa-regular fa-copy"></i>
+                    Copiar
+                </button>
+
+                <a class="primary-button"
+                   href="@_lastLink.Url"
+                   target="_blank"
+                   rel="noopener">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    Abrir
+                </a>
+
+            </div>
+
+        </section>
+    }
+
+
+    <div class="bundles-layout">
+
+        @* ---------------------------------------------------- documentos *@
+
+        <section class="editor-card bundles-documents">
+
+            <header class="editor-card-header bundles-card-header">
+
+                <h2>
+                    Documentos emitidos
+                    <span class="bundles-count">@_documents.Count</span>
+                </h2>
+
+            </header>
+
+            <div class="bundles-toolbar">
+
+                <div class="bundles-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="search"
+                           placeholder="Buscar por nombre de fichero o id"
+                           @bind="_search"
+                           @bind:event="oninput"
+                           @onkeydown="SearchKeyDownAsync" />
+                </div>
+
+                <select value="@_reportFilter"
+                        @onchange="ReportFilterChangedAsync">
+
+                    <option value="">Todos los reports</option>
+
+                    @foreach (var report in _reports)
+                    {
+                        <option value="@report.Id">@report.Name</option>
+                    }
+
+                </select>
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="LoadDocumentsAsync">
+                    Buscar
+                </button>
+
+            </div>
+
+            @if (_loadingDocuments)
+            {
+                <div class="page-state">Cargando documentos...</div>
+            }
+            else if (_documents.Count == 0)
+            {
+                <div class="bundles-empty">
+                    <i class="fa-regular fa-file-lines"></i>
+                    <p>
+                        No hay documentos con ese filtro. Los documentos
+                        aparecen aquí al emitirlos con /api/render.
+                    </p>
+                </div>
+            }
+            else
+            {
+                <div class="bundles-table">
+
+                    <div class="bundles-table-header">
+                        <span></span>
+                        <span>Documento</span>
+                        <span>Report</span>
+                        <span>Idioma</span>
+                        <span>Emitido</span>
+                        <span></span>
+                    </div>
+
+                    @foreach (var document in _documents)
+                    {
+                        var selected = IsSelected(document);
+
+                        <div class="bundles-row @(selected ? "is-selected" : null)"
+                             @key="document.Id">
+
+                            <input type="checkbox"
+                                   checked="@selected"
+                                   title="Añadir al bundle"
+                                   @onchange="() => ToggleSelection(document)" />
+
+                            <div class="bundles-document">
+                                <strong>@document.FileName</strong>
+                                <code>@document.Id</code>
+                            </div>
+
+                            <span class="bundles-muted">@ReportName(document.ReportId)</span>
+
+                            <span class="type-badge">@document.Culture</span>
+
+                            <span class="bundles-muted">@FormatDate(document.CreatedAtUtc)</span>
+
+                            <a class="icon-button"
+                               href="@DocumentUrl(document)"
+                               target="_blank"
+                               rel="noopener"
+                               title="Abrir el documento">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </a>
+
+                        </div>
+                    }
+
+                </div>
+            }
+
+        </section>
+
+
+        @* ---------------------------------------------------- nuevo bundle *@
+
+        <aside class="editor-card bundles-builder">
+
+            <header class="editor-card-header bundles-card-header">
+                <h2>
+                    Nuevo bundle
+                    <span class="bundles-count">@_selection.Count</span>
+                </h2>
+            </header>
+
+            <div class="editor-card-body">
+
+                @if (_selection.Count == 0)
+                {
+                    <p class="bundles-hint">
+                        Marca documentos en la lista. Saldrán en el enlace en
+                        el orden en que los marques; aquí puedes cambiarlo y
+                        poner el nombre que verá el cliente.
+                    </p>
+                }
+                else
+                {
+                    <ol class="bundles-selection">
+
+                        @for (var i = 0; i < _selection.Count; i++)
+                        {
+                            var index = i;
+                            var item = _selection[index];
+
+                            <li @key="item.Document.Id">
+
+                                <span class="bundles-position">@(index + 1)</span>
+
+                                <input value="@item.DisplayName"
+                                       title="@item.Document.FileName"
+                                       placeholder="@DefaultDisplayName(item.Document)"
+                                       @oninput="e => item.DisplayName = e.Value?.ToString() ?? string.Empty" />
+
+                                <div class="bundles-selection-actions">
+
+                                    <button type="button"
+                                            class="icon-button"
+                                            title="Subir"
+                                            disabled="@(index == 0)"
+                                            @onclick="() => Move(index, -1)">
+                                        <i class="fa-solid fa-arrow-up"></i>
+                                    </button>
+
+                                    <button type="button"
+                                            class="icon-button"
+                                            title="Bajar"
+                                            disabled="@(index == _selection.Count - 1)"
+                                            @onclick="() => Move(index, 1)">
+                                        <i class="fa-solid fa-arrow-down"></i>
+                                    </button>
+
+                                    <button type="button"
+                                            class="icon-button"
+                                            title="Quitar"
+                                            @onclick="() => _selection.RemoveAt(index)">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+
+                                </div>
+
+                            </li>
+                        }
+
+                    </ol>
+                }
+
+                <div class="form-group">
+                    <label>Título</label>
+                    <input @bind="_title"
+                           @bind:event="oninput"
+                           maxlength="@DocumentBundleService.MaxTitleLength"
+                           placeholder="Envío pedido 4512 - Gestamp Esmar" />
+                </div>
+
+                <div class="form-group">
+                    <label>Mensaje</label>
+                    <textarea rows="3"
+                              @bind="_message"
+                              @bind:event="oninput"
+                              maxlength="@DocumentBundleService.MaxMessageLength"
+                              placeholder="@MessagePlaceholder"></textarea>
+                    <small>
+                        Vacío usa el mensaje por defecto de la página pública.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label>Caducidad (días)</label>
+                    <input type="number"
+                           min="1"
+                           max="@MaxExpirationDays"
+                           @bind="_expiresInDays"
+                           placeholder="@DefaultExpirationDays" />
+                    @if (!ExpirationIsValid)
+                    {
+                        <small class="bundles-error">
+                            Entre 1 y @MaxExpirationDays días.
+                        </small>
+                    }
+                    else
+                    {
+                        <small>Vacío: @DefaultExpirationDays días.</small>
+                    }
+                </div>
+
+                <button type="button"
+                        class="primary-button bundles-create"
+                        disabled="@(!CanCreate)"
+                        @onclick="CreateAsync">
+                    @if (_creating)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-link"></i>
+                    }
+                    Crear enlace
+                </button>
+
+            </div>
+
+        </aside>
+
+    </div>
+
+
+    @* -------------------------------------------------------- recientes *@
+
+    <section class="editor-card bundles-recent">
+
+        <header class="editor-card-header bundles-card-header">
+
+            <h2>Bundles recientes</h2>
+
+            <button type="button"
+                    class="icon-button"
+                    title="Recargar"
+                    @onclick="LoadBundlesAsync">
+                <i class="fa-solid fa-rotate"></i>
+            </button>
+
+        </header>
+
+        @if (_bundles.Count == 0)
+        {
+            <div class="bundles-empty">
+                <i class="fa-solid fa-link-slash"></i>
+                <p>Todavía no has creado ningún bundle.</p>
+            </div>
+        }
+        else
+        {
+            <div class="bundles-table">
+
+                <div class="bundles-table-header is-recent">
+                    <span>Bundle</span>
+                    <span>Estado</span>
+                    <span>Caduca</span>
+                    <span>Accesos</span>
+                    <span></span>
+                </div>
+
+                @foreach (var bundle in _bundles)
+                {
+                    <div class="bundles-row is-recent"
+                         @key="bundle.BundleId">
+
+                        <div class="bundles-document">
+                            <strong>@bundle.Title</strong>
+                            <small>
+                                @(string.Join(" · ", bundle.Documents.Select(x => x.DisplayName)))
+                            </small>
+                        </div>
+
+                        <span class="@($"bundles-status is-{bundle.Status.ToString().ToLowerInvariant()}")">
+                            @StatusText(bundle.Status)
+                        </span>
+
+                        <span class="bundles-muted">@FormatDate(bundle.ExpiresAtUtc)</span>
+
+                        <span class="bundles-muted">
+                            @bundle.AccessCount
+                            @if (bundle.LastAccessedAtUtc is { } last)
+                            {
+                                <small>último @FormatDate(last)</small>
+                            }
+                        </span>
+
+                        <div class="bundles-row-actions">
+
+                            <button type="button"
+                                    class="icon-button"
+                                    title="Generar un enlace nuevo (el anterior deja de valer)"
+                                    @onclick="() => RenewAsync(bundle)">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+
+                            <button type="button"
+                                    class="icon-button"
+                                    title="Revocar el enlace"
+                                    disabled="@(bundle.Status == DocumentBundleStatus.Revoked)"
+                                    @onclick="() => RevokeAsync(bundle)">
+                                <i class="fa-solid fa-ban"></i>
+                            </button>
+
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+        }
+
+    </section>
+
+</div>
+
+
+@code {
+
+    private IReadOnlyList<RenderedDocumentSummary> _documents = [];
+
+    private IReadOnlyList<DocumentBundleResponse> _bundles = [];
+
+    private IReadOnlyList<Report> _reports = [];
+
+    private DocumentSharingSettingsResponse? _sharing;
+
+    private readonly List<SelectedDocument> _selection = [];
+
+    private string _search = string.Empty;
+
+    private string _reportFilter = string.Empty;
+
+    private string _title = string.Empty;
+
+    private string _message = string.Empty;
+
+    private int? _expiresInDays;
+
+    private bool _loadingDocuments = true;
+
+    private bool _creating;
+
+    private CreatedLink? _lastLink;
+
+
+    private int MaxExpirationDays =>
+        _sharing?.MaxExpirationDays ?? 365;
+
+    private int DefaultExpirationDays =>
+        _sharing?.Settings.DefaultExpirationDays
+        ?? _sharing?.SystemDefaultExpirationDays
+        ?? 30;
+
+    private string MessagePlaceholder =>
+        string.IsNullOrWhiteSpace(_sharing?.Settings.DefaultMessage)
+            ? "Adjuntamos la documentación del envío."
+            : _sharing!.Settings.DefaultMessage!;
+
+    private bool ExpirationIsValid =>
+        _expiresInDays is null ||
+        (_expiresInDays >= 1 && _expiresInDays <= MaxExpirationDays);
+
+    private bool CanCreate =>
+        !_creating &&
+        _selection.Count > 0 &&
+        !string.IsNullOrWhiteSpace(_title) &&
+        ExpirationIsValid;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Independientes entre sí: se piden a la vez.
+        await Task.WhenAll(
+            LoadReportsAsync(),
+            LoadSharingAsync(),
+            LoadDocumentsAsync(),
+            LoadBundlesAsync());
+    }
+
+
+    // ------------------------------------------------------------ carga
+
+    private async Task LoadReportsAsync()
+    {
+        var reports = await Toasts.RunAsync(
+            () => RenderSetApi.GetReportsAsync(CurrentTenant.Id),
+            errorTitle: "No se han podido cargar los reports");
+
+        if (reports is not null)
+            _reports = reports.OrderBy(x => x.Name).ToList();
+    }
+
+    private async Task LoadSharingAsync()
+    {
+        _sharing = await Toasts.RunAsync(
+            () => RenderSetApi.GetSharingSettingsAsync(CurrentTenant.Id),
+            errorTitle: "No se ha podido cargar la configuración de la página pública");
+    }
+
+    private async Task LoadDocumentsAsync()
+    {
+        _loadingDocuments = true;
+
+        try
+        {
+            var documents = await Toasts.RunAsync(
+                () => RenderSetApi.SearchDocumentsAsync(
+                    CurrentTenant.Id,
+                    string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                    string.IsNullOrWhiteSpace(_reportFilter) ? null : _reportFilter,
+                    100),
+                errorTitle: "No se han podido cargar los documentos");
+
+            if (documents is not null)
+                _documents = documents;
+        }
+        finally
+        {
+            _loadingDocuments = false;
+        }
+    }
+
+    private async Task LoadBundlesAsync()
+    {
+        var bundles = await Toasts.RunAsync(
+            () => RenderSetApi.GetBundlesAsync(CurrentTenant.Id, 30),
+            errorTitle: "No se han podido cargar los bundles");
+
+        if (bundles is not null)
+            _bundles = bundles;
+    }
+
+    private async Task SearchKeyDownAsync(
+        KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await LoadDocumentsAsync();
+    }
+
+    private async Task ReportFilterChangedAsync(
+        ChangeEventArgs e)
+    {
+        _reportFilter = e.Value?.ToString() ?? string.Empty;
+
+        await LoadDocumentsAsync();
+    }
+
+
+    // ------------------------------------------------------------ selección
+
+    private bool IsSelected(
+        RenderedDocumentSummary document) =>
+        _selection.Any(x => x.Document.Id == document.Id);
+
+    private void ToggleSelection(
+        RenderedDocumentSummary document)
+    {
+        var existing =
+            _selection.FirstOrDefault(x => x.Document.Id == document.Id);
+
+        if (existing is not null)
+        {
+            _selection.Remove(existing);
+            return;
+        }
+
+        _selection.Add(
+            new SelectedDocument
+            {
+                Document = document
+            });
+    }
+
+    private void Move(
+        int index,
+        int offset)
+    {
+        var target = index + offset;
+
+        if (target < 0 || target >= _selection.Count)
+            return;
+
+        (_selection[index], _selection[target]) =
+            (_selection[target], _selection[index]);
+    }
+
+
+    // ------------------------------------------------------------ acciones
+
+    private async Task CreateAsync()
+    {
+        if (!CanCreate)
+            return;
+
+        _creating = true;
+
+        try
+        {
+            var request =
+                new CreateDocumentBundleRequest
+                {
+                    Title = _title.Trim(),
+                    Message = string.IsNullOrWhiteSpace(_message)
+                        ? null
+                        : _message.Trim(),
+                    ExpiresInDays = _expiresInDays,
+                    Items = _selection
+                        .Select(x => new CreateDocumentBundleItem
+                        {
+                            DocumentId = x.Document.Id,
+                            DisplayName = string.IsNullOrWhiteSpace(x.DisplayName)
+                                ? null
+                                : x.DisplayName.Trim()
+                        })
+                        .ToList()
+                };
+
+            var created = await Toasts.RunApiAsync(
+                () => RenderSetApi.CreateBundleAsync(
+                    CurrentTenant.Id,
+                    request),
+                success: "Enlace creado.",
+                errorTitle: "No se ha podido crear el bundle");
+
+            if (created is null)
+                return;
+
+            ShowLink(created);
+
+            _selection.Clear();
+            _title = string.Empty;
+            _message = string.Empty;
+            _expiresInDays = null;
+
+            await LoadBundlesAsync();
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    private async Task RenewAsync(
+        DocumentBundleResponse bundle)
+    {
+        var renewed = await Toasts.RunApiAsync(
+            () => RenderSetApi.RenewBundleLinkAsync(
+                CurrentTenant.Id,
+                bundle.BundleId,
+                new RenewDocumentBundleLinkRequest()),
+            success: "Enlace nuevo generado. El anterior ya no funciona.",
+            errorTitle: "No se ha podido generar el enlace");
+
+        if (renewed is null)
+            return;
+
+        ShowLink(renewed);
+
+        await LoadBundlesAsync();
+    }
+
+    private async Task RevokeAsync(
+        DocumentBundleResponse bundle)
+    {
+        var confirmed =
+            await JS.InvokeAsync<bool>(
+                "confirm",
+                $"¿Revocar el enlace de \"{bundle.Title}\"? El cliente dejará de poder abrirlo.");
+
+        if (!confirmed)
+            return;
+
+        var revoked = await Toasts.RunApiAsync(
+            () => RenderSetApi.RevokeBundleAsync(
+                CurrentTenant.Id,
+                bundle.BundleId),
+            success: "Enlace revocado.",
+            errorTitle: "No se ha podido revocar el enlace");
+
+        if (revoked)
+            await LoadBundlesAsync();
+    }
+
+    private void ShowLink(
+        DocumentBundleResponse bundle)
+    {
+        if (string.IsNullOrWhiteSpace(bundle.Url))
+            return;
+
+        _lastLink =
+            new CreatedLink(
+                bundle.Title,
+                bundle.Url,
+                bundle.ExpiresAtUtc);
+    }
+
+    private async Task CopyLinkAsync()
+    {
+        if (_lastLink is null)
+            return;
+
+        await Toasts.RunAsync(
+            async () => await JS.InvokeVoidAsync(
+                "navigator.clipboard.writeText",
+                _lastLink.Url),
+            success: "Enlace copiado.",
+            errorTitle: "No se ha podido copiar. Selecciónalo y cópialo a mano");
+
+        // El portapapeles del navegador sólo funciona en https o localhost.
+        // Con la API en http, el campo se selecciona solo al pulsar en él.
+    }
+
+    // ------------------------------------------------------------ formato
+
+    private string ReportName(
+        string reportId) =>
+        _reports.FirstOrDefault(x => x.Id == reportId)?.Name ?? reportId;
+
+    private string DocumentUrl(
+        RenderedDocumentSummary document)
+    {
+        var api =
+            (Configuration["ReportingApi"] ?? string.Empty).TrimEnd('/');
+
+        return $"{api}/api/documents/{Uri.EscapeDataString(CurrentTenant.Id)}" +
+               $"/{Uri.EscapeDataString(document.Id)}";
+    }
+
+    private static string DefaultDisplayName(
+        RenderedDocumentSummary document) =>
+        Path.GetFileNameWithoutExtension(document.FileName);
+
+    private static string FormatDate(
+        DateTime utc) =>
+        DateTime.SpecifyKind(utc, DateTimeKind.Utc)
+            .ToLocalTime()
+            .ToString("dd/MM/yyyy HH:mm");
+
+    private static string StatusText(
+        DocumentBundleStatus status) =>
+        status switch
+        {
+            DocumentBundleStatus.Active => "Activo",
+            DocumentBundleStatus.Expired => "Caducado",
+            DocumentBundleStatus.Revoked => "Revocado",
+            _ => status.ToString()
+        };
+
+
+    private sealed class SelectedDocument
+    {
+        public required RenderedDocumentSummary Document { get; init; }
+
+        /// <summary>
+        /// Vacío deja que el servidor use el nombre del fichero.
+        /// </summary>
+        public string DisplayName { get; set; } = string.Empty;
+    }
+
+    private sealed record CreatedLink(
+        string Title,
+        string Url,
+        DateTime ExpiresAtUtc);
+}

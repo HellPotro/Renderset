@@ -1,0 +1,149 @@
+/* Estilos propios de la configuración de la página pública. Lo común viene
+   de pages.css; el selector de color es el ColorEditor de Renderset.Blazor,
+   con sus estilos de reporting.css. */
+
+.sharing-settings-page {
+    max-width: 1280px;
+}
+
+.sharing-settings-layout {
+    display: grid;
+    grid-template-columns: 380px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.editor-card-header.is-divider {
+    border-top: 1px solid #edf1f3;
+    border-radius: 0;
+}
+
+.sharing-colors {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.sharing-logo-preview {
+    display: flex;
+    align-items: center;
+    min-height: 56px;
+    margin-top: 4px;
+    padding: 10px 12px;
+    border: 1px dashed #d8e1e5;
+    border-radius: 7px;
+    background: #fff;
+}
+
+    .sharing-logo-preview img {
+        max-width: 160px;
+        max-height: 40px;
+        object-fit: contain;
+    }
+
+.sharing-error {
+    display: block;
+    color: #9a3d3d !important;
+}
+
+.sharing-link-button {
+    margin-top: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #4f7384;
+    font-size: 11px;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+    .sharing-link-button:hover {
+        color: #173d4f;
+    }
+
+
+/* ---------- Vista previa ---------- */
+
+.sharing-preview {
+    position: sticky;
+    top: 16px;
+    overflow: hidden;
+}
+
+.sharing-preview-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.sharing-preview-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+    .sharing-preview-tools select {
+        padding: 6px 8px;
+        border: 1px solid #d8e1e5;
+        border-radius: 7px;
+        background: #fafcfc;
+        color: #20323a;
+        font: inherit;
+        font-size: 11px;
+    }
+
+.sharing-segmented {
+    display: inline-flex;
+    padding: 2px;
+    border: 1px solid #d8e1e5;
+    border-radius: 7px;
+    background: #f5f8f9;
+}
+
+    .sharing-segmented button {
+        padding: 5px 10px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #61757e;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+        .sharing-segmented button.is-active {
+            background: #fff;
+            color: #173d4f;
+            box-shadow: 0 1px 2px rgba(23, 43, 53, .12);
+        }
+
+.sharing-preview-frame {
+    display: block;
+    width: 100%;
+    height: 620px;
+    border: 0;
+    border-bottom: 1px solid #edf1f3;
+    background: #f3f5f7;
+}
+
+.sharing-preview-note {
+    margin: 0;
+    padding: 10px 18px;
+    color: #8a999f;
+    font-size: 11px;
+}
+
+
+@media (max-width: 1000px) {
+
+    .sharing-settings-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sharing-preview {
+        position: static;
+    }
+}

@@ -3,8 +3,10 @@ using Renderset.Core.Blocks;
 using Renderset.Core.Localization;
 using Renderset.Core.Persistence;
 using Renderset.Core.Presets;
+using Renderset.Core.Rendering;
 using Renderset.Core.Reports;
 using Renderset.Core.Resources;
+using Renderset.Core.Sharing;
 using Renderset.Core.Translations;
 using Renderset.Core.Variables;
 
@@ -221,6 +223,76 @@ public interface IRenderSetApi
     Task<IApiResponse> DeleteVariableAsync(
         string tenantId,
         string key,
+        CancellationToken cancellationToken = default);
+
+    #endregion
+
+
+    #region Documents
+
+    [Get("/api/documents/{tenantId}")]
+    Task<IReadOnlyList<RenderedDocumentSummary>> SearchDocumentsAsync(
+        string tenantId,
+        [Query] string? search,
+        [Query] string? reportId,
+        [Query] int? take,
+        CancellationToken cancellationToken = default);
+
+    #endregion
+
+    #region Bundles
+
+    [Get("/api/bundles/{tenantId}")]
+    Task<IReadOnlyList<DocumentBundleResponse>> GetBundlesAsync(
+        string tenantId,
+        [Query] int? take,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// La respuesta trae la URL del enlace. Es el único momento en que
+    /// existe: después sólo se puede pedir una nueva.
+    /// </summary>
+    [Post("/api/bundles/{tenantId}")]
+    Task<IApiResponse<DocumentBundleResponse>> CreateBundleAsync(
+        string tenantId,
+        [Body] CreateDocumentBundleRequest request,
+        CancellationToken cancellationToken = default);
+
+    [Post("/api/bundles/{tenantId}/{bundleId}/revoke")]
+    Task<IApiResponse> RevokeBundleAsync(
+        string tenantId,
+        Guid bundleId,
+        CancellationToken cancellationToken = default);
+
+    [Post("/api/bundles/{tenantId}/{bundleId}/link")]
+    Task<IApiResponse<DocumentBundleResponse>> RenewBundleLinkAsync(
+        string tenantId,
+        Guid bundleId,
+        [Body] RenewDocumentBundleLinkRequest request,
+        CancellationToken cancellationToken = default);
+
+    #endregion
+
+    #region Sharing settings
+
+    [Get("/api/sharing/{tenantId}/settings")]
+    Task<DocumentSharingSettingsResponse> GetSharingSettingsAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
+    [Put("/api/sharing/{tenantId}/settings")]
+    Task<IApiResponse> SaveSharingSettingsAsync(
+        string tenantId,
+        [Body] DocumentSharingSettings settings,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// HTML de la página pública con la configuración sin guardar.
+    /// </summary>
+    [Post("/api/sharing/{tenantId}/preview")]
+    Task<string> PreviewSharingAsync(
+        string tenantId,
+        [Body] DocumentSharingPreviewRequest request,
         CancellationToken cancellationToken = default);
 
     #endregion

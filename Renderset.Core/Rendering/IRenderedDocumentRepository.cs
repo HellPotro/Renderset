@@ -18,6 +18,14 @@ public interface IRenderedDocumentRepository
         IReadOnlyCollection<string> documentIds,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Listado para la pantalla de consulta, sin contenido.
+    /// </summary>
+    Task<IReadOnlyList<RenderedDocumentSummary>> SearchAsync(
+        string tenantId,
+        RenderedDocumentQuery query,
+        CancellationToken cancellationToken = default);
+
     Task SaveAsync(
         string tenantId,
         RenderedDocument document,

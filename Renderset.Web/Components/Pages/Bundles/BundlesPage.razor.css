@@ -1,0 +1,414 @@
+/* Estilos propios de la página de documentos compartidos. Lo común
+   (.page, .page-header, .editor-card, .form-group, botones, .icon-button,
+   .type-badge) viene de pages.css. */
+
+.bundles-page {
+    max-width: 1280px;
+}
+
+
+/* ---------- Enlace recién creado ---------- */
+
+.bundle-link-card {
+    margin-bottom: 20px;
+    padding: 16px 18px;
+    border: 1px solid #b9d7c6;
+    border-radius: 10px;
+    background: #f3faf6;
+}
+
+.bundle-link-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+    .bundle-link-heading > i {
+        margin-top: 2px;
+        color: #2f7a52;
+    }
+
+    .bundle-link-heading > div {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .bundle-link-heading strong {
+        color: #1f4d36;
+        font-size: 13px;
+    }
+
+    .bundle-link-heading small {
+        color: #557a66;
+        font-size: 11px;
+    }
+
+.bundle-link-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
+}
+
+    .bundle-link-row input {
+        min-width: 0;
+        padding: 8px 10px;
+        border: 1px solid #c9dfd2;
+        border-radius: 7px;
+        background: #fff;
+        color: #20323a;
+        font-family: "Cascadia Code", Consolas, monospace;
+        font-size: 11px;
+    }
+
+
+/* ---------- Estructura ---------- */
+
+.bundles-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 16px;
+}
+
+.bundles-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+    .bundles-card-header h2 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+.bundles-count {
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: #edf2f4;
+    color: #617780;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.bundles-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 200px auto;
+    gap: 8px;
+    padding: 12px 18px;
+    border-bottom: 1px solid #edf1f3;
+}
+
+    .bundles-toolbar select {
+        min-width: 0;
+        padding: 7px 9px;
+        border: 1px solid #d8e1e5;
+        border-radius: 7px;
+        background: #fafcfc;
+        color: #20323a;
+        font: inherit;
+        font-size: 12px;
+    }
+
+.bundles-search {
+    position: relative;
+}
+
+    .bundles-search i {
+        position: absolute;
+        top: 50%;
+        left: 10px;
+        transform: translateY(-50%);
+        color: #93a0a5;
+        font-size: 11px;
+    }
+
+    .bundles-search input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 10px 8px 30px;
+        border: 1px solid #d8e1e5;
+        border-radius: 7px;
+        background: #fafcfc;
+        color: #20323a;
+        font: inherit;
+        font-size: 12px;
+    }
+
+
+/* ---------- Tablas ---------- */
+
+.bundles-table-header,
+.bundles-row {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) minmax(90px, 160px) 60px 112px 31px;
+    align-items: center;
+    gap: 12px;
+    padding: 0 18px;
+}
+
+    .bundles-table-header.is-recent,
+    .bundles-row.is-recent {
+        grid-template-columns: minmax(0, 1fr) 90px 112px 150px 70px;
+    }
+
+.bundles-table-header {
+    min-height: 36px;
+    border-bottom: 1px solid #e5ebee;
+    background: #f7f9fa;
+}
+
+    .bundles-table-header span {
+        color: #84939a;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+
+.bundles-row {
+    min-height: 54px;
+    border-bottom: 1px solid #edf1f3;
+    font-size: 12px;
+}
+
+    .bundles-row:last-child {
+        border-bottom: 0;
+    }
+
+    .bundles-row:hover {
+        background: #fafcfc;
+    }
+
+    .bundles-row.is-selected {
+        background: #f1f6f8;
+    }
+
+    .bundles-row input[type="checkbox"] {
+        width: 15px;
+        height: 15px;
+        cursor: pointer;
+    }
+
+.bundles-document {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    padding: 8px 0;
+}
+
+    .bundles-document strong {
+        overflow: hidden;
+        color: #20323a;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .bundles-document code,
+    .bundles-document small {
+        overflow: hidden;
+        color: #8a999f;
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+.bundles-muted {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+    color: #61757e;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+    .bundles-muted small {
+        color: #93a0a5;
+        font-size: 10px;
+    }
+
+.bundles-status {
+    justify-self: start;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+    .bundles-status.is-active {
+        background: #e5f4ec;
+        color: #2f7a52;
+    }
+
+    .bundles-status.is-expired {
+        background: #f4f0e4;
+        color: #8a6d24;
+    }
+
+    .bundles-status.is-revoked {
+        background: #f8e9e9;
+        color: #9a3d3d;
+    }
+
+.bundles-row-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 5px;
+}
+
+.bundles-row .icon-button:disabled,
+.bundles-selection .icon-button:disabled {
+    opacity: .4;
+    cursor: default;
+}
+
+.bundles-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 36px 24px;
+    color: #8a999f;
+    text-align: center;
+}
+
+    .bundles-empty i {
+        font-size: 20px;
+    }
+
+    .bundles-empty p {
+        max-width: 360px;
+        margin: 0;
+        font-size: 12px;
+    }
+
+
+/* ---------- Constructor del bundle ---------- */
+
+.bundles-builder {
+    position: sticky;
+    top: 16px;
+}
+
+.bundles-hint {
+    margin: 0 0 16px;
+    padding: 12px;
+    border: 1px dashed #d8e1e5;
+    border-radius: 7px;
+    color: #74858d;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.bundles-selection {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 0 18px;
+    padding: 0;
+    list-style: none;
+}
+
+    .bundles-selection li {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .bundles-selection input {
+        min-width: 0;
+        padding: 7px 9px;
+        border: 1px solid #d8e1e5;
+        border-radius: 7px;
+        background: #fafcfc;
+        color: #20323a;
+        font: inherit;
+        font-size: 12px;
+    }
+
+.bundles-position {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #173d4f;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.bundles-selection-actions {
+    display: flex;
+    gap: 3px;
+}
+
+    .bundles-selection-actions .icon-button {
+        width: 26px;
+        height: 26px;
+        font-size: 10px;
+    }
+
+.bundles-error {
+    color: #9a3d3d !important;
+}
+
+.bundles-create {
+    width: 100%;
+}
+
+
+/* ---------- Estrecho ---------- */
+
+@media (max-width: 1000px) {
+
+    .bundles-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .bundles-builder {
+        position: static;
+    }
+}
+
+@media (max-width: 700px) {
+
+    .bundles-toolbar {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .bundles-table-header {
+        display: none;
+    }
+
+    .bundles-row {
+        grid-template-columns: 22px minmax(0, 1fr) 31px;
+    }
+
+        .bundles-row > .bundles-muted,
+        .bundles-row > .type-badge {
+            display: none;
+        }
+
+        .bundles-row.is-recent {
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+            .bundles-row.is-recent > .bundles-status {
+                display: none;
+            }
+
+    .bundle-link-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

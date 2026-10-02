@@ -35,5 +35,11 @@ public sealed class TenantEntityConfiguration
 
         builder.Property(x => x.SecondaryColor)
             .HasMaxLength(20);
+
+        builder.Property(x => x.SharingDefaultMessage)
+            .HasMaxLength(2000);
+
+        builder.Property(x => x.SharingFooterText)
+            .HasMaxLength(500);
     }
 }

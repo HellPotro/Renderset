@@ -19,6 +19,11 @@
 
         <p>@Message</p>
 
+        @if (!string.IsNullOrWhiteSpace(View.FooterText))
+        {
+            <p class="rs-share-footer">@View.FooterText</p>
+        }
+
     </div>
 
 </main>

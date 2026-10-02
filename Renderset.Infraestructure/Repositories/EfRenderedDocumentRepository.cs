@@ -112,6 +112,66 @@ public sealed class EfRenderedDocumentRepository
             .ToList();
     }
 
+    public async Task<IReadOnlyList<RenderedDocumentSummary>> SearchAsync(
+        string tenantId,
+        RenderedDocumentQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        await using var context =
+            await _contextFactory.CreateDbContextAsync(
+                cancellationToken);
+
+        var documents =
+            context.RenderedDocuments
+                .AsNoTracking()
+                .Where(x => x.TenantId == tenantId);
+
+        if (!string.IsNullOrWhiteSpace(query.ReportId))
+        {
+            var reportId = query.ReportId.Trim();
+
+            documents = documents.Where(x => x.ReportId == reportId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim();
+
+            documents = documents.Where(x =>
+                x.FileName.Contains(search) ||
+                x.DocumentId.Contains(search));
+        }
+
+        var rows =
+            await documents
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .Take(Math.Clamp(query.Take, 1, RenderedDocumentQuery.MaxTake))
+                .Select(x => new
+                {
+                    x.DocumentId,
+                    x.ReportId,
+                    x.Culture,
+                    x.FileName,
+                    x.Format,
+                    x.CreatedAtUtc
+                })
+                .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(x => new RenderedDocumentSummary
+            {
+                Id = x.DocumentId,
+                ReportId = x.ReportId,
+                Culture = x.Culture,
+                FileName = x.FileName,
+                Format = ParseFormat(x.Format),
+                CreatedAtUtc = DateTime.SpecifyKind(x.CreatedAtUtc, DateTimeKind.Utc)
+            })
+            .ToList();
+    }
+
     public async Task SaveAsync(
         string tenantId,
         RenderedDocument document,

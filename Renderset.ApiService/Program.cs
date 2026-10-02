@@ -63,7 +63,7 @@ builder.Services.AddSingleton(
 
 builder.Services.AddScoped<IDocumentBundleRepository, EfDocumentBundleRepository>();
 builder.Services.AddScoped<IDocumentBundleService, DocumentBundleService>();
-builder.Services.AddScoped<ITenantBrandingProvider, EfTenantBrandingProvider>();
+builder.Services.AddScoped<IDocumentSharingSettingsRepository, EfDocumentSharingSettingsRepository>();
 builder.Services.AddSingleton<IDocumentBundlePageRenderer, BlazorDocumentBundlePageRenderer>();
 
 // Almacén del contenido de los documentos. Sin configurar (o con
@@ -152,6 +152,7 @@ app.MapReportEndpoints();
 app.MapRenderEndpoints();
 app.MapBundleEndpoints();
 app.MapSharingEndpoints();
+app.MapSharingSettingsEndpoints();
 app.MapReportVariableEndpoints();
 app.MapReportResourceEndpoints();
 app.MapTenantCultureEndpoints();

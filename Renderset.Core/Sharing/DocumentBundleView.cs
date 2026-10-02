@@ -10,7 +10,15 @@ public sealed class DocumentBundleView
 {
     public required string Title { get; init; }
 
+    /// <summary>
+    /// El del bundle o, si no tiene, el mensaje por defecto del tenant.
+    /// </summary>
     public string? Message { get; init; }
+
+    /// <summary>
+    /// Pie configurado por el tenant (contacto). Opcional.
+    /// </summary>
+    public string? FooterText { get; init; }
 
     public required string Culture { get; init; }
 
@@ -41,6 +49,8 @@ public sealed class DocumentBundleViewItem
 public sealed class DocumentBundleUnavailableView
 {
     public required DocumentBundleOpenStatus Reason { get; init; }
+
+    public string? FooterText { get; init; }
 
     public required string Culture { get; init; }
 

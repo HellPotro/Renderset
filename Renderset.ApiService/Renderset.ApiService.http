@@ -213,7 +213,7 @@ Content-Type: application/json
   "expiresInDays": 15,
   "items": [
     {
-      "documentId": "f3ad6d5120f84c3cbd3ad4922bd039b0",
+      "documentId": "pega-aqui-un-documentId",
       "displayName": "Factura F-2026-0412"
     },
     {

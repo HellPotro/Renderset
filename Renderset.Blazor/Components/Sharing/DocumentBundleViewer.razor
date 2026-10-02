@@ -75,6 +75,11 @@
                 }
             </ol>
 
+            @if (!string.IsNullOrWhiteSpace(View.FooterText))
+            {
+                <p class="rs-share-footer">@View.FooterText</p>
+            }
+
         </nav>
 
         <section class="rs-share-viewer">

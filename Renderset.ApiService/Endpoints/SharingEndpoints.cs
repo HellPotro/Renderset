@@ -78,7 +78,7 @@ public static class SharingEndpoints
         string token,
         HttpContext httpContext,
         IDocumentBundleService bundles,
-        ITenantBrandingProvider branding,
+        IDocumentSharingSettingsRepository sharingSettings,
         IDocumentBundlePageRenderer pages,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
@@ -97,17 +97,18 @@ public static class SharingEndpoints
             return await UnavailableAsync(
                 open,
                 httpContext,
-                branding,
+                sharingSettings,
                 pages,
                 cancellationToken);
         }
 
         var bundle = open.Bundle!;
 
-        var tenantBranding =
-            await branding.GetAsync(
+        var settings =
+            await sharingSettings.GetAsync(
                 bundle.TenantId,
-                cancellationToken);
+                cancellationToken)
+            ?? new DocumentSharingSettings();
 
         var basePath =
             ShareLinks.LocalBundlePath(
@@ -119,10 +120,17 @@ public static class SharingEndpoints
             new DocumentBundleView
             {
                 Title = bundle.Title,
-                Message = bundle.Message,
+
+                // El mensaje propio del bundle gana; si no tiene, el del
+                // tenant. Se resuelve aquí y no al crear para que cambiar el
+                // texto por defecto afecte también a los enlaces ya enviados.
+                Message = string.IsNullOrWhiteSpace(bundle.Message)
+                    ? settings.Normalized().DefaultMessage
+                    : bundle.Message,
+                FooterText = settings.Normalized().FooterText,
                 Culture = bundle.Culture,
                 ExpiresAtUtc = bundle.ExpiresAtUtc,
-                Branding = tenantBranding,
+                Branding = settings.ToBranding(bundle.TenantId),
                 Texts = DocumentBundleTexts.For(bundle.Culture),
                 DownloadAllUrl = $"{basePath}/download",
                 Documents = bundle.Items
@@ -164,7 +172,7 @@ public static class SharingEndpoints
         int position,
         HttpContext httpContext,
         IDocumentBundleService bundles,
-        ITenantBrandingProvider branding,
+        IDocumentSharingSettingsRepository sharingSettings,
         IDocumentBundlePageRenderer pages,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
@@ -186,7 +194,7 @@ public static class SharingEndpoints
             return await UnavailableAsync(
                 open,
                 httpContext,
-                branding,
+                sharingSettings,
                 pages,
                 cancellationToken);
         }
@@ -313,7 +321,7 @@ public static class SharingEndpoints
     private static async Task<IResult> UnavailableAsync(
         DocumentBundleOpenResult open,
         HttpContext httpContext,
-        ITenantBrandingProvider branding,
+        IDocumentSharingSettingsRepository sharingSettings,
         IDocumentBundlePageRenderer pages,
         CancellationToken cancellationToken)
     {
@@ -327,11 +335,17 @@ public static class SharingEndpoints
                 ? open.Bundle!.Culture
                 : BrowserLanguage(httpContext);
 
-        var tenantBranding =
+        var settings =
             known
-                ? await branding.GetAsync(
+                ? await sharingSettings.GetAsync(
                     open.Bundle!.TenantId,
                     cancellationToken)
+                : null;
+
+        var tenantBranding =
+            known
+                ? (settings ?? new DocumentSharingSettings())
+                    .ToBranding(open.Bundle!.TenantId)
                 : TenantBranding.Neutral();
 
         var html =
@@ -339,6 +353,10 @@ public static class SharingEndpoints
                 new DocumentBundleUnavailableView
                 {
                     Reason = open.Status,
+
+                    // El contacto sólo con token correcto: a un desconocido
+                    // no se le dice de quién era el enlace.
+                    FooterText = settings?.Normalized().FooterText,
                     Culture = culture,
                     Branding = tenantBranding,
                     Texts = DocumentBundleTexts.For(culture)

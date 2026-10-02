@@ -166,8 +166,22 @@ public static class ToastServiceExtensions
 
         if (!string.IsNullOrWhiteSpace(content))
         {
-            if (!content.StartsWith('{') && !content.StartsWith('<'))
+            // /api/render y /api/bundles devuelven una lista de errores de
+            // validación con código, path y mensaje.
+            if (content.StartsWith('['))
+            {
+                var validation = TryExtractValidationErrors(content);
+
+                if (!string.IsNullOrWhiteSpace(validation))
+                    return validation;
+            }
+
+            if (!content.StartsWith('{') &&
+                !content.StartsWith('<') &&
+                !content.StartsWith('['))
+            {
                 return TrimQuotes(content);
+            }
 
             var extracted = TryExtractProblemMessage(content);
 
@@ -199,6 +213,59 @@ public static class ToastServiceExtensions
         text[^1] == '"'
             ? text[1..^1]
             : text;
+
+    /// <summary>
+    /// [{ "code", "message", "path" }, ...] → "path: mensaje · path: mensaje".
+    /// </summary>
+    private static string? TryExtractValidationErrors(
+        string content)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(content);
+
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+                return null;
+
+            var messages = new List<string>();
+
+            foreach (var item in document.RootElement.EnumerateArray())
+            {
+                if (item.ValueKind != System.Text.Json.JsonValueKind.Object)
+                    continue;
+
+                var message =
+                    ReadString(item, "message") ?? ReadString(item, "Message");
+
+                if (string.IsNullOrWhiteSpace(message))
+                    continue;
+
+                var path =
+                    ReadString(item, "path") ?? ReadString(item, "Path");
+
+                messages.Add(
+                    string.IsNullOrWhiteSpace(path)
+                        ? message
+                        : $"{path}: {message}");
+            }
+
+            return messages.Count == 0
+                ? null
+                : string.Join(" · ", messages);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadString(
+        System.Text.Json.JsonElement element,
+        string property) =>
+        element.TryGetProperty(property, out var value) &&
+        value.ValueKind == System.Text.Json.JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     private static string? TryExtractProblemMessage(
         string content)

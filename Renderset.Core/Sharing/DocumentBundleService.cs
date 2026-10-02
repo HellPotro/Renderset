@@ -63,6 +63,7 @@ public sealed class DocumentBundleService
     private readonly IDocumentBundleRepository _bundles;
     private readonly IRenderedDocumentRepository _documents;
     private readonly IReportRenderService _renderService;
+    private readonly IDocumentSharingSettingsRepository _settings;
     private readonly DocumentSharingOptions _options;
     private readonly TimeProvider _time;
 
@@ -70,12 +71,14 @@ public sealed class DocumentBundleService
         IDocumentBundleRepository bundles,
         IRenderedDocumentRepository documents,
         IReportRenderService renderService,
+        IDocumentSharingSettingsRepository settings,
         DocumentSharingOptions options,
         TimeProvider time)
     {
         _bundles = bundles;
         _documents = documents;
         _renderService = renderService;
+        _settings = settings;
         _options = options;
         _time = time;
     }
@@ -103,6 +106,7 @@ public sealed class DocumentBundleService
                 now,
                 request.ExpiresAtUtc,
                 request.ExpiresInDays,
+                await DefaultExpirationDaysAsync(tenantId, cancellationToken),
                 errors);
 
         if (errors.Count > 0)
@@ -202,6 +206,7 @@ public sealed class DocumentBundleService
                 now,
                 request.ExpiresAtUtc,
                 request.ExpiresInDays,
+                await DefaultExpirationDaysAsync(tenantId, cancellationToken),
                 errors);
 
         if (errors.Count > 0)
@@ -528,10 +533,32 @@ public sealed class DocumentBundleService
         return ids;
     }
 
+    /// <summary>
+    /// La del tenant si la tiene configurada y es válida; si no, la de
+    /// DocumentSharing. Se acota al máximo por si el máximo se ha bajado
+    /// después de configurarla.
+    /// </summary>
+    private async Task<int> DefaultExpirationDaysAsync(
+        string tenantId,
+        CancellationToken cancellationToken)
+    {
+        var settings =
+            await _settings.GetAsync(
+                tenantId,
+                cancellationToken);
+
+        var days =
+            settings?.DefaultExpirationDays
+            ?? _options.DefaultExpirationDays;
+
+        return Math.Clamp(days, 1, _options.MaxExpirationDays);
+    }
+
     private DateTime? ResolveExpiration(
         DateTime nowUtc,
         DateTime? expiresAtUtc,
         int? expiresInDays,
+        int defaultDays,
         List<RenderValidationError> errors)
     {
         var max = nowUtc.AddDays(_options.MaxExpirationDays);
@@ -583,7 +610,7 @@ public sealed class DocumentBundleService
             return value;
         }
 
-        return nowUtc.AddDays(_options.DefaultExpirationDays);
+        return nowUtc.AddDays(defaultDays);
     }
 
     /// <summary>

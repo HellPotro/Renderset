@@ -23,6 +23,18 @@ public sealed class TenantEntity
 
     public string? SecondaryColor { get; set; }
 
+    /// <summary>
+    /// Mensaje del visor cuando el bundle no trae uno propio.
+    /// </summary>
+    public string? SharingDefaultMessage { get; set; }
+
+    /// <summary>
+    /// Pie del visor y del aviso de enlace caducado (contacto).
+    /// </summary>
+    public string? SharingFooterText { get; set; }
+
+    public int? SharingDefaultExpirationDays { get; set; }
+
     public ICollection<ReportEntity> Reports { get; set; } = [];
 
     public ICollection<ReportPresetEntity> Presets { get; set; } = [];

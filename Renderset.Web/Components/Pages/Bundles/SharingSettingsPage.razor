@@ -1,0 +1,462 @@
+@page "/bundles/settings"
+
+@using Renderset.Blazor.Components.Editor
+@using Renderset.Core.Sharing
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+
+<PageTitle>Página pública - RenderSet</PageTitle>
+
+<div class="page sharing-settings-page">
+
+    <header class="page-header">
+
+        <div>
+            <a class="back-button" href="/bundles">
+                <i class="fa-solid fa-arrow-left"></i>
+                Documentos compartidos
+            </a>
+
+            <h1>Página pública</h1>
+
+            <p>
+                Marca y textos por defecto de la página que ve el cliente al
+                abrir un enlace.
+            </p>
+        </div>
+
+        <div class="page-actions">
+
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@(_loading || _saving)"
+                    @onclick="LoadAsync">
+                Descartar cambios
+            </button>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@(!CanSave)"
+                    @onclick="SaveAsync">
+                @if (_saving)
+                {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                }
+                Guardar
+            </button>
+
+        </div>
+
+    </header>
+
+
+    @if (_loading)
+    {
+        <div class="page-state">Cargando configuración...</div>
+    }
+    else
+    {
+        <div class="sharing-settings-layout">
+
+            <section class="editor-card">
+
+                <header class="editor-card-header">
+                    <h2>Marca</h2>
+                </header>
+
+                <div class="editor-card-body">
+
+                    <div class="form-group">
+                        <label>Empresa</label>
+                        <input value="@_settings.TenantName" disabled />
+                        <small>Nombre del tenant. Se enseña junto al logo o en su lugar.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>URL del logo</label>
+                        <input @bind="_settings.LogoUrl"
+                               @bind:event="oninput"
+                               @bind:after="SchedulePreviewAsync"
+                               maxlength="@DocumentSharingSettings.MaxLogoUrlLength"
+                               placeholder="https://oranauto.com/logo.png" />
+
+                        @if (!LogoIsValid)
+                        {
+                            <small class="sharing-error">
+                                Tiene que ser una URL completa que empiece por https:// o http://.
+                            </small>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(_settings.LogoUrl))
+                        {
+                            <div class="sharing-logo-preview">
+                                <img src="@_settings.LogoUrl" alt="Logo" />
+                            </div>
+                        }
+                        else
+                        {
+                            <small>Sin logo se enseña el nombre de la empresa.</small>
+                        }
+                    </div>
+
+                    <div class="sharing-colors">
+
+                        <ColorEditor Label="Color principal"
+                                     Value="@PrimaryColor"
+                                     ValueChanged="PrimaryColorChangedAsync" />
+
+                        <ColorEditor Label="Color secundario"
+                                     Value="@SecondaryColor"
+                                     ValueChanged="SecondaryColorChangedAsync" />
+
+                    </div>
+
+                    @if (!ColorsAreValid)
+                    {
+                        <small class="sharing-error">
+                            Los colores tienen que ser hexadecimales: #00285A o #fff.
+                        </small>
+                    }
+
+                    <button type="button"
+                            class="sharing-link-button"
+                            @onclick="ResetColorsAsync">
+                        Volver a los colores por defecto
+                    </button>
+
+                </div>
+
+                <header class="editor-card-header is-divider">
+                    <h2>Textos</h2>
+                </header>
+
+                <div class="editor-card-body">
+
+                    <div class="form-group">
+                        <label>Mensaje por defecto</label>
+                        <textarea rows="3"
+                                  @bind="_settings.DefaultMessage"
+                                  @bind:event="oninput"
+                                  @bind:after="SchedulePreviewAsync"
+                                  maxlength="@DocumentSharingSettings.MaxDefaultMessageLength"
+                                  placeholder="Adjuntamos la documentación de su pedido."></textarea>
+                        <small>
+                            Se enseña cuando el bundle no trae mensaje propio.
+                            Afecta también a los enlaces ya enviados.
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Pie / contacto</label>
+                        <textarea rows="2"
+                                  @bind="_settings.FooterText"
+                                  @bind:event="oninput"
+                                  @bind:after="SchedulePreviewAsync"
+                                  maxlength="@DocumentSharingSettings.MaxFooterTextLength"
+                                  placeholder="Dudas: logistica@oranauto.com · +34 942 000 000"></textarea>
+                        <small>
+                            Sale bajo la lista de documentos y en el aviso de
+                            enlace caducado.
+                        </small>
+                    </div>
+
+                </div>
+
+                <header class="editor-card-header is-divider">
+                    <h2>Enlaces</h2>
+                </header>
+
+                <div class="editor-card-body">
+
+                    <div class="form-group">
+                        <label>Caducidad por defecto (días)</label>
+                        <input type="number"
+                               min="1"
+                               max="@_maxExpirationDays"
+                               @bind="_settings.DefaultExpirationDays"
+                               @bind:after="SchedulePreviewAsync"
+                               placeholder="@_systemDefaultExpirationDays" />
+
+                        @if (!ExpirationIsValid)
+                        {
+                            <small class="sharing-error">
+                                Entre 1 y @_maxExpirationDays días.
+                            </small>
+                        }
+                        else
+                        {
+                            <small>
+                                Vacío: @_systemDefaultExpirationDays días
+                                (configuración del servidor). Se aplica a los
+                                bundles creados sin caducidad.
+                            </small>
+                        }
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <section class="editor-card sharing-preview">
+
+                <header class="editor-card-header sharing-preview-header">
+
+                    <h2>Vista previa</h2>
+
+                    <div class="sharing-preview-tools">
+
+                        <div class="sharing-segmented">
+                            <button type="button"
+                                    class="@(!_previewExpired ? "is-active" : null)"
+                                    @onclick="() => SetPreviewModeAsync(false)">
+                                Visor
+                            </button>
+                            <button type="button"
+                                    class="@(_previewExpired ? "is-active" : null)"
+                                    @onclick="() => SetPreviewModeAsync(true)">
+                                Enlace caducado
+                            </button>
+                        </div>
+
+                        <select value="@_previewCulture"
+                                title="Idioma de los botones"
+                                @onchange="PreviewCultureChangedAsync">
+                            @foreach (var culture in PreviewCultures)
+                            {
+                                <option value="@culture.Code">@culture.Name</option>
+                            }
+                        </select>
+
+                        <button type="button"
+                                class="icon-button"
+                                title="Actualizar"
+                                @onclick="RefreshPreviewAsync">
+                            <i class="fa-solid fa-rotate"></i>
+                        </button>
+
+                    </div>
+
+                </header>
+
+                @* sandbox sin allow-same-origin: el HTML de la vista previa
+                   no puede tocar la página de RenderSet que lo contiene. *@
+                <iframe class="sharing-preview-frame"
+                        title="Vista previa de la página pública"
+                        sandbox="allow-scripts"
+                        srcdoc="@_previewHtml"></iframe>
+
+                <p class="sharing-preview-note">
+                    Documentos de ejemplo. Los valores no válidos se ignoran
+                    igual que en la página real.
+                </p>
+
+            </section>
+
+        </div>
+    }
+
+</div>
+
+
+@code {
+
+    private static readonly (string Code, string Name)[] PreviewCultures =
+    [
+        ("es-ES", "Español"),
+        ("en-GB", "English"),
+        ("fr-FR", "Français"),
+        ("de-DE", "Deutsch"),
+        ("it-IT", "Italiano"),
+        ("pt-PT", "Português"),
+        ("pl-PL", "Polski")
+    ];
+
+    private DocumentSharingSettings _settings = new();
+
+    private int _maxExpirationDays = 365;
+
+    private int _systemDefaultExpirationDays = 30;
+
+    private string _previewHtml = string.Empty;
+
+    private string _previewCulture = "es-ES";
+
+    private bool _previewExpired;
+
+    private int _previewVersion;
+
+    private bool _loading = true;
+
+    private bool _saving;
+
+
+    private string PrimaryColor =>
+        string.IsNullOrWhiteSpace(_settings.PrimaryColor)
+            ? TenantBranding.DefaultPrimaryColor
+            : _settings.PrimaryColor;
+
+    private string SecondaryColor =>
+        string.IsNullOrWhiteSpace(_settings.SecondaryColor)
+            ? TenantBranding.DefaultSecondaryColor
+            : _settings.SecondaryColor;
+
+    // Validaciones locales, con mensaje inline. Lo que rechace la API llega
+    // por toast.
+    private bool LogoIsValid =>
+        string.IsNullOrWhiteSpace(_settings.LogoUrl) ||
+        TenantBranding.CleanLogoUrl(_settings.LogoUrl) is not null;
+
+    private bool ColorsAreValid =>
+        (string.IsNullOrWhiteSpace(_settings.PrimaryColor) ||
+         TenantBranding.CleanColor(_settings.PrimaryColor) is not null) &&
+        (string.IsNullOrWhiteSpace(_settings.SecondaryColor) ||
+         TenantBranding.CleanColor(_settings.SecondaryColor) is not null);
+
+    private bool ExpirationIsValid =>
+        _settings.DefaultExpirationDays is null ||
+        (_settings.DefaultExpirationDays >= 1 &&
+         _settings.DefaultExpirationDays <= _maxExpirationDays);
+
+    private bool CanSave =>
+        !_loading &&
+        !_saving &&
+        LogoIsValid &&
+        ColorsAreValid &&
+        ExpirationIsValid;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            var response = await Toasts.RunAsync(
+                () => RenderSetApi.GetSharingSettingsAsync(CurrentTenant.Id),
+                errorTitle: "No se ha podido cargar la configuración");
+
+            if (response is null)
+                return;
+
+            _settings = response.Settings;
+            _maxExpirationDays = response.MaxExpirationDays;
+            _systemDefaultExpirationDays = response.SystemDefaultExpirationDays;
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        await RefreshPreviewAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave)
+            return;
+
+        _saving = true;
+
+        try
+        {
+            var saved = await Toasts.RunApiAsync(
+                () => RenderSetApi.SaveSharingSettingsAsync(
+                    CurrentTenant.Id,
+                    _settings),
+                success: "Configuración guardada.",
+                errorTitle: "No se ha podido guardar la configuración");
+
+            if (saved)
+                await LoadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+
+    // ------------------------------------------------------------ colores
+
+    private Task PrimaryColorChangedAsync(
+        string value)
+    {
+        _settings.PrimaryColor = value;
+        return SchedulePreviewAsync();
+    }
+
+    private Task SecondaryColorChangedAsync(
+        string value)
+    {
+        _settings.SecondaryColor = value;
+        return SchedulePreviewAsync();
+    }
+
+    private Task ResetColorsAsync()
+    {
+        _settings.PrimaryColor = null;
+        _settings.SecondaryColor = null;
+        return RefreshPreviewAsync();
+    }
+
+
+    // ------------------------------------------------------------ vista previa
+
+    private Task SetPreviewModeAsync(
+        bool expired)
+    {
+        _previewExpired = expired;
+        return RefreshPreviewAsync();
+    }
+
+    private Task PreviewCultureChangedAsync(
+        ChangeEventArgs e)
+    {
+        _previewCulture = e.Value?.ToString() ?? "es-ES";
+        return RefreshPreviewAsync();
+    }
+
+    /// <summary>
+    /// Espera a que se deje de escribir (o de arrastrar el selector de color)
+    /// antes de pedir la vista previa: si no, cada tecla sería una llamada.
+    /// </summary>
+    private async Task SchedulePreviewAsync()
+    {
+        var version = ++_previewVersion;
+
+        await Task.Delay(400);
+
+        if (version != _previewVersion)
+            return;
+
+        await RefreshPreviewAsync();
+    }
+
+    private async Task RefreshPreviewAsync()
+    {
+        // Cualquier petición programada antes queda obsoleta.
+        _previewVersion++;
+
+        var html = await Toasts.RunAsync(
+            () => RenderSetApi.PreviewSharingAsync(
+                CurrentTenant.Id,
+                new DocumentSharingPreviewRequest
+                {
+                    Settings = _settings,
+                    Culture = _previewCulture,
+                    Expired = _previewExpired
+                }),
+            errorTitle: "No se ha podido generar la vista previa");
+
+        if (html is not null)
+            _previewHtml = html;
+    }
+}

@@ -137,3 +137,79 @@ public sealed class DocumentBundleTextsTests
         DocumentBundleTexts.For(culture).Documents.Should().Be(expected);
     }
 }
+
+
+public sealed class DocumentSharingSettingsTests
+{
+    [Fact]
+    public void Validate_ShouldAcceptEmptySettings()
+    {
+        new DocumentSharingSettings()
+            .Validate(365)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_ShouldReportEachInvalidField()
+    {
+        var errors =
+            new DocumentSharingSettings
+            {
+                LogoUrl = "javascript:alert(1)",
+                PrimaryColor = "azul",
+                SecondaryColor = "#12",
+                FooterText = new string('x', DocumentSharingSettings.MaxFooterTextLength + 1),
+                DefaultExpirationDays = 400
+            }
+            .Validate(365);
+
+        errors
+            .Select(x => x.Path)
+            .Should()
+            .BeEquivalentTo(
+                "logoUrl",
+                "primaryColor",
+                "secondaryColor",
+                "footerText",
+                "defaultExpirationDays");
+    }
+
+    [Fact]
+    public void Normalized_ShouldTurnBlankTextsIntoNull()
+    {
+        var normalized =
+            new DocumentSharingSettings
+            {
+                DefaultMessage = "   ",
+                FooterText = "  Dudas: logistica@oranauto.com  "
+            }
+            .Normalized();
+
+        normalized.DefaultMessage.Should().BeNull();
+        normalized.FooterText.Should().Be("Dudas: logistica@oranauto.com");
+    }
+
+    [Fact]
+    public void Preview_ShouldUseTheDefaultMessageAndTheTenantColors()
+    {
+        var view =
+            DocumentBundlePreview.Build(
+                "oranauto",
+                new DocumentSharingSettings
+                {
+                    TenantName = "ORAN Auto",
+                    PrimaryColor = "#AA0000",
+                    DefaultMessage = "Adjuntamos la documentación."
+                },
+                "es-ES",
+                new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc),
+                fallbackExpirationDays: 30);
+
+        view.Message.Should().Be("Adjuntamos la documentación.");
+        view.Branding.DisplayName.Should().Be("ORAN Auto");
+        view.Branding.PrimaryColor.Should().Be("#AA0000");
+        view.Documents.Should().HaveCount(3);
+        view.ExpiresAtUtc.Should().Be(new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc));
+    }
+}

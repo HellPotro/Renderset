@@ -15,6 +15,7 @@ public sealed class DocumentBundleServiceTests
     private readonly InMemoryBundleRepository _bundles = new();
     private readonly Mock<IRenderedDocumentRepository> _documents = new();
     private readonly Mock<IReportRenderService> _render = new();
+    private readonly Mock<IDocumentSharingSettingsRepository> _settings = new();
     private readonly FixedTimeProvider _time = new(Now);
     private readonly DocumentSharingOptions _options = new();
 
@@ -30,6 +31,7 @@ public sealed class DocumentBundleServiceTests
             _bundles,
             _documents.Object,
             _render.Object,
+            _settings.Object,
             _options,
             _time);
 
@@ -83,6 +85,39 @@ public sealed class DocumentBundleServiceTests
         result.Bundle!.ExpiresAtUtc
             .Should()
             .Be(Now.AddDays(_options.DefaultExpirationDays));
+    }
+
+    [Fact]
+    public async Task CreateAsync_ShouldUseTheTenantDefaultExpiration()
+    {
+        _settings
+            .Setup(x => x.GetAsync(Tenant, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DocumentSharingSettings { DefaultExpirationDays = 7 });
+
+        var result =
+            await CreateSut().CreateAsync(
+                Tenant,
+                Request("doc-factura"));
+
+        result.Bundle!.ExpiresAtUtc.Should().Be(Now.AddDays(7));
+    }
+
+    [Fact]
+    public async Task CreateAsync_ShouldPreferTheRequestedExpirationOverTheTenantDefault()
+    {
+        _settings
+            .Setup(x => x.GetAsync(Tenant, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DocumentSharingSettings { DefaultExpirationDays = 7 });
+
+        var request = Request("doc-factura");
+        request.ExpiresInDays = 3;
+
+        var result =
+            await CreateSut().CreateAsync(
+                Tenant,
+                request);
+
+        result.Bundle!.ExpiresAtUtc.Should().Be(Now.AddDays(3));
     }
 
     [Fact]

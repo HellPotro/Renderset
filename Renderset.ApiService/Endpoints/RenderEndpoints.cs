@@ -20,6 +20,10 @@ public static class RenderEndpoints
                 .WithTags("Documents");
 
         documents.MapGet(
+            "/{tenantId}",
+            SearchDocumentsAsync);
+
+        documents.MapGet(
             "/{tenantId}/{documentId}",
             GetDocumentAsync);
 
@@ -77,6 +81,32 @@ public static class RenderEndpoints
             };
 
         return Results.Created(url, response);
+    }
+
+    /// <summary>
+    /// Listado de documentos emitidos, sin contenido, los más recientes
+    /// primero. Es lo que usa la pantalla de bundles para elegir documentos.
+    /// </summary>
+    private static async Task<IResult> SearchDocumentsAsync(
+        string tenantId,
+        string? search,
+        string? reportId,
+        int? take,
+        IRenderedDocumentRepository documents,
+        CancellationToken cancellationToken)
+    {
+        var items =
+            await documents.SearchAsync(
+                tenantId,
+                new RenderedDocumentQuery
+                {
+                    Search = search,
+                    ReportId = reportId,
+                    Take = take ?? 50
+                },
+                cancellationToken);
+
+        return Results.Ok(items);
     }
 
     /// <summary>

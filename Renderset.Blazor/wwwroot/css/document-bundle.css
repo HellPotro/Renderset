@@ -191,6 +191,18 @@ body.rs-share-page {
 }
 
 
+/* Contacto del tenant. Respeta saltos de línea. */
+.rs-share-footer {
+    margin: 16px 8px 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--rs-share-border);
+    color: var(--rs-share-muted);
+    font-size: 12px;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+
 /* ---------- Visor ---------- */
 
 .rs-share-viewer {
@@ -315,6 +327,29 @@ body.rs-share-page {
         color: var(--rs-share-muted);
     }
 
+    .rs-share-card .rs-share-footer {
+        margin: 20px 0 0;
+        padding-top: 16px;
+    }
+
+
+/* ---------- Ancho intermedio (tablet, vista previa de Web) ---------- */
+
+@media (max-width: 1000px) and (min-width: 761px) {
+
+    .rs-share-body {
+        grid-template-columns: 220px minmax(0, 1fr);
+    }
+
+    .rs-share-toolbar {
+        flex-wrap: wrap;
+    }
+
+    .rs-share-current {
+        flex-basis: 100%;
+    }
+}
+
 
 /* ---------- Móvil ---------- */
 
@@ -367,6 +402,10 @@ body.rs-share-page {
 
     .rs-share-item-name {
         overflow-wrap: normal;
+    }
+
+    .rs-share-list .rs-share-footer {
+        margin: 12px 0 0;
     }
 
     .rs-share-toolbar {
