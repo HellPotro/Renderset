@@ -147,7 +147,7 @@
 .bundles-table-header,
 .bundles-row {
     display: grid;
-    grid-template-columns: 22px minmax(0, 1fr) minmax(90px, 160px) 60px 112px 31px;
+    grid-template-columns: 22px minmax(0, 1fr) minmax(90px, 160px) 60px 112px 67px;
     align-items: center;
     gap: 12px;
     padding: 0 18px;
@@ -418,7 +418,7 @@
     }
 
     .bundles-row {
-        grid-template-columns: 22px minmax(0, 1fr) 31px;
+        grid-template-columns: 22px minmax(0, 1fr) 67px;
     }
 
         .bundles-row > .bundles-muted,

@@ -102,6 +102,12 @@ body.rs-share-page {
     font-size: 13px;
 }
 
+.rs-share-header-actions {
+    display: flex;
+    flex: none;
+    gap: 8px;
+}
+
 /* El mensaje respeta los saltos de línea tal como los escribió el ERP. */
 .rs-share-message {
     margin: 0;
@@ -372,9 +378,14 @@ body.rs-share-page {
         border-left: 0;
     }
 
-    .rs-share-header > .rs-share-button {
+    .rs-share-header > .rs-share-button,
+    .rs-share-header-actions {
         width: 100%;
     }
+
+        .rs-share-header-actions > .rs-share-button {
+            flex: 1 1 auto;
+        }
 
     .rs-share-message {
         padding: 12px 16px;

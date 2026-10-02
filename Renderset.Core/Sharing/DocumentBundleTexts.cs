@@ -23,6 +23,12 @@ public sealed class DocumentBundleTexts
 
     public required string Print { get; init; }
 
+    public required string DownloadPdf { get; init; }
+
+    public required string DownloadAllPdf { get; init; }
+
+    public required string DownloadZip { get; init; }
+
     public required string OpenInNewTab { get; init; }
 
     /// <summary>Lleva {0} con la fecha.</summary>
@@ -97,6 +103,9 @@ public sealed class DocumentBundleTexts
         Download = "Descargar",
         DownloadAll = "Descargar todo",
         Print = "Imprimir",
+        DownloadPdf = "Descargar PDF",
+        DownloadAllPdf = "Todo en PDF",
+        DownloadZip = "ZIP",
         OpenInNewTab = "Abrir en una pestaña nueva",
         AvailableUntil = "Disponible hasta el {0}",
         SharedBy = "Compartido por {0}",
@@ -113,6 +122,9 @@ public sealed class DocumentBundleTexts
         Download = "Download",
         DownloadAll = "Download all",
         Print = "Print",
+        DownloadPdf = "Download PDF",
+        DownloadAllPdf = "All as PDF",
+        DownloadZip = "ZIP",
         OpenInNewTab = "Open in a new tab",
         AvailableUntil = "Available until {0}",
         SharedBy = "Shared by {0}",
@@ -129,6 +141,9 @@ public sealed class DocumentBundleTexts
         Download = "Télécharger",
         DownloadAll = "Tout télécharger",
         Print = "Imprimer",
+        DownloadPdf = "Télécharger le PDF",
+        DownloadAllPdf = "Tout en PDF",
+        DownloadZip = "ZIP",
         OpenInNewTab = "Ouvrir dans un nouvel onglet",
         AvailableUntil = "Disponible jusqu'au {0}",
         SharedBy = "Partagé par {0}",
@@ -145,6 +160,9 @@ public sealed class DocumentBundleTexts
         Download = "Herunterladen",
         DownloadAll = "Alle herunterladen",
         Print = "Drucken",
+        DownloadPdf = "PDF herunterladen",
+        DownloadAllPdf = "Alles als PDF",
+        DownloadZip = "ZIP",
         OpenInNewTab = "In neuem Tab öffnen",
         AvailableUntil = "Verfügbar bis {0}",
         SharedBy = "Geteilt von {0}",
@@ -161,6 +179,9 @@ public sealed class DocumentBundleTexts
         Download = "Scarica",
         DownloadAll = "Scarica tutto",
         Print = "Stampa",
+        DownloadPdf = "Scarica PDF",
+        DownloadAllPdf = "Tutto in PDF",
+        DownloadZip = "ZIP",
         OpenInNewTab = "Apri in una nuova scheda",
         AvailableUntil = "Disponibile fino al {0}",
         SharedBy = "Condiviso da {0}",
@@ -177,6 +198,9 @@ public sealed class DocumentBundleTexts
         Download = "Descarregar",
         DownloadAll = "Descarregar tudo",
         Print = "Imprimir",
+        DownloadPdf = "Descarregar PDF",
+        DownloadAllPdf = "Tudo em PDF",
+        DownloadZip = "ZIP",
         OpenInNewTab = "Abrir num novo separador",
         AvailableUntil = "Disponível até {0}",
         SharedBy = "Partilhado por {0}",
@@ -193,6 +217,9 @@ public sealed class DocumentBundleTexts
         Download = "Pobierz",
         DownloadAll = "Pobierz wszystko",
         Print = "Drukuj",
+        DownloadPdf = "Pobierz PDF",
+        DownloadAllPdf = "Wszystko w PDF",
+        DownloadZip = "ZIP",
         OpenInNewTab = "Otwórz w nowej karcie",
         AvailableUntil = "Dostępne do {0}",
         SharedBy = "Udostępnione przez {0}",

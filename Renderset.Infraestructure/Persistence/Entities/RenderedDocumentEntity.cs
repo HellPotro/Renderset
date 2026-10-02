@@ -33,6 +33,19 @@ public sealed class RenderedDocumentEntity
     /// </summary>
     public string? ContentPath { get; set; }
 
+    /// <summary>
+    /// PDF generado a partir del HTML, en el almacén externo. Nulo si no se
+    /// ha generado o si va en <see cref="PdfContent"/>.
+    /// </summary>
+    public string? PdfPath { get; set; }
+
+    /// <summary>
+    /// PDF en la propia fila, cuando no hay almacén externo.
+    /// </summary>
+    public byte[]? PdfContent { get; set; }
+
+    public DateTime? PdfCreatedAtUtc { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
 
     public TenantEntity Tenant { get; set; } = default!;

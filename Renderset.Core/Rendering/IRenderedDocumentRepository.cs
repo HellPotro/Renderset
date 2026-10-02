@@ -33,4 +33,23 @@ public interface IRenderedDocumentRepository
         string tenantId,
         RenderedDocument document,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// PDF ya generado del documento. Nulo si todavía no se ha generado o si
+    /// el documento no existe.
+    /// </summary>
+    Task<byte[]?> GetPdfAsync(
+        string tenantId,
+        string documentId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Guarda el PDF junto al HTML del documento (mismo almacén). No toca el
+    /// HTML: el documento emitido sigue siendo el mismo.
+    /// </summary>
+    Task SavePdfAsync(
+        string tenantId,
+        string documentId,
+        byte[] pdf,
+        CancellationToken cancellationToken = default);
 }

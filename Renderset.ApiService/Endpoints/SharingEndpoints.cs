@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using Renderset.Core.Rendering.Pdf;
 using Renderset.Core.Sharing;
 using Renderset.Core.Tenancy;
 
@@ -12,7 +13,9 @@ namespace Renderset.Api.Endpoints;
 ///     GET /share/{bundleId}/{token}                                visor
 ///     GET /share/{bundleId}/{token}/documents/{position}           documento (iframe)
 ///     GET /share/{bundleId}/{token}/documents/{position}/download  documento como fichero
+///     GET /share/{bundleId}/{token}/documents/{position}/pdf       documento en PDF
 ///     GET /share/{bundleId}/{token}/download                       todo en un ZIP
+///     GET /share/{bundleId}/{token}/pdf                            todo en un único PDF
 ///
 /// En las URLs va la posición del documento dentro del bundle y no su id:
 /// el cliente no necesita conocer identificadores internos.
@@ -65,8 +68,16 @@ public static class SharingEndpoints
             DownloadDocumentAsync);
 
         share.MapGet(
+            "/{bundleId:guid}/{token}/documents/{position:int}/pdf",
+            DownloadDocumentPdfAsync);
+
+        share.MapGet(
             "/{bundleId:guid}/{token}/download",
             DownloadAllAsync);
+
+        share.MapGet(
+            "/{bundleId:guid}/{token}/pdf",
+            DownloadAllPdfAsync);
 
         return app;
     }
@@ -80,6 +91,7 @@ public static class SharingEndpoints
         IDocumentBundleService bundles,
         IDocumentSharingSettingsRepository sharingSettings,
         IDocumentBundlePageRenderer pages,
+        IDocumentPdfService pdfService,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
@@ -132,7 +144,14 @@ public static class SharingEndpoints
                 ExpiresAtUtc = bundle.ExpiresAtUtc,
                 Branding = settings.ToBranding(bundle.TenantId),
                 Texts = DocumentBundleTexts.For(bundle.Culture),
+
+                // Con conversor, las descargas son en PDF; sin él, el HTML
+                // de siempre. El ZIP sigue disponible en los dos casos.
+                PdfAvailable = pdfService.IsAvailable,
                 DownloadAllUrl = $"{basePath}/download",
+                DownloadAllPdfUrl = pdfService.IsAvailable
+                    ? $"{basePath}/pdf"
+                    : null,
                 Documents = bundle.Items
                     .OrderBy(x => x.Position)
                     .Select(x => new DocumentBundleViewItem
@@ -140,7 +159,9 @@ public static class SharingEndpoints
                         Position = x.Position,
                         Title = x.DisplayName,
                         ViewUrl = $"{basePath}/documents/{x.Position}",
-                        DownloadUrl = $"{basePath}/documents/{x.Position}/download"
+                        DownloadUrl = pdfService.IsAvailable
+                            ? $"{basePath}/documents/{x.Position}/pdf"
+                            : $"{basePath}/documents/{x.Position}/download"
                     })
                     .ToList()
             };
@@ -267,6 +288,142 @@ public static class SharingEndpoints
             Encoding.UTF8.GetBytes(bundled.Document.Content),
             "text/html; charset=utf-8",
             bundled.Document.FileName);
+    }
+
+    private static async Task<IResult> DownloadDocumentPdfAsync(
+        Guid bundleId,
+        string token,
+        int position,
+        HttpContext httpContext,
+        IDocumentBundleService bundles,
+        IDocumentPdfService pdfService,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        var open =
+            await bundles.OpenAsync(
+                bundleId,
+                token,
+                cancellationToken);
+
+        if (open.Status != DocumentBundleOpenStatus.Available || !pdfService.IsAvailable)
+            return Results.NotFound();
+
+        var item =
+            open.Bundle!.Items.FirstOrDefault(x => x.Position == position);
+
+        if (item is null)
+            return Results.NotFound();
+
+        byte[]? pdf;
+
+        try
+        {
+            pdf =
+                await pdfService.GetOrCreateAsync(
+                    open.Bundle.TenantId,
+                    item.DocumentId,
+                    cancellationToken);
+        }
+        catch (PdfConversionException ex)
+        {
+            return PdfUnavailable(ex, open.Bundle, loggerFactory);
+        }
+
+        if (pdf is null)
+            return Results.NotFound();
+
+        await TryRecordAccessAsync(
+            bundles,
+            open.Bundle,
+            DocumentBundleAccessKind.Download,
+            position,
+            httpContext,
+            loggerFactory,
+            cancellationToken);
+
+        return Results.File(
+            pdf,
+            "application/pdf",
+            SafeFileName(item.DisplayName, "documento") + ".pdf");
+    }
+
+    private static async Task<IResult> DownloadAllPdfAsync(
+        Guid bundleId,
+        string token,
+        HttpContext httpContext,
+        IDocumentBundleService bundles,
+        IDocumentPdfService pdfService,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        var open =
+            await bundles.OpenAsync(
+                bundleId,
+                token,
+                cancellationToken);
+
+        if (open.Status != DocumentBundleOpenStatus.Available || !pdfService.IsAvailable)
+            return Results.NotFound();
+
+        var bundle = open.Bundle!;
+
+        byte[]? pdf;
+
+        try
+        {
+            pdf =
+                await pdfService.MergeAsync(
+                    bundle.TenantId,
+                    bundle.Items
+                        .OrderBy(x => x.Position)
+                        .Select(x => x.DocumentId)
+                        .ToList(),
+                    cancellationToken);
+        }
+        catch (PdfConversionException ex)
+        {
+            return PdfUnavailable(ex, bundle, loggerFactory);
+        }
+
+        if (pdf is null)
+            return Results.NotFound();
+
+        await TryRecordAccessAsync(
+            bundles,
+            bundle,
+            DocumentBundleAccessKind.DownloadAll,
+            position: null,
+            httpContext,
+            loggerFactory,
+            cancellationToken);
+
+        return Results.File(
+            pdf,
+            "application/pdf",
+            SafeFileName(bundle.Title, "documentos") + ".pdf");
+    }
+
+    /// <summary>
+    /// Al cliente no se le enseña el detalle (es infraestructura interna);
+    /// queda en el log con el bundle para poder buscarlo.
+    /// </summary>
+    private static IResult PdfUnavailable(
+        PdfConversionException ex,
+        DocumentBundle bundle,
+        ILoggerFactory loggerFactory)
+    {
+        loggerFactory
+            .CreateLogger(LoggerCategory)
+            .LogError(
+                ex,
+                "No se ha podido generar el PDF del bundle {BundleId}.",
+                bundle.Id);
+
+        return Results.Text(
+            "No se ha podido generar el PDF en este momento. Inténtalo de nuevo en unos minutos.",
+            "text/plain; charset=utf-8",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
     private static async Task<IResult> DownloadAllAsync(

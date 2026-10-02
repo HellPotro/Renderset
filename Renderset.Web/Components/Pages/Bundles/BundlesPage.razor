@@ -203,13 +203,25 @@
 
                             <span class="bundles-muted">@FormatDate(document.CreatedAtUtc)</span>
 
-                            <a class="icon-button"
-                               href="@DocumentUrl(document)"
-                               target="_blank"
-                               rel="noopener"
-                               title="Abrir el documento">
-                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                            </a>
+                            <div class="bundles-row-actions">
+
+                                <a class="icon-button"
+                                   href="@DocumentUrl(document)"
+                                   target="_blank"
+                                   rel="noopener"
+                                   title="Abrir el documento">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                </a>
+
+                                <a class="icon-button"
+                                   href="@(DocumentUrl(document) + "/pdf")"
+                                   target="_blank"
+                                   rel="noopener"
+                                   title="@(document.HasPdf ? "Abrir el PDF" : "Generar y abrir el PDF")">
+                                    <i class="fa-regular fa-file-pdf"></i>
+                                </a>
+
+                            </div>
 
                         </div>
                     }

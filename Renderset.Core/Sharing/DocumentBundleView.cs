@@ -30,7 +30,21 @@ public sealed class DocumentBundleView
 
     public required IReadOnlyList<DocumentBundleViewItem> Documents { get; init; }
 
+    /// <summary>
+    /// ZIP con todos los documentos.
+    /// </summary>
     public required string DownloadAllUrl { get; init; }
+
+    /// <summary>
+    /// Todos los documentos en un único PDF. Nulo sin conversor de PDF.
+    /// </summary>
+    public string? DownloadAllPdfUrl { get; init; }
+
+    /// <summary>
+    /// Si las descargas de <see cref="DocumentBundleViewItem.DownloadUrl"/>
+    /// son PDF (cambia el texto del botón).
+    /// </summary>
+    public bool PdfAvailable { get; init; }
 }
 
 

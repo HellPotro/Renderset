@@ -35,11 +35,32 @@
 
         @if (View.Documents.Count > 1)
         {
-            <a class="rs-share-button is-primary"
-               href="@View.DownloadAllUrl"
-               download>
-                @View.Texts.DownloadAll
-            </a>
+            <div class="rs-share-header-actions">
+
+                @if (!string.IsNullOrWhiteSpace(View.DownloadAllPdfUrl))
+                {
+                    <a class="rs-share-button"
+                       href="@View.DownloadAllUrl"
+                       download>
+                        @View.Texts.DownloadZip
+                    </a>
+
+                    <a class="rs-share-button is-primary"
+                       href="@View.DownloadAllPdfUrl"
+                       download>
+                        @View.Texts.DownloadAllPdf
+                    </a>
+                }
+                else
+                {
+                    <a class="rs-share-button is-primary"
+                       href="@View.DownloadAllUrl"
+                       download>
+                        @View.Texts.DownloadAll
+                    </a>
+                }
+
+            </div>
         }
 
     </header>
@@ -107,7 +128,7 @@
                     <a class="rs-share-button is-primary"
                        href="@First.DownloadUrl"
                        data-share-download>
-                        @View.Texts.Download
+                        @(View.PdfAvailable ? View.Texts.DownloadPdf : View.Texts.Download)
                     </a>
 
                 </div>

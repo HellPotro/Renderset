@@ -23,5 +23,10 @@ public sealed class RenderedDocument
 
     public required string Content { get; init; }
 
+    /// <summary>
+    /// Si ya existe el PDF generado a partir de este HTML.
+    /// </summary>
+    public bool HasPdf { get; init; }
+
     public DateTime CreatedAtUtc { get; init; }
 }

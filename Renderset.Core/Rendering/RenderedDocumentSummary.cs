@@ -15,5 +15,11 @@ public sealed class RenderedDocumentSummary
 
     public RenderFormat Format { get; init; } = RenderFormat.Html;
 
+    /// <summary>
+    /// Si el PDF ya está generado. Aunque sea falso se puede pedir: se
+    /// genera en ese momento.
+    /// </summary>
+    public bool HasPdf { get; init; }
+
     public DateTime CreatedAtUtc { get; init; }
 }

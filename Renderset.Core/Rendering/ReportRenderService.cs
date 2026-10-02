@@ -31,6 +31,7 @@ public sealed class ReportRenderService
     private readonly IReportConfigurationComposer _composer;
     private readonly IReportDocumentRenderer _documentRenderer;
     private readonly IRenderedDocumentRepository _documents;
+    private readonly IHtmlAssetInliner? _assetInliner;
 
     private readonly ReportConfigurationResolver _resolver = new();
 
@@ -46,8 +47,10 @@ public sealed class ReportRenderService
         IReportTextCatalogFactory catalogFactory,
         IReportConfigurationComposer composer,
         IReportDocumentRenderer documentRenderer,
-        IRenderedDocumentRepository documents)
+        IRenderedDocumentRepository documents,
+        IHtmlAssetInliner? assetInliner = null)
     {
+        _assetInliner = assetInliner;
         _reports = reports;
         _presets = presets;
         _presetProvider = presetProvider;
@@ -183,6 +186,17 @@ public sealed class ReportRenderService
                 request.Output.IncludeDocumentData,
                 cancellationToken);
 
+        // Las imágenes se incrustan antes de guardar: el documento emitido
+        // tiene que ser autosuficiente para no cambiar si cambia la URL del
+        // logo, y para que el PDF no dependa de la red.
+        if (_assetInliner is not null)
+        {
+            html =
+                await _assetInliner.InlineAsync(
+                    html,
+                    cancellationToken);
+        }
+
         var document =
             new RenderedDocument
             {
@@ -220,14 +234,16 @@ public sealed class ReportRenderService
                 path: "reportId");
         }
 
-        if (request.Output.Format != RenderFormat.Html)
+        // Pdf y Html emiten lo mismo: el documento se guarda siempre en HTML
+        // y el PDF se deriva de él (al momento si se pide Pdf, o la primera
+        // vez que alguien lo descarga). Así los dos son siempre idénticos.
+        if (request.Output.Format is not (RenderFormat.Html or RenderFormat.Pdf))
         {
             return RenderResult.Failure(
                 "output.format_not_supported",
-                "De momento sólo se emite HTML. El PDF se generará sobre este " +
-                "mismo documento cuando esté el motor de conversión.",
+                "Formato no soportado.",
                 path: "output.format",
-                expected: nameof(RenderFormat.Html),
+                expected: "Html | Pdf",
                 actual: request.Output.Format.ToString());
         }
 

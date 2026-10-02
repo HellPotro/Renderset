@@ -11,6 +11,12 @@ public sealed class RenderDocumentResponse
 
     public required string Url { get; init; }
 
+    /// <summary>
+    /// Descarga del PDF. Si no se pidió formato Pdf, se genera la primera
+    /// vez que se abre. Nulo si la API no tiene conversor de PDF.
+    /// </summary>
+    public string? PdfUrl { get; init; }
+
     public required string FileName { get; init; }
 
     public required string ReportId { get; init; }

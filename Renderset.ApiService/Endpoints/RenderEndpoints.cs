@@ -1,5 +1,6 @@
 using Renderset.Core.Paging;
 using Renderset.Core.Rendering;
+using Renderset.Core.Rendering.Pdf;
 
 namespace Renderset.Api.Endpoints;
 
@@ -36,6 +37,10 @@ public static class RenderEndpoints
             "/{tenantId}/{documentId}/metadata",
             GetMetadataAsync);
 
+        documents.MapGet(
+            "/{tenantId}/{documentId}/pdf",
+            GetPdfAsync);
+
         return app;
     }
 
@@ -44,8 +49,17 @@ public static class RenderEndpoints
         RenderRequest request,
         HttpContext httpContext,
         IReportRenderService renderService,
+        IDocumentPdfService pdfService,
         CancellationToken cancellationToken)
     {
+        var wantsPdf =
+            request.Output?.Format == RenderFormat.Pdf;
+
+        // Se comprueba antes de emitir: no tiene sentido guardar un
+        // documento para luego decir que el PDF no se puede hacer.
+        if (wantsPdf && !pdfService.IsAvailable)
+            return PdfNotConfigured();
+
         var result =
             await renderService.RenderAsync(
                 tenantId,
@@ -57,6 +71,25 @@ public static class RenderEndpoints
             // Los errores son de validación y llevan código y path: quien
             // integra tiene que poder saber qué corregir sin abrir el log.
             return Results.BadRequest(result.Errors);
+        }
+
+        if (wantsPdf)
+        {
+            // Con formato Pdf se genera ya, para que quien integra pueda
+            // descargarlo en cuanto recibe la respuesta. Si falla, el
+            // documento HTML ya está emitido: el error lo dice para que se
+            // pueda reintentar sólo el PDF.
+            try
+            {
+                await pdfService.GetOrCreateAsync(
+                    tenantId,
+                    result.Document!.Id,
+                    cancellationToken);
+            }
+            catch (PdfConversionException ex)
+            {
+                return PdfFailed(ex, result.Document!.Id);
+            }
         }
 
         var document = result.Document!;
@@ -72,6 +105,9 @@ public static class RenderEndpoints
             {
                 DocumentId = document.Id,
                 Url = url,
+                PdfUrl = pdfService.IsAvailable
+                    ? url + "/pdf"
+                    : null,
                 FileName = document.FileName,
                 ReportId = document.ReportId,
                 PresetId = document.PresetId,
@@ -184,6 +220,7 @@ public static class RenderEndpoints
         string documentId,
         HttpContext httpContext,
         IRenderedDocumentRepository documents,
+        IDocumentPdfService pdfService,
         CancellationToken cancellationToken)
     {
         var document =
@@ -203,6 +240,9 @@ public static class RenderEndpoints
                     httpContext,
                     tenantId,
                     document.Id),
+                PdfUrl = pdfService.IsAvailable
+                    ? BuildDocumentUrl(httpContext, tenantId, document.Id) + "/pdf"
+                    : null,
                 FileName = document.FileName,
                 ReportId = document.ReportId,
                 PresetId = document.PresetId,
@@ -212,6 +252,87 @@ public static class RenderEndpoints
                 CreatedAtUtc = document.CreatedAtUtc
             });
     }
+
+    /// <summary>
+    /// PDF del documento. Se genera la primera vez que se pide y después se
+    /// sirve el guardado.
+    /// </summary>
+    private static async Task<IResult> GetPdfAsync(
+        string tenantId,
+        string documentId,
+        bool? download,
+        IRenderedDocumentRepository documents,
+        IDocumentPdfService pdfService,
+        CancellationToken cancellationToken)
+    {
+        if (!pdfService.IsAvailable)
+            return PdfNotConfigured();
+
+        byte[]? pdf;
+
+        try
+        {
+            pdf =
+                await pdfService.GetOrCreateAsync(
+                    tenantId,
+                    documentId,
+                    cancellationToken);
+        }
+        catch (PdfConversionException ex)
+        {
+            return PdfFailed(ex, documentId);
+        }
+
+        if (pdf is null)
+            return Results.NotFound();
+
+        var summary =
+            (await documents.GetSummariesAsync(
+                tenantId,
+                [documentId],
+                cancellationToken))
+            .FirstOrDefault();
+
+        var fileName =
+            Path.GetFileNameWithoutExtension(summary?.FileName ?? documentId) + ".pdf";
+
+        // Por defecto inline, para abrirlo en el navegador; ?download=true
+        // lo fuerza como descarga.
+        return download == true
+            ? Results.File(pdf, "application/pdf", fileName)
+            : Results.File(pdf, "application/pdf");
+    }
+
+    internal static IResult PdfNotConfigured() =>
+        Results.Json(
+            new[]
+            {
+                new RenderValidationError
+                {
+                    Code = "pdf.not_configured",
+                    Message = "La API no tiene conversor de PDF configurado (Pdf:GotenbergUrl).",
+                    Path = "output.format"
+                }
+            },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    internal static IResult PdfFailed(
+        PdfConversionException ex,
+        string documentId) =>
+        Results.Json(
+            new[]
+            {
+                new RenderValidationError
+                {
+                    Code = "pdf.generation_failed",
+                    Message =
+                        $"El documento '{documentId}' se ha emitido, pero no se ha " +
+                        $"podido generar su PDF: {ex.Message}",
+                    Path = "output.format",
+                    Actual = documentId
+                }
+            },
+            statusCode: StatusCodes.Status502BadGateway);
 
     private static string BuildDocumentUrl(
         HttpContext httpContext,

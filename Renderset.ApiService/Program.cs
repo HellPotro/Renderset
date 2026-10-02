@@ -9,6 +9,7 @@ using Renderset.Core.Localization;
 using Renderset.Core.Presets;
 using Renderset.Core.Reports;
 using Renderset.Core.Rendering;
+using Renderset.Core.Rendering.Pdf;
 using Renderset.Core.Services;
 using Renderset.Core.Sharing;
 using Renderset.Core.Tenancy;
@@ -16,7 +17,9 @@ using Renderset.Core.Translations;
 using Renderset.Core.Variables;
 using Renderset.Blazor.Rendering;
 using Renderset.Blazor.Sharing;
+using Renderset.Infrastructure.Pdf;
 using Renderset.Infrastructure.Persistence;
+using Renderset.Infrastructure.Rendering;
 using Renderset.Infrastructure.Repositories;
 using Renderset.Infrastructure.Storage;
 using Renderset.Infrastructure.Translations;
@@ -52,6 +55,35 @@ builder.Services.AddScoped<ITenantCultureRepository, EfTenantCultureRepository>(
 builder.Services.AddScoped<IReportTextCatalogFactory, ReportTextCatalogFactory>();
 builder.Services.AddScoped<IRenderedDocumentRepository, EfRenderedDocumentRepository>();
 builder.Services.AddScoped<IReportRenderService, ReportRenderService>();
+
+// ---------------------------------------------------------------- PDF
+
+// Imágenes incrustadas al emitir: el documento no depende de la URL del logo.
+var documentAssets =
+    builder.Configuration
+        .GetSection(DocumentAssetsOptions.SectionName)
+        .Get<DocumentAssetsOptions>()
+    ?? new DocumentAssetsOptions();
+
+builder.Services.AddSingleton(documentAssets);
+builder.Services.AddSingleton<IHtmlAssetInliner, HttpHtmlAssetInliner>();
+
+// Sin Pdf:GotenbergUrl la API arranca igual y sirve HTML; los botones de
+// PDF no aparecen.
+var pdf =
+    builder.Configuration
+        .GetSection(PdfOptions.SectionName)
+        .Get<PdfOptions>()
+    ?? new PdfOptions();
+
+builder.Services.AddSingleton(pdf);
+
+if (string.IsNullOrWhiteSpace(pdf.GotenbergUrl))
+    builder.Services.AddSingleton<IPdfConverter, UnavailablePdfConverter>();
+else
+    builder.Services.AddSingleton<IPdfConverter>(new GotenbergPdfConverter(pdf));
+
+builder.Services.AddScoped<IDocumentPdfService, DocumentPdfService>();
 
 // ---------------------------------------------------------------- bundles
 

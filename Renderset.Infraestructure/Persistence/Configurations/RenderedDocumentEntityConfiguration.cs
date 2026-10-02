@@ -52,6 +52,11 @@ public sealed class RenderedDocumentEntityConfiguration
         builder.Property(x => x.ContentPath)
             .HasMaxLength(400);
 
+        builder.Property(x => x.PdfPath)
+            .HasMaxLength(400);
+
+        builder.Property(x => x.PdfContent);
+
         builder.Property(x => x.CreatedAtUtc)
             .HasDefaultValueSql("SYSUTCDATETIME()");
 

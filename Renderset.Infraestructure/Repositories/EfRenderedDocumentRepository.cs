@@ -15,6 +15,9 @@ namespace Renderset.Infrastructure.Repositories;
 /// ruta, se va al almacén; si no, el contenido está en la propia fila. Así
 /// los documentos emitidos antes de activar el blob se siguen abriendo sin
 /// migrar nada.
+///
+/// El PDF sigue la misma regla (PdfPath en el almacén o PdfContent en la
+/// fila) y nunca se carga salvo que se pida: es la columna más pesada.
 /// </summary>
 public sealed class EfRenderedDocumentRepository
     : IRenderedDocumentRepository
@@ -43,24 +46,42 @@ public sealed class EfRenderedDocumentRepository
             await _contextFactory.CreateDbContextAsync(
                 cancellationToken);
 
-        var entity =
+        // Proyección explícita para no traer PdfContent.
+        var row =
             await context.RenderedDocuments
                 .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.TenantId == tenantId &&
-                        x.DocumentId == documentId,
-                    cancellationToken);
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.DocumentId == documentId)
+                .Select(x => new
+                {
+                    Entity = new RenderedDocumentEntity
+                    {
+                        TenantId = x.TenantId,
+                        DocumentId = x.DocumentId,
+                        ReportId = x.ReportId,
+                        PresetId = x.PresetId,
+                        PresetVersion = x.PresetVersion,
+                        Culture = x.Culture,
+                        FileName = x.FileName,
+                        Format = x.Format,
+                        Content = x.Content,
+                        ContentPath = x.ContentPath,
+                        CreatedAtUtc = x.CreatedAtUtc
+                    },
+                    HasPdf = x.PdfPath != null || x.PdfContent != null
+                })
+                .FirstOrDefaultAsync(cancellationToken);
 
-        if (entity is null)
+        if (row is null)
             return null;
 
         var content =
             await ReadContentAsync(
-                entity,
+                row.Entity,
                 cancellationToken);
 
-        return ToModel(entity, content);
+        return ToModel(row.Entity, content, row.HasPdf);
     }
 
     public async Task<IReadOnlyList<RenderedDocumentSummary>> GetSummariesAsync(
@@ -96,7 +117,8 @@ public sealed class EfRenderedDocumentRepository
                     x.Culture,
                     x.FileName,
                     x.Format,
-                    x.CreatedAtUtc
+                    x.CreatedAtUtc,
+                    HasPdf = x.PdfPath != null || x.PdfContent != null
                 })
                 .ToListAsync(cancellationToken);
 
@@ -108,6 +130,7 @@ public sealed class EfRenderedDocumentRepository
                 Culture = x.Culture,
                 FileName = x.FileName,
                 Format = ParseFormat(x.Format),
+                HasPdf = x.HasPdf,
                 CreatedAtUtc = x.CreatedAtUtc
             })
             .ToList();
@@ -176,7 +199,8 @@ public sealed class EfRenderedDocumentRepository
                     x.Culture,
                     x.FileName,
                     x.Format,
-                    x.CreatedAtUtc
+                    x.CreatedAtUtc,
+                    HasPdf = x.PdfPath != null || x.PdfContent != null
                 })
                 .ToListAsync(cancellationToken);
 
@@ -189,6 +213,7 @@ public sealed class EfRenderedDocumentRepository
                     Culture = x.Culture,
                     FileName = x.FileName,
                     Format = ParseFormat(x.Format),
+                    HasPdf = x.HasPdf,
                     CreatedAtUtc = DateTime.SpecifyKind(x.CreatedAtUtc, DateTimeKind.Utc)
                 })
                 .ToList();
@@ -261,6 +286,110 @@ public sealed class EfRenderedDocumentRepository
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<byte[]?> GetPdfAsync(
+        string tenantId,
+        string documentId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context =
+            await _contextFactory.CreateDbContextAsync(
+                cancellationToken);
+
+        var row =
+            await context.RenderedDocuments
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.DocumentId == documentId)
+                .Select(x => new
+                {
+                    x.PdfPath,
+                    x.PdfContent
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+        if (row is null)
+            return null;
+
+        if (row.PdfContent is not null)
+            return row.PdfContent;
+
+        if (string.IsNullOrWhiteSpace(row.PdfPath) || _contentStore is null)
+            return null;
+
+        // Si el fichero ha desaparecido del almacén se devuelve nulo y el
+        // servicio lo vuelve a generar desde el HTML: el PDF es derivable.
+        return await _contentStore.ReadAsync(
+            row.PdfPath,
+            cancellationToken);
+    }
+
+    public async Task SavePdfAsync(
+        string tenantId,
+        string documentId,
+        byte[] pdf,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pdf);
+
+        await using var context =
+            await _contextFactory.CreateDbContextAsync(
+                cancellationToken);
+
+        var fileName =
+            await context.RenderedDocuments
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.DocumentId == documentId)
+                .Select(x => x.FileName)
+                .FirstOrDefaultAsync(cancellationToken);
+
+        if (fileName is null)
+            return;
+
+        string? path = null;
+        byte[]? inline = pdf;
+
+        if (_contentStore is not null)
+        {
+            path =
+                await _contentStore.SaveAsync(
+                    tenantId,
+                    documentId,
+                    PdfFileName(fileName),
+                    "application/pdf",
+                    pdf,
+                    cancellationToken);
+
+            inline = null;
+        }
+
+        var now = DateTime.UtcNow;
+
+        await context.RenderedDocuments
+            .Where(x =>
+                x.TenantId == tenantId &&
+                x.DocumentId == documentId)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.PdfPath, path)
+                    .SetProperty(x => x.PdfContent, inline)
+                    .SetProperty(x => x.PdfCreatedAtUtc, (DateTime?)now),
+                cancellationToken);
+    }
+
+    /// <summary>
+    /// "factura-0412.html" → "factura-0412.pdf".
+    /// </summary>
+    public static string PdfFileName(
+        string fileName)
+    {
+        var name = Path.GetFileNameWithoutExtension(fileName);
+
+        return (string.IsNullOrWhiteSpace(name) ? "documento" : name) + ".pdf";
+    }
+
     private async Task<string> ReadContentAsync(
         RenderedDocumentEntity entity,
         CancellationToken cancellationToken)
@@ -308,7 +437,8 @@ public sealed class EfRenderedDocumentRepository
 
     private static RenderedDocument ToModel(
         RenderedDocumentEntity entity,
-        string content)
+        string content,
+        bool hasPdf)
     {
         return new RenderedDocument
         {
@@ -320,6 +450,7 @@ public sealed class EfRenderedDocumentRepository
             FileName = entity.FileName,
             Format = ParseFormat(entity.Format),
             Content = content,
+            HasPdf = hasPdf,
             CreatedAtUtc = entity.CreatedAtUtc
         };
     }

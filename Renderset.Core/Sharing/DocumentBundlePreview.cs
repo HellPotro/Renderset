@@ -40,6 +40,8 @@ public static class DocumentBundlePreview
             Branding = normalized.ToBranding(tenantId),
             Texts = texts,
             DownloadAllUrl = "#",
+            DownloadAllPdfUrl = "#",
+            PdfAvailable = true,
             Documents = names
                 .Select((name, index) => new DocumentBundleViewItem
                 {
