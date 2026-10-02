@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Renderset.Api.Endpoints;
 using Renderset.Core.Blocks;
@@ -7,11 +8,15 @@ using Renderset.Core.Presets;
 using Renderset.Core.Reports;
 using Renderset.Core.Rendering;
 using Renderset.Core.Services;
+using Renderset.Core.Sharing;
+using Renderset.Core.Tenancy;
 using Renderset.Core.Translations;
 using Renderset.Core.Variables;
 using Renderset.Blazor.Rendering;
+using Renderset.Blazor.Sharing;
 using Renderset.Infrastructure.Persistence;
 using Renderset.Infrastructure.Repositories;
+using Renderset.Infrastructure.Storage;
 using Renderset.Infrastructure.Translations;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -46,6 +51,68 @@ builder.Services.AddScoped<IReportTextCatalogFactory, ReportTextCatalogFactory>(
 builder.Services.AddScoped<IRenderedDocumentRepository, EfRenderedDocumentRepository>();
 builder.Services.AddScoped<IReportRenderService, ReportRenderService>();
 
+// ---------------------------------------------------------------- bundles
+
+builder.Services.AddSingleton(TimeProvider.System);
+
+builder.Services.AddSingleton(
+    builder.Configuration
+        .GetSection(DocumentSharingOptions.SectionName)
+        .Get<DocumentSharingOptions>()
+    ?? new DocumentSharingOptions());
+
+builder.Services.AddScoped<IDocumentBundleRepository, EfDocumentBundleRepository>();
+builder.Services.AddScoped<IDocumentBundleService, DocumentBundleService>();
+builder.Services.AddScoped<ITenantBrandingProvider, EfTenantBrandingProvider>();
+builder.Services.AddSingleton<IDocumentBundlePageRenderer, BlazorDocumentBundlePageRenderer>();
+
+// Almacén del contenido de los documentos. Sin configurar (o con
+// "Database") no se registra ninguno y el contenido sigue en la columna
+// Content, como hasta ahora.
+var documentStorage =
+    builder.Configuration
+        .GetSection(DocumentStorageOptions.SectionName)
+        .Get<DocumentStorageOptions>()
+    ?? new DocumentStorageOptions();
+
+switch (documentStorage.Provider)
+{
+    case DocumentStorageProvider.AzureBlob:
+        builder.Services.AddSingleton<IDocumentContentStore>(
+            new AzureBlobDocumentContentStore(
+                documentStorage.ConnectionString!,
+                documentStorage.ContainerName));
+        break;
+
+    case DocumentStorageProvider.FileSystem:
+        builder.Services.AddSingleton<IDocumentContentStore>(
+            new FileSystemDocumentContentStore(
+                documentStorage.RootPath!));
+        break;
+}
+
+// El enlace público es lo único de la API abierto a cualquiera. El token no
+// se puede adivinar, así que el límite no es contra fuerza bruta sino contra
+// alguien que se ponga a pedir el ZIP en bucle. Detrás de un proxy hace
+// falta UseForwardedHeaders para que la IP sea la del cliente y no la del
+// proxy.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy(
+        SharingEndpoints.RateLimitPolicy,
+        context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 120,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
+});
+
 // El renderizador estático de Blazor no necesita estado por petición: pinta
 // los mismos componentes que el preview del diseñador a partir del informe ya
 // resuelto.
@@ -76,11 +143,15 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseRateLimiter();
+
 app.MapAssignmentEndpoints();
 app.MapPresetEndpoints();
 app.MapReportBlockEndpoints();
 app.MapReportEndpoints();
 app.MapRenderEndpoints();
+app.MapBundleEndpoints();
+app.MapSharingEndpoints();
 app.MapReportVariableEndpoints();
 app.MapReportResourceEndpoints();
 app.MapTenantCultureEndpoints();

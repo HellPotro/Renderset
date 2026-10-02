@@ -21,8 +21,17 @@ public sealed class RenderedDocumentEntity
     /// <summary>
     /// Documento ya generado. Se guarda el contenido y no la petición: lo
     /// emitido no puede cambiar porque después se retoque el diseño.
+    ///
+    /// Nulo cuando el contenido está en un almacén externo (blob o disco):
+    /// entonces manda <see cref="ContentPath"/>.
     /// </summary>
-    public string Content { get; set; } = default!;
+    public string? Content { get; set; }
+
+    /// <summary>
+    /// Ruta en el almacén externo. Nula en los documentos guardados en la
+    /// propia fila, que son todos los anteriores a activar el almacén.
+    /// </summary>
+    public string? ContentPath { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
 

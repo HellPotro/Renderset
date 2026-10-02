@@ -1,0 +1,419 @@
+/* =========================================================
+   RENDERSET - VISOR DE DOCUMENTOS COMPARTIDOS
+   Página pública que ve el cliente del tenant.
+
+   Se incrusta en el HTML como recurso embebido, igual que
+   report-document.css, y no comparte clases con él: el visor es el marco
+   y los documentos van dentro de un iframe con sus propios estilos. Así
+   ninguno de los dos puede romper al otro.
+
+   Los colores de marca llegan como variables desde el renderer, ya
+   validados (sólo #rgb / #rrggbb).
+   ========================================================= */
+
+:root {
+    --rs-share-primary: #00285A;
+    --rs-share-secondary: #E8EFF3;
+    --rs-share-text: #25313A;
+    --rs-share-muted: #6D7B83;
+    --rs-share-border: #D8E1E7;
+    --rs-share-canvas: #F3F5F7;
+    --rs-share-surface: #FFFFFF;
+    --rs-share-radius: 8px;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+}
+
+body.rs-share-page {
+    background: var(--rs-share-canvas);
+    color: var(--rs-share-text);
+    font: 14px/1.45 "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+
+/* ---------- Estructura ---------- */
+
+.rs-share {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+}
+
+.rs-share-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 14px 24px;
+    background: var(--rs-share-surface);
+    border-top: 4px solid var(--rs-share-primary);
+    border-bottom: 1px solid var(--rs-share-border);
+}
+
+.rs-share-brand {
+    flex: none;
+    display: flex;
+    align-items: center;
+}
+
+.rs-share-logo {
+    display: block;
+    max-width: 160px;
+    max-height: 40px;
+    object-fit: contain;
+}
+
+.rs-share-company {
+    margin: 0;
+    color: var(--rs-share-primary);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.rs-share-heading {
+    flex: 1;
+    min-width: 0;
+    padding-left: 20px;
+    border-left: 1px solid var(--rs-share-border);
+}
+
+.rs-share-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.rs-share-meta {
+    margin: 2px 0 0;
+    color: var(--rs-share-muted);
+    font-size: 13px;
+}
+
+/* El mensaje respeta los saltos de línea tal como los escribió el ERP. */
+.rs-share-message {
+    margin: 0;
+    padding: 12px 24px;
+    background: var(--rs-share-secondary);
+    border-bottom: 1px solid var(--rs-share-border);
+    white-space: pre-line;
+}
+
+.rs-share-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    min-height: 0;
+}
+
+
+/* ---------- Lista de documentos ---------- */
+
+.rs-share-list {
+    padding: 16px 12px;
+    background: var(--rs-share-surface);
+    border-right: 1px solid var(--rs-share-border);
+    overflow: auto;
+}
+
+.rs-share-list-title {
+    margin: 0 8px 10px;
+    color: var(--rs-share-muted);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.rs-share-list ol {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rs-share-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: inherit;
+    text-decoration: none;
+}
+
+    .rs-share-item:hover {
+        background: var(--rs-share-canvas);
+    }
+
+    .rs-share-item.is-active {
+        background: var(--rs-share-secondary);
+        border-color: var(--rs-share-border);
+    }
+
+.rs-share-item-index {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--rs-share-canvas);
+    color: var(--rs-share-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.rs-share-item.is-active .rs-share-item-index {
+    background: var(--rs-share-primary);
+    color: #FFFFFF;
+}
+
+.rs-share-item-name {
+    min-width: 0;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+
+/* ---------- Visor ---------- */
+
+.rs-share-viewer {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.rs-share-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: var(--rs-share-surface);
+    border-bottom: 1px solid var(--rs-share-border);
+}
+
+.rs-share-current {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.rs-share-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.rs-share-frame {
+    flex: 1;
+    width: 100%;
+    border: 0;
+    background: var(--rs-share-canvas);
+}
+
+
+/* ---------- Botones ---------- */
+
+.rs-share-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--rs-share-border);
+    border-radius: 6px;
+    background: var(--rs-share-surface);
+    color: var(--rs-share-text);
+    font: inherit;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+    .rs-share-button:hover {
+        border-color: var(--rs-share-primary);
+        color: var(--rs-share-primary);
+    }
+
+    .rs-share-button.is-primary {
+        border-color: var(--rs-share-primary);
+        background: var(--rs-share-primary);
+        color: #FFFFFF;
+    }
+
+        .rs-share-button.is-primary:hover {
+            filter: brightness(1.12);
+            color: #FFFFFF;
+        }
+
+.rs-share-button:focus-visible,
+.rs-share-item:focus-visible {
+    outline: 2px solid var(--rs-share-primary);
+    outline-offset: 2px;
+}
+
+
+/* ---------- Enlace no disponible ---------- */
+
+.rs-share-notice {
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    padding: 24px 16px;
+}
+
+.rs-share-card {
+    width: 100%;
+    max-width: 440px;
+    padding: 32px 28px;
+    background: var(--rs-share-surface);
+    border: 1px solid var(--rs-share-border);
+    border-top: 4px solid var(--rs-share-primary);
+    border-radius: var(--rs-share-radius);
+    text-align: center;
+}
+
+    .rs-share-card .rs-share-logo,
+    .rs-share-card .rs-share-company {
+        margin: 0 auto 20px;
+    }
+
+    /* Más específico que ".rs-share-card p", que lo dejaría en gris. */
+    .rs-share-card .rs-share-company {
+        color: var(--rs-share-primary);
+    }
+
+    .rs-share-card h1 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    .rs-share-card p {
+        margin: 0;
+        color: var(--rs-share-muted);
+    }
+
+
+/* ---------- Móvil ---------- */
+
+@media (max-width: 760px) {
+
+    .rs-share {
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .rs-share-header {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .rs-share-heading {
+        flex-basis: 100%;
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .rs-share-header > .rs-share-button {
+        width: 100%;
+    }
+
+    .rs-share-message {
+        padding: 12px 16px;
+    }
+
+    .rs-share-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* La lista pasa a ser una fila de pestañas desplazable. */
+    .rs-share-list {
+        padding: 12px 16px;
+        border-right: 0;
+        border-bottom: 1px solid var(--rs-share-border);
+    }
+
+    .rs-share-list ol {
+        flex-direction: row;
+        overflow-x: auto;
+    }
+
+    .rs-share-item {
+        white-space: nowrap;
+    }
+
+    .rs-share-item-name {
+        overflow-wrap: normal;
+    }
+
+    .rs-share-toolbar {
+        flex-wrap: wrap;
+        padding: 10px 16px;
+    }
+
+    .rs-share-current {
+        flex-basis: 100%;
+    }
+
+    .rs-share-actions {
+        width: 100%;
+    }
+
+        .rs-share-actions > .rs-share-button {
+            flex: 1 1 auto;
+        }
+
+    .rs-share-frame {
+        flex: none;
+        height: 75vh;
+    }
+}
+
+
+/* ---------- Impresión ---------- */
+
+/* Imprimir la página contenedora no tiene sentido; el botón Imprimir
+   imprime el documento del iframe. Por si alguien usa Ctrl+P aquí, al
+   menos sale sólo el documento. */
+@media print {
+
+    .rs-share-header,
+    .rs-share-message,
+    .rs-share-list,
+    .rs-share-toolbar {
+        display: none;
+    }
+
+    .rs-share,
+    .rs-share-body {
+        display: block;
+        height: auto;
+    }
+
+    .rs-share-frame {
+        height: 100vh;
+    }
+}

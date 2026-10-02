@@ -12,6 +12,17 @@ public sealed class TenantEntity
 
     public DateTime? UpdatedAtUtc { get; set; }
 
+    /// <summary>
+    /// Marca para las páginas que ve el cliente del tenant (visor de
+    /// documentos compartidos). Opcional: sin ella se usan el nombre y los
+    /// colores por defecto de RenderSet.
+    /// </summary>
+    public string? LogoUrl { get; set; }
+
+    public string? PrimaryColor { get; set; }
+
+    public string? SecondaryColor { get; set; }
+
     public ICollection<ReportEntity> Reports { get; set; } = [];
 
     public ICollection<ReportPresetEntity> Presets { get; set; } = [];

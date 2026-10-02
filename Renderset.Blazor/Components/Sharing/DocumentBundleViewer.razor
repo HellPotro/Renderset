@@ -1,0 +1,132 @@
+@using Renderset.Core.Sharing
+
+@*
+    Visor público de un bundle. Se pinta en estático (HtmlRenderer), sin
+    circuito: la navegación entre documentos es un enlace con target al
+    iframe, y el script del renderer sólo actualiza el estado visual. Si el
+    script no carga, la página sigue funcionando.
+*@
+
+<div class="rs-share">
+
+    <header class="rs-share-header">
+
+        <div class="rs-share-brand">
+            @if (!string.IsNullOrWhiteSpace(View.Branding.LogoUrl))
+            {
+                <img class="rs-share-logo"
+                     src="@View.Branding.LogoUrl"
+                     alt="@View.Branding.DisplayName" />
+            }
+            else
+            {
+                <span class="rs-share-company">@View.Branding.DisplayName</span>
+            }
+        </div>
+
+        <div class="rs-share-heading">
+            <h1 class="rs-share-title">@View.Title</h1>
+            <p class="rs-share-meta">
+                @View.Texts.FormatSharedBy(View.Branding.DisplayName)
+                <span aria-hidden="true"> · </span>
+                @View.Texts.FormatAvailableUntil(View.ExpiresAtUtc)
+            </p>
+        </div>
+
+        @if (View.Documents.Count > 1)
+        {
+            <a class="rs-share-button is-primary"
+               href="@View.DownloadAllUrl"
+               download>
+                @View.Texts.DownloadAll
+            </a>
+        }
+
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(View.Message))
+    {
+        <p class="rs-share-message">@View.Message</p>
+    }
+
+    <div class="rs-share-body">
+
+        <nav class="rs-share-list" aria-label="@View.Texts.Documents">
+
+            <h2 class="rs-share-list-title">
+                @View.Texts.Documents (@View.Documents.Count)
+            </h2>
+
+            <ol>
+                @foreach (var document in View.Documents)
+                {
+                    <li>
+                        <a class="rs-share-item @(document == First ? "is-active" : null)"
+                           href="@document.ViewUrl"
+                           target="@FrameName"
+                           aria-current="@(document == First ? "true" : null)"
+                           data-share-item
+                           data-title="@document.Title"
+                           data-download="@document.DownloadUrl">
+                            <span class="rs-share-item-index">@document.Position</span>
+                            <span class="rs-share-item-name">@document.Title</span>
+                        </a>
+                    </li>
+                }
+            </ol>
+
+        </nav>
+
+        <section class="rs-share-viewer">
+
+            <div class="rs-share-toolbar">
+
+                <span class="rs-share-current" data-share-current>@First.Title</span>
+
+                <div class="rs-share-actions">
+
+                    <button type="button"
+                            class="rs-share-button"
+                            data-share-print>
+                        @View.Texts.Print
+                    </button>
+
+                    <a class="rs-share-button"
+                       href="@First.ViewUrl"
+                       target="_blank"
+                       rel="noopener"
+                       data-share-open>
+                        @View.Texts.OpenInNewTab
+                    </a>
+
+                    <a class="rs-share-button is-primary"
+                       href="@First.DownloadUrl"
+                       data-share-download>
+                        @View.Texts.Download
+                    </a>
+
+                </div>
+
+            </div>
+
+            <iframe class="rs-share-frame"
+                    name="@FrameName"
+                    title="@First.Title"
+                    src="@First.ViewUrl"></iframe>
+
+        </section>
+
+    </div>
+
+</div>
+
+@code {
+
+    public const string FrameName = "rs-share-frame";
+
+    [Parameter, EditorRequired]
+    public DocumentBundleView View { get; set; } = default!;
+
+    private DocumentBundleViewItem First =>
+        View.Documents[0];
+}

@@ -1,0 +1,38 @@
+@using Renderset.Core.Sharing
+
+<main class="rs-share-notice">
+
+    <div class="rs-share-card">
+
+        @if (!string.IsNullOrWhiteSpace(View.Branding.LogoUrl))
+        {
+            <img class="rs-share-logo"
+                 src="@View.Branding.LogoUrl"
+                 alt="@View.Branding.DisplayName" />
+        }
+        else
+        {
+            <p class="rs-share-company">@View.Branding.DisplayName</p>
+        }
+
+        <h1>@View.Texts.UnavailableTitle</h1>
+
+        <p>@Message</p>
+
+    </div>
+
+</main>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public DocumentBundleUnavailableView View { get; set; } = default!;
+
+    private string Message =>
+        View.Reason switch
+        {
+            DocumentBundleOpenStatus.Expired => View.Texts.ExpiredMessage,
+            DocumentBundleOpenStatus.Revoked => View.Texts.RevokedMessage,
+            _ => View.Texts.NotFoundMessage
+        };
+}

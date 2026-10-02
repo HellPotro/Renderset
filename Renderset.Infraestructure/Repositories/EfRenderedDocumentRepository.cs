@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Renderset.Core.Rendering;
 using Renderset.Infrastructure.Persistence;
@@ -5,15 +6,31 @@ using Renderset.Infrastructure.Persistence.Entities;
 
 namespace Renderset.Infrastructure.Repositories;
 
+/// <summary>
+/// Documentos emitidos.
+///
+/// El contenido va a <see cref="IDocumentContentStore"/> si hay uno
+/// registrado y a la columna Content si no. Al leer se mira la fila: si trae
+/// ruta, se va al almacén; si no, el contenido está en la propia fila. Así
+/// los documentos emitidos antes de activar el blob se siguen abriendo sin
+/// migrar nada.
+/// </summary>
 public sealed class EfRenderedDocumentRepository
     : IRenderedDocumentRepository
 {
     private readonly IDbContextFactory<RenderSetDbContext> _contextFactory;
+    private readonly IDocumentContentStore? _contentStore;
 
+    /// <param name="contentStore">
+    /// Opcional. El contenedor de dependencias pasa null cuando no hay
+    /// ningún almacén registrado, que es la configuración por defecto.
+    /// </param>
     public EfRenderedDocumentRepository(
-        IDbContextFactory<RenderSetDbContext> contextFactory)
+        IDbContextFactory<RenderSetDbContext> contextFactory,
+        IDocumentContentStore? contentStore = null)
     {
         _contextFactory = contextFactory;
+        _contentStore = contentStore;
     }
 
     public async Task<RenderedDocument?> GetByIdAsync(
@@ -34,9 +51,65 @@ public sealed class EfRenderedDocumentRepository
                         x.DocumentId == documentId,
                     cancellationToken);
 
-        return entity is null
-            ? null
-            : ToModel(entity);
+        if (entity is null)
+            return null;
+
+        var content =
+            await ReadContentAsync(
+                entity,
+                cancellationToken);
+
+        return ToModel(entity, content);
+    }
+
+    public async Task<IReadOnlyList<RenderedDocumentSummary>> GetSummariesAsync(
+        string tenantId,
+        IReadOnlyCollection<string> documentIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (documentIds.Count == 0)
+            return [];
+
+        var ids =
+            documentIds
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+        await using var context =
+            await _contextFactory.CreateDbContextAsync(
+                cancellationToken);
+
+        // Se proyecta sin Content a propósito: es la columna pesada y aquí
+        // no hace falta.
+        var rows =
+            await context.RenderedDocuments
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    ids.Contains(x.DocumentId))
+                .Select(x => new
+                {
+                    x.DocumentId,
+                    x.ReportId,
+                    x.Culture,
+                    x.FileName,
+                    x.Format,
+                    x.CreatedAtUtc
+                })
+                .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(x => new RenderedDocumentSummary
+            {
+                Id = x.DocumentId,
+                ReportId = x.ReportId,
+                Culture = x.Culture,
+                FileName = x.FileName,
+                Format = ParseFormat(x.Format),
+                CreatedAtUtc = x.CreatedAtUtc
+            })
+            .ToList();
     }
 
     public async Task SaveAsync(
@@ -74,13 +147,80 @@ public sealed class EfRenderedDocumentRepository
         entity.Culture = document.Culture;
         entity.FileName = document.FileName;
         entity.Format = document.Format.ToString();
-        entity.Content = document.Content;
+
+        if (_contentStore is null)
+        {
+            entity.Content = document.Content;
+            entity.ContentPath = null;
+        }
+        else
+        {
+            // Primero el blob y después la fila: si falla el blob no queda
+            // una fila apuntando a algo que no existe. Al revés (blob sin
+            // fila) sólo queda un fichero huérfano, que no rompe nada.
+            entity.ContentPath =
+                await _contentStore.SaveAsync(
+                    tenantId,
+                    document.Id,
+                    document.FileName,
+                    ContentType(document.Format),
+                    Encoding.UTF8.GetBytes(document.Content),
+                    cancellationToken);
+
+            entity.Content = null;
+        }
 
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    private async Task<string> ReadContentAsync(
+        RenderedDocumentEntity entity,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(entity.ContentPath))
+            return entity.Content ?? string.Empty;
+
+        if (_contentStore is null)
+        {
+            throw new InvalidOperationException(
+                $"El documento '{entity.DocumentId}' tiene el contenido en un " +
+                $"almacén externo ('{entity.ContentPath}'), pero la API no tiene " +
+                "ninguno configurado. Revisa la sección DocumentStorage.");
+        }
+
+        var bytes =
+            await _contentStore.ReadAsync(
+                entity.ContentPath,
+                cancellationToken);
+
+        if (bytes is null)
+        {
+            throw new InvalidOperationException(
+                $"No se encuentra el contenido del documento '{entity.DocumentId}' " +
+                $"en '{entity.ContentPath}'.");
+        }
+
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    private static string ContentType(
+        RenderFormat format) =>
+        format == RenderFormat.Pdf
+            ? "application/pdf"
+            : "text/html; charset=utf-8";
+
+    private static RenderFormat ParseFormat(
+        string? value) =>
+        Enum.TryParse<RenderFormat>(
+            value,
+            ignoreCase: true,
+            out var format)
+            ? format
+            : RenderFormat.Html;
+
     private static RenderedDocument ToModel(
-        RenderedDocumentEntity entity)
+        RenderedDocumentEntity entity,
+        string content)
     {
         return new RenderedDocument
         {
@@ -90,13 +230,8 @@ public sealed class EfRenderedDocumentRepository
             PresetVersion = entity.PresetVersion,
             Culture = entity.Culture,
             FileName = entity.FileName,
-            Format = Enum.TryParse<RenderFormat>(
-                entity.Format,
-                ignoreCase: true,
-                out var format)
-                    ? format
-                    : RenderFormat.Html,
-            Content = entity.Content,
+            Format = ParseFormat(entity.Format),
+            Content = content,
             CreatedAtUtc = entity.CreatedAtUtc
         };
     }

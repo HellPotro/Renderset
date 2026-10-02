@@ -191,3 +191,61 @@ GET {{ApiService_HostAddress}}/api/documents/{{tenantId}}/REEMPLAZA_DOCUMENT_ID/
 Accept: application/json
 
 ###
+
+
+### ==========================================================
+### Bundles: varios documentos detrás de un único enlace
+### ==========================================================
+
+@bundleId = pega-aqui-el-bundleId
+
+### Crear un bundle con documentos ya emitidos y uno que se emite ahora
+# Cada elemento lleva "documentId" (ya emitido con /api/render) o "render"
+# (misma petición que /api/render, se emite en esta llamada). La respuesta
+# trae "url": es el enlace para el cliente y sólo se devuelve aquí, porque
+# el token no se guarda en claro.
+POST {{ApiService_HostAddress}}/api/bundles/{{tenantId}}
+Content-Type: application/json
+
+{
+  "title": "Envío pedido 4512 - Gestamp Esmar",
+  "message": "Adjuntamos la documentación del envío.\nCualquier duda, responde a este correo.",
+  "expiresInDays": 15,
+  "items": [
+    {
+      "documentId": "f3ad6d5120f84c3cbd3ad4922bd039b0",
+      "displayName": "Factura F-2026-0412"
+    },
+    {
+      "displayName": "Albarán ALB_CON_PIT",
+      "render": {
+        "reportId": "{{reportId}}",
+        "presetId": "{{presetId}}",
+        "context": { "culture": "es-ES" },
+        "output": { "fileName": "albaran-ALB_CON_PIT.html" },
+        "data": {
+          "deliveryNote": { "number": "ALB_CON_PIT", "date": "2026-09-15" },
+          "customer": { "code": "001184", "name": "Gestamp Esmar S.A.U." },
+          "materials": []
+        }
+      }
+    }
+  ]
+}
+
+### Últimos bundles del tenant
+GET {{ApiService_HostAddress}}/api/bundles/{{tenantId}}?take=20
+
+### Estado de un bundle (accesos, caducidad, documentos)
+GET {{ApiService_HostAddress}}/api/bundles/{{tenantId}}/{{bundleId}}
+
+### Enlace nuevo (el anterior deja de valer)
+POST {{ApiService_HostAddress}}/api/bundles/{{tenantId}}/{{bundleId}}/link
+Content-Type: application/json
+
+{
+  "expiresInDays": 30
+}
+
+### Revocar el enlace
+POST {{ApiService_HostAddress}}/api/bundles/{{tenantId}}/{{bundleId}}/revoke

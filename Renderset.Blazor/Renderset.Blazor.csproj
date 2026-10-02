@@ -18,6 +18,7 @@
   -->
 	<ItemGroup>
 		<EmbeddedResource Include="wwwroot\css\report-document.css" LogicalName="Renderset.Blazor.report-document.css" />
+		<EmbeddedResource Include="wwwroot\css\document-bundle.css" LogicalName="Renderset.Blazor.document-bundle.css" />
 	</ItemGroup>
 
 	<ItemGroup>

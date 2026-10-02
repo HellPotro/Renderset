@@ -44,8 +44,13 @@ public sealed class RenderedDocumentEntityConfiguration
             .HasMaxLength(20)
             .IsRequired();
 
-        builder.Property(x => x.Content)
-            .IsRequired();
+        // Ya no es obligatorio: con almacén externo la fila sólo lleva la
+        // ruta. Que uno de los dos venga informado lo garantiza el
+        // repositorio, que es el único que escribe aquí.
+        builder.Property(x => x.Content);
+
+        builder.Property(x => x.ContentPath)
+            .HasMaxLength(400);
 
         builder.Property(x => x.CreatedAtUtc)
             .HasDefaultValueSql("SYSUTCDATETIME()");

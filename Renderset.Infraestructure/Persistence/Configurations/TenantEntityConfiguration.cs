@@ -1,4 +1,4 @@
-﻿using Renderset.Infrastructure.Persistence.Entities;
+using Renderset.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -26,5 +26,14 @@ public sealed class TenantEntityConfiguration
 
         builder.Property(x => x.CreatedAtUtc)
             .HasDefaultValueSql("SYSUTCDATETIME()");
+
+        builder.Property(x => x.LogoUrl)
+            .HasMaxLength(500);
+
+        builder.Property(x => x.PrimaryColor)
+            .HasMaxLength(20);
+
+        builder.Property(x => x.SecondaryColor)
+            .HasMaxLength(20);
     }
 }
