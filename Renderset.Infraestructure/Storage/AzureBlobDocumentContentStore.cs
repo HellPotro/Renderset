@@ -1,4 +1,5 @@
 using Azure;
+using Azure.Identity;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Renderset.Core.Rendering;
@@ -19,22 +20,56 @@ public sealed class AzureBlobDocumentContentStore
     private readonly SemaphoreSlim _ensureLock = new(1, 1);
     private volatile bool _containerReady;
 
-    public AzureBlobDocumentContentStore(
-        string connectionString,
-        string containerName)
+    private AzureBlobDocumentContentStore(
+        BlobContainerClient container)
     {
-        if (string.IsNullOrWhiteSpace(connectionString))
+        _container = container;
+    }
+
+    /// <summary>
+    /// Elige la forma de autenticarse según lo configurado:
+    ///
+    /// - ConnectionString: con la clave de la cuenta. Cómodo en desarrollo
+    ///   (user-secrets), pero la clave da acceso total a la cuenta.
+    /// - AccountUrl sin ConnectionString: identidad administrada en Azure
+    ///   (o tu usuario de Visual Studio / az login en local), sin ninguna
+    ///   clave en la configuración. Es lo recomendado en App Service; la
+    ///   identidad necesita el rol "Storage Blob Data Contributor".
+    /// </summary>
+    public static AzureBlobDocumentContentStore Create(
+        DocumentStorageOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var containerName =
+            string.IsNullOrWhiteSpace(options.ContainerName)
+                ? "documents"
+                : options.ContainerName.Trim();
+
+        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
         {
-            throw new InvalidOperationException(
-                "DocumentStorage:ConnectionString es obligatorio con el proveedor AzureBlob.");
+            return new AzureBlobDocumentContentStore(
+                new BlobContainerClient(
+                    options.ConnectionString,
+                    containerName));
         }
 
-        _container =
-            new BlobContainerClient(
-                connectionString,
-                string.IsNullOrWhiteSpace(containerName)
-                    ? "documents"
-                    : containerName);
+        if (!string.IsNullOrWhiteSpace(options.AccountUrl))
+        {
+            var containerUri =
+                new Uri(
+                    options.AccountUrl.TrimEnd('/') + "/" + containerName);
+
+            return new AzureBlobDocumentContentStore(
+                new BlobContainerClient(
+                    containerUri,
+                    new DefaultAzureCredential()));
+        }
+
+        throw new InvalidOperationException(
+            "Con DocumentStorage:Provider = AzureBlob hace falta " +
+            "DocumentStorage:ConnectionString o DocumentStorage:AccountUrl " +
+            "(identidad administrada).");
     }
 
     public async Task<string> SaveAsync(

@@ -131,9 +131,7 @@ switch (documentStorage.Provider)
 {
     case DocumentStorageProvider.AzureBlob:
         builder.Services.AddSingleton<IDocumentContentStore>(
-            new AzureBlobDocumentContentStore(
-                documentStorage.ConnectionString!,
-                documentStorage.ContainerName));
+            AzureBlobDocumentContentStore.Create(documentStorage));
         break;
 
     case DocumentStorageProvider.FileSystem:

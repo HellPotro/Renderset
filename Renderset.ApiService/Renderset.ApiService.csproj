@@ -4,6 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Secretos de desarrollo (cadena de conexión del blob, contraseñas):
+         dotnet user-secrets set ... -->
+    <UserSecretsId>5434de7b-249a-43e8-9e32-c2c074022bb3</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

@@ -26,8 +26,17 @@ public sealed class DocumentStorageOptions
 
     /// <summary>
     /// Cadena de conexión para <see cref="DocumentStorageProvider.AzureBlob"/>.
+    /// Lleva la clave de la cuenta: nunca en appsettings.json, sólo en
+    /// user-secrets (desarrollo) o Key Vault.
     /// </summary>
     public string? ConnectionString { get; set; }
+
+    /// <summary>
+    /// Alternativa sin clave para <see cref="DocumentStorageProvider.AzureBlob"/>:
+    /// "https://rendersetstorage.blob.core.windows.net" y la identidad
+    /// administrada del App Service. Se usa sólo si no hay ConnectionString.
+    /// </summary>
+    public string? AccountUrl { get; set; }
 
     public string ContainerName { get; set; } = "documents";
 
