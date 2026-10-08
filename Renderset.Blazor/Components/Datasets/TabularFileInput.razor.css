@@ -1,0 +1,132 @@
+.tfile {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* El input real va encima, invisible: así toda la etiqueta hace de botón
+   y se puede soltar el fichero encima. */
+.tfile-pick {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 8px;
+    padding: 7px 12px;
+    border: 1px dashed #b9c8d1;
+    border-radius: 8px;
+    background: #fff;
+    color: #355766;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+    .tfile-pick:hover {
+        border-color: #7f9cab;
+        background: #f7fafb;
+    }
+
+    .tfile-pick small {
+        color: #93a0a5;
+        font-size: 10.5px;
+    }
+
+    .tfile-pick.is-busy {
+        cursor: progress;
+        opacity: .75;
+    }
+
+    .tfile-pick ::deep input[type="file"] {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+.tfile-chip {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    padding: 8px 10px 8px 12px;
+    border: 1px solid #dfe7ea;
+    border-radius: 8px;
+    background: #f7fafb;
+    color: #4d626d;
+    font-size: 12px;
+}
+
+    .tfile-chip > i {
+        color: #2f7a4f;
+        font-size: 15px;
+    }
+
+    .tfile-chip strong {
+        overflow: hidden;
+        max-width: 260px;
+        color: #23333c;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+.tfile-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    color: #6b7c85;
+    font-size: 11.5px;
+}
+
+    .tfile-option select,
+    .tfile-option input {
+        padding: 3px 6px;
+        border: 1px solid #d8e1e7;
+        border-radius: 6px;
+        background: #fff;
+        color: #23333c;
+        font-size: 11.5px;
+    }
+
+    .tfile-option input {
+        width: 62px;
+    }
+
+.tfile-muted {
+    color: #93a0a5;
+    font-size: 11.5px;
+}
+
+.tfile-remove {
+    margin-left: auto;
+    padding: 3px 7px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #8a99a1;
+    cursor: pointer;
+}
+
+    .tfile-remove:hover {
+        background: #eef3f5;
+        color: #b4443a;
+    }
+
+.tfile-notes {
+    margin: 0;
+    padding-left: 18px;
+    color: #6b7c85;
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+.tfile-error {
+    padding: 8px 11px;
+    border: 1px solid #efc9c4;
+    border-radius: 7px;
+    background: #fdf4f3;
+    color: #a3392f;
+    font-size: 11.5px;
+    line-height: 1.45;
+}

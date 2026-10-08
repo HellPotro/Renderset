@@ -68,6 +68,36 @@ public static class DelimitedTextParser
         if (firstRowIsHeader)
             grid = [grid[0], .. JoinBrokenRows(grid.Skip(1).ToList(), grid[0].Count)];
 
+        return FromGrid(grid, renamed, firstRowIsHeader);
+    }
+
+    /// <summary>
+    /// Tipos y valores a partir de una rejilla de celdas ya separadas. Es lo
+    /// que comparten el texto pegado y los ficheros (<see cref="TabularFile"/>):
+    /// un Excel llega como celdas, no como texto, pero el análisis de cada
+    /// columna es el mismo.
+    /// </summary>
+    /// <param name="ambiguousDecimalSeparator">
+    /// Separador decimal cuando la columna no lo deja claro ("1.234"). Nulo
+    /// usa la cultura del servidor, que es lo correcto para texto pegado; un
+    /// Excel escribe sus números siempre con punto.
+    /// </param>
+    internal static TabularPayload FromGrid(
+        List<List<string>> grid,
+        List<string> renamed,
+        bool firstRowIsHeader = true,
+        char? ambiguousDecimalSeparator = null)
+    {
+        var payload = new TabularPayload();
+
+        grid =
+            grid
+                .Where(x => x.Any(value => !string.IsNullOrWhiteSpace(value)))
+                .ToList();
+
+        if (grid.Count == 0)
+            return payload;
+
         var width = grid.Max(x => x.Count);
 
         var headers =
@@ -99,7 +129,7 @@ public static class DelimitedTextParser
                     .Select(row => row[column])
                     .ToList();
 
-            var analysis = ColumnAnalysis.Analyze(values);
+            var analysis = ColumnAnalysis.Analyze(values, ambiguousDecimalSeparator);
 
             analyses.Add(analysis);
 
@@ -345,7 +375,8 @@ public static class DelimitedTextParser
         public char DecimalSeparator { get; }
 
         public static ColumnAnalysis Analyze(
-            IReadOnlyCollection<string> values)
+            IReadOnlyCollection<string> values,
+            char? ambiguousDecimalSeparator = null)
         {
             var present =
                 values
@@ -359,7 +390,7 @@ public static class DelimitedTextParser
             if (present.All(IsBoolean))
                 return new ColumnAnalysis(ReportDataType.Boolean, '.');
 
-            var separator = DetectDecimalSeparator(present);
+            var separator = DetectDecimalSeparator(present, ambiguousDecimalSeparator);
 
             if (present.All(x => IsNumber(x, separator)))
                 return new ColumnAnalysis(ReportDataType.Number, separator);
@@ -384,11 +415,13 @@ public static class DelimitedTextParser
         ///   detrás, es decimal: "148,24" y "7412,5".
         /// - Si deja exactamente tres cifras ("1,234") es ambiguo y no vota.
         ///
-        /// Si toda la columna es ambigua se usa la cultura del servidor, que
-        /// es la mejor apuesta disponible.
+        /// Si toda la columna es ambigua se usa el separador que diga quien
+        /// llama (un Excel: punto) o, si no dice nada, la cultura del
+        /// servidor, que es la mejor apuesta disponible.
         /// </summary>
         private static char DetectDecimalSeparator(
-            IReadOnlyCollection<string> values)
+            IReadOnlyCollection<string> values,
+            char? ambiguous)
         {
             var comma = 0;
             var dot = 0;
@@ -424,9 +457,10 @@ public static class DelimitedTextParser
             if (dot > comma)
                 return '.';
 
-            return CultureInfo.CurrentCulture
-                .NumberFormat
-                .NumberDecimalSeparator[0];
+            return ambiguous
+                ?? CultureInfo.CurrentCulture
+                    .NumberFormat
+                    .NumberDecimalSeparator[0];
         }
 
         private static void Vote(

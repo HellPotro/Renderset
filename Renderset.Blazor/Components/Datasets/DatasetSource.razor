@@ -76,7 +76,7 @@
                                 class="@(_kind == DatasetSourceKind.Tabular ? "is-on" : "")"
                                 @onclick="() => SwitchTo(DatasetSourceKind.Tabular)">
                             <i class="fa-solid fa-table"></i>
-                            SQL / CSV
+                            SQL / Excel / CSV
                         </button>
 
                     </div>
@@ -85,7 +85,7 @@
                 <p class="dsrc-hint">
                     @(_kind == DatasetSourceKind.Json
                         ? "Pega un documento de ejemplo con la estructura que ya usa tu sistema."
-                        : "Pega el resultado de tu consulta tal cual. Desde SSMS, copia la rejilla con cabeceras.")
+                        : "Pega el resultado de tu consulta tal cual (desde SSMS, copia la rejilla con cabeceras) o sube un Excel o un CSV.")
                 </p>
 
                 <button type="button"
@@ -107,12 +107,29 @@
             }
             else
             {
-                <textarea class="dsrc-input"
+                <TabularFileInput @ref="_fileInput"
+                                  Loaded="FileLoaded"
+                                  Cleared="FileCleared" />
+
+                @* Con un fichero el textarea sólo enseña las primeras filas:
+                   pintar cincuenta mil en el navegador no aporta nada, y
+                   editar una vista parcial perdería el resto. Para pegar
+                   otra cosa se quita el fichero. *@
+                <textarea class="dsrc-input @(_fromFile is null ? null : "is-readonly")"
                           rows="@Rows"
                           spellcheck="false"
+                          readonly="@(_fromFile is not null)"
                           value="@_raw"
                           @onchange="RawChanged"
                           placeholder="Factura&#9;Cliente&#9;Albaran_codigo&#9;Articulo&#9;Cantidad"></textarea>
+
+                @if (_fromFile is not null && _fromFile.Payload.Rows.Count > FilePreviewRows)
+                {
+                    <p class="dsrc-hint">
+                        Vista previa: @FilePreviewRows de @_fromFile.Payload.Rows.Count.ToString("N0") filas.
+                        Se usan todas. Para pegar otros datos, quita el fichero.
+                    </p>
+                }
 
                 @if (_payload is not null && _payload.Rows.Count > 0)
                 {
@@ -739,6 +756,16 @@
 
     private IReadOnlyList<string> _renamedHeaders = [];
 
+    private const int FilePreviewRows = 200;
+
+    private TabularFileInput? _fileInput;
+
+    /// <summary>
+    /// Fichero del que vienen las filas, si vienen de uno. Mientras lo hay,
+    /// las filas son las del fichero y el textarea es sólo una vista.
+    /// </summary>
+    private TabularFileResult? _fromFile;
+
     private DatasetSourceKind _kind = DatasetSourceKind.Json;
 
     private string _json = string.Empty;
@@ -873,6 +900,10 @@
         _kind = kind;
         _error = null;
 
+        // El textarea de un fichero es una vista parcial: volver a leerlo
+        // perdería filas, así que el fichero se suelta entero.
+        DropFile();
+
         Reset();
 
         if (kind == DatasetSourceKind.Json)
@@ -902,6 +933,8 @@
 
     private void LoadExample()
     {
+        DropFile();
+
         if (_kind == DatasetSourceKind.Json)
         {
             _json =
@@ -929,6 +962,41 @@
             "060098\t002532\tGestamp Esmar\t001310\t2026-06-17\tGBA01102\tAssy Cantrail RH.\t240\t13,739";
 
         AnalyzeTabular();
+    }
+
+
+    private void FileLoaded(
+        TabularFileResult result)
+    {
+        Reset();
+
+        _fromFile = result;
+        _raw = ToTabText(result.Payload, FilePreviewRows);
+
+        LoadPayload(result.Payload);
+
+        // Después de LoadPayload: Reset los limpia.
+        _renamedHeaders = result.RenamedHeaders;
+    }
+
+
+    private void FileCleared()
+    {
+        _fromFile = null;
+        _raw = string.Empty;
+
+        Reset();
+    }
+
+
+    private void DropFile()
+    {
+        if (_fromFile is null)
+            return;
+
+        _fromFile = null;
+        _raw = string.Empty;
+        _fileInput?.Reset();
     }
 
 
@@ -1458,7 +1526,8 @@
     /// con tabulador, salto de línea o comillas va entre comillas.
     /// </summary>
     private static string ToTabText(
-        TabularPayload payload)
+        TabularPayload payload,
+        int maxRows = int.MaxValue)
     {
         static string Cell(object? value)
         {
@@ -1479,7 +1548,7 @@
 
         builder.AppendJoin('\t', payload.Columns.Select(x => Cell(x.Name)));
 
-        foreach (var row in payload.Rows)
+        foreach (var row in payload.Rows.Take(maxRows))
         {
             builder.Append('\n');
             builder.AppendJoin('\t', row.Select(Cell));

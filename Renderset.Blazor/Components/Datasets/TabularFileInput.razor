@@ -1,0 +1,278 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Renderset.Core.DataSources
+
+@* Subir un Excel o un CSV y dejarlo en filas.
+
+   El fichero se queda en memoria mientras está elegido: cambiar de hoja o
+   de fila de cabecera vuelve a leerlo sin pedirlo otra vez. Los errores son
+   validaciones locales (formato, tamaño), así que van en línea y no en
+   toast. *@
+
+<div class="tfile @(IsLoaded ? "is-loaded" : null)">
+
+    @if (!IsLoaded)
+    {
+        <label class="tfile-pick @(_reading ? "is-busy" : null)">
+
+            <i class="fa-solid @(_reading ? "fa-spinner fa-spin" : "fa-file-arrow-up")"></i>
+
+            <span>@(_reading ? "Leyendo..." : Label)</span>
+
+            <small>.xlsx · .csv · .txt</small>
+
+            <InputFile accept="@TabularFile.Accept"
+                       disabled="@_reading"
+                       OnChange="FileChangedAsync" />
+
+        </label>
+    }
+    else
+    {
+        <div class="tfile-chip">
+
+            <i class="fa-solid @(_result!.Format == TabularFileFormat.Excel ? "fa-file-excel" : "fa-file-csv")"></i>
+
+            <strong title="@_fileName">@_fileName</strong>
+
+            @if (_result.Format == TabularFileFormat.Excel)
+            {
+                @if (_result.Sheets.Count > 1)
+                {
+                    <label class="tfile-option">
+                        Hoja
+                        <select value="@_result.Sheet"
+                                @onchange="SheetChangedAsync">
+                            @foreach (var sheet in _result.Sheets)
+                            {
+                                <option value="@sheet">@sheet</option>
+                            }
+                        </select>
+                    </label>
+                }
+                else if (!string.IsNullOrWhiteSpace(_result.Sheet))
+                {
+                    <span class="tfile-muted">Hoja @_result.Sheet</span>
+                }
+
+                @if (_result.HeaderRow is { } headerRow)
+                {
+                    <label class="tfile-option"
+                           title="Fila de Excel con los nombres de las columnas">
+                        Cabecera en la fila
+                        <input type="number"
+                               min="1"
+                               step="1"
+                               value="@headerRow"
+                               @onchange="HeaderRowChangedAsync" />
+                    </label>
+                }
+            }
+
+            <button type="button"
+                    class="tfile-remove"
+                    title="Quitar el fichero"
+                    @onclick="ClearAsync">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+        @if (Notes.Count > 0)
+        {
+            <ul class="tfile-notes">
+                @foreach (var note in Notes)
+                {
+                    <li>@note</li>
+                }
+            </ul>
+        }
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="tfile-error">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            @_error
+        </div>
+    }
+
+</div>
+
+@code {
+
+    /// <summary>
+    /// Filas leídas, cada vez que cambia el fichero, la hoja o la cabecera.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public EventCallback<TabularFileResult> Loaded { get; set; }
+
+    /// <summary>
+    /// Se ha quitado el fichero.
+    /// </summary>
+    [Parameter]
+    public EventCallback Cleared { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "Subir Excel o CSV";
+
+    private byte[]? _content;
+    private string _fileName = string.Empty;
+    private TabularFileResult? _result;
+    private string? _error;
+    private bool _reading;
+
+    private TabularFileOptions _options = new();
+
+    public bool IsLoaded =>
+        _result is not null;
+
+    /// <summary>
+    /// Olvida el fichero sin avisar: para cuando quien lo usa ya ha
+    /// sustituido las filas por otras (un pegado, el ejemplo).
+    /// </summary>
+    public void Reset()
+    {
+        _content = null;
+        _result = null;
+        _error = null;
+        _options = new TabularFileOptions();
+
+        StateHasChanged();
+    }
+
+    private IReadOnlyList<string> Notes
+    {
+        get
+        {
+            var notes = new List<string>();
+
+            if (_result is null)
+                return notes;
+
+            if (_result.SkippedRowsAbove > 0 && _result.HeaderRowDetected)
+            {
+                notes.Add(
+                    _result.SkippedRowsAbove == 1
+                        ? "Se ha saltado 1 fila de encima de la tabla (un título o un filtro)."
+                        : $"Se han saltado {_result.SkippedRowsAbove} filas de encima de la tabla (títulos o filtros).");
+            }
+
+            if (_result.Encoding == "Windows-1252")
+                notes.Add("El CSV no estaba en UTF-8: se ha leído como Windows-1252, que es como lo guarda Excel en español.");
+
+            return notes;
+        }
+    }
+
+    private async Task FileChangedAsync(
+        InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _reading = true;
+
+        try
+        {
+            var file = e.File;
+
+            if (file.Size > TabularFile.MaxBytes)
+            {
+                _error = $"El fichero pasa de {TabularFile.MaxBytes / 1024 / 1024} MB.";
+                return;
+            }
+
+            // El fichero llega por streaming, no por el textarea: no depende
+            // del tamaño máximo de mensaje del circuito.
+            await using var stream = file.OpenReadStream(TabularFile.MaxBytes);
+            using var memory = new MemoryStream((int)file.Size);
+
+            await stream.CopyToAsync(memory);
+
+            _content = memory.ToArray();
+            _fileName = file.Name;
+            _options = new TabularFileOptions();
+
+            await ReadAsync();
+        }
+        catch (IOException)
+        {
+            _error = "No se ha podido leer el fichero. Si es muy grande, prueba a quitar columnas u hojas que no hagan falta.";
+        }
+        finally
+        {
+            _reading = false;
+        }
+    }
+
+    private async Task SheetChangedAsync(
+        ChangeEventArgs e)
+    {
+        // Otra hoja tiene su propia cabecera: se vuelve a detectar.
+        _options = new TabularFileOptions
+        {
+            Sheet = e.Value?.ToString()
+        };
+
+        await ReadAsync();
+    }
+
+    private async Task HeaderRowChangedAsync(
+        ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var row) || row < 1)
+            return;
+
+        _options.HeaderRow = row;
+
+        await ReadAsync();
+    }
+
+    private async Task ReadAsync()
+    {
+        if (_content is null)
+            return;
+
+        _error = null;
+
+        TabularFileResult result;
+
+        try
+        {
+            result = TabularFile.Read(_content, _fileName, _options);
+        }
+        catch (TabularFileException exception)
+        {
+            // Con una hoja o cabecera elegida a mano, el fichero sigue
+            // valiendo: se queda el resultado anterior.
+            if (_result is null)
+                _content = null;
+
+            _error = exception.Message;
+
+            return;
+        }
+
+        if (result.Payload.Rows.Count == 0)
+        {
+            _error =
+                result.Format == TabularFileFormat.Excel
+                    ? $"La hoja '{result.Sheet}' no tiene filas de datos debajo de la cabecera."
+                    : "No se ha encontrado ninguna fila de datos.";
+
+            if (_result is null)
+                _content = null;
+
+            return;
+        }
+
+        _result = result;
+
+        await Loaded.InvokeAsync(result);
+    }
+
+    private async Task ClearAsync()
+    {
+        Reset();
+
+        await Cleared.InvokeAsync();
+    }
+}

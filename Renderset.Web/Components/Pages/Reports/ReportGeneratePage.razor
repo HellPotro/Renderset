@@ -79,18 +79,24 @@
 
                 <div class="editor-card-body">
 
-                    <textarea class="rgen-input"
-                              rows="12"
-                              spellcheck="false"
-                              placeholder="Pega aquí la rejilla de SSMS con cabeceras (clic derecho → Copiar con encabezados)"
-                              value="@_raw"
-                              @onchange="RawChanged"></textarea>
+                    @if (_fromFile is null)
+                    {
+                        <textarea class="rgen-input"
+                                  rows="12"
+                                  spellcheck="false"
+                                  placeholder="Pega aquí la rejilla de SSMS con cabeceras (clic derecho → Copiar con encabezados)"
+                                  value="@_raw"
+                                  @onchange="RawChanged"></textarea>
+                    }
 
-                    <label class="rgen-file">
-                        <i class="fa-solid fa-file-arrow-up"></i>
-                        o carga un .txt / .csv exportado
-                        <InputFile accept=".txt,.csv,.tsv" OnChange="FileChangedAsync" />
-                    </label>
+                    @* Excel o CSV. Con un fichero no se enseña el textarea:
+                       las filas son las del fichero, y para pegar otras se
+                       quita. *@
+                    <div class="rgen-file">
+                        <TabularFileInput Loaded="FileLoaded"
+                                          Cleared="FileCleared"
+                                          Label="o sube un Excel / CSV exportado" />
+                    </div>
 
                     @if (_payload is not null)
                     {
@@ -373,29 +379,27 @@
         Analyze(e.Value?.ToString() ?? string.Empty);
 
     /// <summary>
-    /// Un fichero no pasa por el textarea: llega por streaming y no depende
-    /// del tamaño máximo de mensaje del circuito.
+    /// Un fichero (Excel o CSV) no pasa por el textarea: llega por
+    /// streaming, TabularFileInput lo lee y aquí se valida contra el mapping
+    /// igual que un pegado.
     /// </summary>
-    private async Task FileChangedAsync(
-        InputFileChangeEventArgs e)
+    private TabularFileResult? _fromFile;
+
+    private void FileLoaded(
+        TabularFileResult result)
     {
-        try
-        {
-            await using var stream =
-                e.File.OpenReadStream(MaxFileBytes);
+        _fromFile = result;
+        _raw = string.Empty;
 
-            using var reader =
-                new StreamReader(stream, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-
-            Analyze(await reader.ReadToEndAsync());
-        }
-        catch (IOException)
-        {
-            _errors = [$"El fichero pasa de {MaxFileBytes / 1024 / 1024} MB."];
-        }
+        Validate(result.Payload);
     }
 
-    private const long MaxFileBytes = 20 * 1024 * 1024;
+    private void FileCleared()
+    {
+        _fromFile = null;
+
+        Analyze(string.Empty);
+    }
 
     private void Analyze(
         string raw)
@@ -408,9 +412,11 @@
         if (string.IsNullOrWhiteSpace(_raw) || _mapping is null)
             return;
 
+        TabularPayload payload;
+
         try
         {
-            _payload = DelimitedTextParser.Parse(_raw);
+            payload = DelimitedTextParser.Parse(_raw);
         }
         catch (Exception exception)
         {
@@ -418,8 +424,21 @@
             return;
         }
 
+        Validate(payload);
+    }
+
+    private void Validate(
+        TabularPayload payload)
+    {
+        _payload = payload;
+        _groups = [];
+        _errors = [];
+
+        if (_mapping is null)
+            return;
+
         var errors =
-            TabularDocuments.Validate(_payload, _mapping).ToList();
+            TabularDocuments.Validate(payload, _mapping).ToList();
 
         if (errors.Count == 0)
         {

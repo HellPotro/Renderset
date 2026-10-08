@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Los tests prueban piezas internas del lector de Excel. -->
+    <InternalsVisibleTo Include="Renderset.Tests" />
+  </ItemGroup>
+
 </Project>

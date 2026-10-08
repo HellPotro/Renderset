@@ -181,6 +181,13 @@
         outline: none;
     }
 
+    /* Filas de un fichero: el textarea es sólo una vista. */
+    .dsrc-input.is-readonly {
+        background: #f2f6f8;
+        color: #5c6c74;
+        resize: none;
+    }
+
 .dsrc-summary {
     display: flex;
     align-items: center;

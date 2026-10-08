@@ -79,25 +79,10 @@
         box-shadow: 0 0 0 2px rgba(65, 105, 125, .10);
     }
 
+/* La subida la pinta TabularFileInput; aquí sólo el hueco. */
 .rgen-file {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 6px;
-    color: #4f7384;
-    font-size: 11.5px;
-    text-decoration: underline;
-    cursor: pointer;
+    margin-top: 8px;
 }
-
-    /* El input real queda encima, invisible: así el texto hace de botón. */
-    .rgen-file ::deep input[type="file"] {
-        position: absolute;
-        inset: 0;
-        opacity: 0;
-        cursor: pointer;
-    }
 
 .rgen-summary {
     display: flex;
