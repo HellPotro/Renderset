@@ -1,0 +1,81 @@
+.logo-input {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.logo-input-preview {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 150px;
+    height: 64px;
+    padding: 8px;
+    border: 1px dashed #d8e1e5;
+    border-radius: 8px;
+    background: #fff;
+}
+
+    .logo-input-preview img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+
+    .logo-input-preview.is-empty span {
+        color: #98a6ad;
+        font-size: 11px;
+    }
+
+.logo-input-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+}
+
+.logo-input-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+/* El input de fichero cubre el botón: el clic va al diálogo del sistema. */
+.logo-input-upload {
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+    .logo-input-upload ::deep input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .logo-input-upload.is-disabled {
+        opacity: .6;
+        pointer-events: none;
+    }
+
+.logo-input-remove:hover:not(:disabled) {
+    color: #9a3d3d;
+}
+
+.logo-input-url {
+    width: 100%;
+    min-width: 0;
+}
+
+.logo-input-controls small {
+    color: #74858d;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+    .logo-input-controls small.logo-input-error {
+        color: #9a3d3d;
+    }

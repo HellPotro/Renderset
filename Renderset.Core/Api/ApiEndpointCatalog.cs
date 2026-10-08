@@ -404,6 +404,21 @@ public static class ApiEndpointCatalog
                     "Descargar el DeCA (QR)",
                     "El PDF del DeCA, sin autenticación ni interacción: es la URL del QR. Sirve el PDF guardado al emitir. 410 cuando ha pasado el plazo tras terminar el servicio.",
                     Public: true)
+            ]),
+
+        new(
+            "Imágenes",
+            "El logo del tenant subido a RenderSet en vez de enlazado desde otra web. Se guarda por el hash de su contenido, así que su URL no cambia mientras no cambie la imagen.",
+            [
+                new("POST", "/api/assets/{tenantId}/logo",
+                    "Subir el logo",
+                    "multipart/form-data con el campo file: PNG, JPG, WebP o GIF de 1 MB como mucho (SVG no). Devuelve { url, assetId, contentType, sizeBytes }; la url es la que se pone como logo. Rol Admin.",
+                    Integration: false),
+
+                new("GET", "/assets/{tenantId}/{file}",
+                    "Ver una imagen",
+                    "La imagen subida, sin autenticación (la pintan el visor público y el conversor de PDF) y cacheable para siempre.",
+                    Public: true)
             ])
     ];
 

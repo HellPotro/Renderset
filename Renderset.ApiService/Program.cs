@@ -77,7 +77,16 @@ var documentAssets =
     ?? new DocumentAssetsOptions();
 
 builder.Services.AddSingleton(documentAssets);
-builder.Services.AddSingleton<IHtmlAssetInliner, HttpHtmlAssetInliner>();
+builder.Services.AddSingleton<HttpHtmlAssetInliner>();
+
+// Los logos subidos a RenderSet (/assets) se leen de su almacén; el resto se
+// descarga como siempre.
+builder.Services.AddSingleton<IHtmlAssetInliner>(services =>
+    new TenantAssetHtmlInliner(
+        services.GetRequiredService<HttpHtmlAssetInliner>(),
+        services.GetRequiredService<IServiceScopeFactory>(),
+        services.GetRequiredService<TenantAssetOptions>(),
+        documentAssets));
 
 // Sin Pdf:GotenbergUrl la API arranca igual y sirve HTML; los botones de
 // PDF no aparecen.
@@ -240,6 +249,53 @@ switch (documentStorage.Provider)
         break;
 }
 
+// Imágenes de los tenants (el logo subido). Van en la base de datos de
+// RenderSet (TenantAssets) salvo que Assets:Storage diga otra cosa: mismo
+// formato que DocumentStorage, contenedor "assets" por defecto.
+var assetOptions =
+    builder.Configuration
+        .GetSection(TenantAssetOptions.SectionName)
+        .Get<TenantAssetOptions>()
+    ?? new TenantAssetOptions();
+
+// Su dirección pública es la de la API: la misma que la de los enlaces
+// compartidos o, si no hay, la del QR del DeCA.
+if (string.IsNullOrWhiteSpace(assetOptions.PublicBaseUrl))
+{
+    assetOptions.PublicBaseUrl =
+        !string.IsNullOrWhiteSpace(documentSharing.PublicBaseUrl)
+            ? documentSharing.PublicBaseUrl
+            : deca.PublicBaseUrl;
+}
+
+builder.Services.AddSingleton(assetOptions);
+
+var assetStorage =
+    builder.Configuration
+        .GetSection(TenantAssetOptions.SectionName + ":Storage")
+        .Get<DocumentStorageOptions>();
+
+switch (assetStorage?.Provider)
+{
+    case DocumentStorageProvider.AzureBlob:
+        if (string.IsNullOrWhiteSpace(builder.Configuration[TenantAssetOptions.SectionName + ":Storage:ContainerName"]))
+            assetStorage!.ContainerName = "assets";
+
+        builder.Services.AddSingleton(
+            new TenantAssetContentStore(
+                AzureBlobDocumentContentStore.Create(assetStorage!)));
+        break;
+
+    case DocumentStorageProvider.FileSystem:
+        builder.Services.AddSingleton(
+            new TenantAssetContentStore(
+                new FileSystemDocumentContentStore(
+                    assetStorage!.RootPath!)));
+        break;
+}
+
+builder.Services.AddScoped<ITenantAssetRepository, EfTenantAssetRepository>();
+
 // El enlace público es lo único de la API abierto a cualquiera. El token no
 // se puede adivinar, así que el límite no es contra fuerza bruta sino contra
 // alguien que se ponga a pedir el ZIP en bucle. Detrás de un proxy hace
@@ -389,11 +445,15 @@ api.MapReportVariableEndpoints();
 api.MapReportResourceEndpoints();
 api.MapTenantCultureEndpoints();
 api.MapApiKeyEndpoints();
+api.MapTenantAssetEndpoints();
 if (decaEnabled)
     api.MapDecaEndpoints();
 
 // Público: enlaces compartidos con token propio.
 app.MapSharingEndpoints();
+
+// Público: las imágenes de los tenants (logo), por el hash de su contenido.
+app.MapTenantAssetPublicEndpoints();
 
 // El QR de la cabecera enlaza al visor de Web (/documents/{id}). Si
 // DocumentLinks:BaseUrl apuntaba a la API en vez de a Web, los documentos

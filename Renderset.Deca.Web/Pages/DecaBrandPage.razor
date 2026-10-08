@@ -1,0 +1,290 @@
+@page "/deca/brand"
+
+@using Renderset.Blazor.Components.Branding
+@using Renderset.Blazor.Components.Editor
+@using Renderset.Blazor.Components.Themes
+@using Renderset.Core.Sharing
+@using Renderset.Core.Themes
+
+@inject IDecaApi Api
+@inject ICurrentTenant CurrentTenant
+@inject TenantSession Session
+@inject IToastService Toasts
+
+<PageTitle>Marca - RenderSet DeCA</PageTitle>
+
+<div class="page page-wide deca-page deca-brand-page">
+
+    <header class="page-header">
+
+        <div>
+            <h1>Marca</h1>
+            <p>
+                Logo, colores y temas de la empresa. Son los mismos que en
+                RenderSet (Temas y Compartir → Página pública): lo que se
+                cambie aquí se ve también allí. Los DeCA ya emitidos no
+                cambian.
+            </p>
+        </div>
+
+    </header>
+
+    @* ------------------------------------------------ logo y colores *@
+
+    <section class="editor-card deca-brand-card">
+
+        <header class="editor-card-header deca-brand-card-header">
+
+            <div>
+                <h2>Logo y colores</h2>
+                <small>
+                    El logo sale en la cabecera de cada DeCA. Los colores son
+                    los del diseño base; un diseño propio usa su tema.
+                </small>
+            </div>
+
+            @if (_settings is not null && _canEdit)
+            {
+                <div class="deca-brand-actions">
+
+                    @if (IsBrandDirty)
+                    {
+                        <span class="deca-designer-note is-dirty">
+                            <i class="fa-solid fa-circle"></i>
+                            Sin guardar
+                        </span>
+                    }
+
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@(_saving || !IsBrandDirty || !BrandIsValid)"
+                            @onclick="SaveBrandAsync">
+                        @if (_saving)
+                        {
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                        }
+                        Guardar
+                    </button>
+
+                </div>
+            }
+
+        </header>
+
+        <div class="editor-card-body">
+
+            @if (_settings is null)
+            {
+                <div class="deca-empty">
+                    @if (_loadingBrand)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <span>Cargando la marca...</span>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>No se ha podido cargar la marca.</span>
+                    }
+                </div>
+            }
+            else
+            {
+                @if (!_canEdit)
+                {
+                    <p class="deca-brand-readonly">
+                        <i class="fa-solid fa-lock"></i>
+                        Sólo un administrador de la empresa puede cambiar el
+                        logo y los colores.
+                    </p>
+                }
+
+                <div class="deca-brand-grid">
+
+                    <div class="form-group">
+                        <label>Logo</label>
+
+                        <LogoInput Value="@_settings.LogoUrl"
+                                   ValueChanged="LogoChanged"
+                                   Upload="UploadLogoAsync"
+                                   Disabled="@(!_canEdit)"
+                                   EmptyText="Sin logo" />
+                    </div>
+
+                    <div class="deca-brand-colors">
+
+                        <ColorEditor Label="Color principal"
+                                     Value="@PrimaryColor"
+                                     ValueChanged="value => _settings!.PrimaryColor = value" />
+
+                        <ColorEditor Label="Color secundario"
+                                     Value="@SecondaryColor"
+                                     ValueChanged="value => _settings!.SecondaryColor = value" />
+
+                    </div>
+
+                </div>
+            }
+
+        </div>
+
+    </section>
+
+    @* ------------------------------------------------ temas *@
+
+    <section class="deca-brand-themes">
+
+        <header class="deca-brand-section-header">
+            <h2>Temas</h2>
+            <p>
+                Colores y tipografía para el diseño del DeCA (Diseño → Tema)
+                y para los documentos de RenderSet. Un diseño que usa un tema
+                se actualiza solo al cambiarlo.
+            </p>
+        </header>
+
+        <TenantThemeManager Load="LoadThemesAsync"
+                            Save="SaveThemeAsync"
+                            Delete="DeleteThemeAsync"
+                            SelectedThemeId="@ThemeFromQuery"
+                            ShowUsage="false"
+                            DefaultHint="Los presets nuevos de RenderSet nacen con él." />
+
+    </section>
+
+</div>
+
+@code {
+
+    /// <summary>
+    /// /deca/brand?theme=x abre ese tema (enlace desde la pestaña Tema).
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "theme")]
+    public string? ThemeFromQuery { get; set; }
+
+    private DocumentSharingSettings? _settings;
+    private string? _savedSnapshot;
+
+    private bool _loadingBrand = true;
+    private bool _saving;
+    private bool _canEdit;
+
+    private string PrimaryColor =>
+        string.IsNullOrWhiteSpace(_settings?.PrimaryColor)
+            ? TenantBranding.DefaultPrimaryColor
+            : _settings.PrimaryColor;
+
+    private string SecondaryColor =>
+        string.IsNullOrWhiteSpace(_settings?.SecondaryColor)
+            ? TenantBranding.DefaultSecondaryColor
+            : _settings.SecondaryColor;
+
+    private bool IsBrandDirty =>
+        _settings is not null &&
+        !string.Equals(Snapshot(_settings), _savedSnapshot, StringComparison.Ordinal);
+
+    private bool BrandIsValid =>
+        _settings is not null &&
+        (string.IsNullOrWhiteSpace(_settings.LogoUrl) || TenantBranding.CleanLogoUrl(_settings.LogoUrl) is not null) &&
+        (string.IsNullOrWhiteSpace(_settings.PrimaryColor) || TenantBranding.CleanColor(_settings.PrimaryColor) is not null) &&
+        (string.IsNullOrWhiteSpace(_settings.SecondaryColor) || TenantBranding.CleanColor(_settings.SecondaryColor) is not null);
+
+    private static string Snapshot(
+        DocumentSharingSettings settings) =>
+        $"{settings.LogoUrl}|{settings.PrimaryColor}|{settings.SecondaryColor}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var membership = await Session.GetMembershipAsync();
+            _canEdit = membership?.Role >= TenantRole.Admin;
+
+            var response =
+                await Toasts.RunAsync(
+                    () => Api.GetBrandAsync(CurrentTenant.Id),
+                    errorTitle: "No se ha podido cargar la marca");
+
+            if (response is not null)
+            {
+                _settings = response.Settings;
+                _savedSnapshot = Snapshot(_settings);
+            }
+        }
+        finally
+        {
+            _loadingBrand = false;
+        }
+    }
+
+    private void LogoChanged(
+        string? url)
+    {
+        if (_settings is not null)
+            _settings.LogoUrl = url;
+    }
+
+    private async Task<string?> UploadLogoAsync(
+        byte[] content,
+        string fileName)
+    {
+        var uploaded =
+            await Toasts.RunAsync(
+                () => Api.UploadLogoAsync(
+                    CurrentTenant.Id,
+                    new Refit.StreamPart(new MemoryStream(content), fileName)),
+                success: "Logo subido. Guarda para usarlo.",
+                errorTitle: "No se ha podido subir el logo");
+
+        return uploaded?.Url;
+    }
+
+    /// <summary>
+    /// Se manda la configuración entera tal como llegó (mensaje y pie de la
+    /// página pública, caducidad): aquí sólo se cambian logo y colores.
+    /// </summary>
+    private async Task SaveBrandAsync()
+    {
+        if (_settings is null || _saving || !BrandIsValid)
+            return;
+
+        _saving = true;
+
+        try
+        {
+            var saved =
+                await Toasts.RunAsync(
+                    () => Api.SaveBrandAsync(CurrentTenant.Id, _settings),
+                    success: "Marca guardada. Los próximos DeCA saldrán con ella.",
+                    errorTitle: "No se ha guardado la marca");
+
+            if (saved)
+                _savedSnapshot = Snapshot(_settings);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ------------------------------------------------------------ temas
+
+    private Task<IReadOnlyCollection<TenantReportTheme>?> LoadThemesAsync() =>
+        Toasts.RunAsync<IReadOnlyCollection<TenantReportTheme>?>(
+            async () => await Api.GetThemesAsync(CurrentTenant.Id),
+            errorTitle: "No se han podido cargar los temas");
+
+    private Task<bool> SaveThemeAsync(
+        TenantReportTheme theme) =>
+        Toasts.RunAsync(
+            () => Api.SaveThemeAsync(CurrentTenant.Id, theme.Theme.Id, theme),
+            success: "Tema guardado.",
+            errorTitle: "No se ha podido guardar el tema");
+
+    private Task<bool> DeleteThemeAsync(
+        string themeId) =>
+        Toasts.RunAsync(
+            () => Api.DeleteThemeAsync(CurrentTenant.Id, themeId),
+            success: "Tema borrado.",
+            errorTitle: "No se ha podido borrar el tema");
+}

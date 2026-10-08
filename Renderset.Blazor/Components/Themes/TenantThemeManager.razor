@@ -1,0 +1,721 @@
+@using Renderset.Blazor.Components.Editor
+@using Renderset.Blazor.Components.Rendering
+@using Renderset.Core.Themes
+
+@using Microsoft.JSInterop
+
+@inject IJSRuntime JS
+
+@*
+    Temas de empresa del tenant: lista, editor y vista previa.
+
+    Lo usan la pantalla Temas de RenderSet y Marca del portal DeCA: los
+    temas son del tenant y viven en RenderSet (/api/themes), así que quien
+    sólo tiene DeCA los gestiona igual. Cómo se cargan y se guardan (y sus
+    toasts) lo pone quien lo aloja.
+*@
+
+@if (_loading)
+{
+    <div class="themes-empty">
+        <i class="fa-solid fa-circle-notch fa-spin"></i>
+        Cargando temas…
+    </div>
+}
+else
+{
+    <div class="themes-layout">
+
+        @* ------------------------------------------------ lista *@
+
+        <aside class="themes-list">
+
+            <button type="button"
+                    class="primary-button themes-new"
+                    @onclick="() => StartNewAsync(null)">
+                <i class="fa-solid fa-plus"></i>
+                Nuevo tema
+            </button>
+
+            <span class="themes-list-title">De la empresa</span>
+
+            @if (_themes.Count == 0)
+            {
+                <p class="themes-hint">
+                    Todavía no hay temas. Crea uno en blanco o parte de una
+                    plantilla.
+                </p>
+            }
+
+            @foreach (var stored in _themes)
+            {
+                <button type="button"
+                        class="themes-item @(IsSelected(stored.Theme.Id) ? "is-active" : null)"
+                        @key="stored.Theme.Id"
+                        @onclick="() => SelectAsync(stored)">
+
+                    @(Swatches(stored.Theme))
+
+                    <span class="themes-item-text">
+                        <strong>@stored.Theme.Name</strong>
+                        <small>@UsageText(stored)</small>
+                    </span>
+
+                    @if (stored.IsDefault)
+                    {
+                        <span class="themes-badge" title="@DefaultHint">Por defecto</span>
+                    }
+
+                </button>
+            }
+
+            <span class="themes-list-title">Plantillas</span>
+
+            @foreach (var template in Templates)
+            {
+                <button type="button"
+                        class="themes-item is-template"
+                        title="Crear un tema a partir de esta plantilla"
+                        @key="template.Theme.Id"
+                        @onclick="() => StartNewAsync(template)">
+
+                    @(Swatches(template.Theme))
+
+                    <span class="themes-item-text">
+                        <strong>@template.Theme.Name</strong>
+                        <small>@template.Description</small>
+                    </span>
+
+                    <i class="fa-solid fa-plus"></i>
+
+                </button>
+            }
+
+        </aside>
+
+        @* ------------------------------------------------ editor *@
+
+        @if (_draft is null)
+        {
+            <section class="editor-card themes-placeholder">
+                <i class="fa-solid fa-palette"></i>
+                <p>Elige un tema de la lista o crea uno nuevo.</p>
+            </section>
+        }
+        else
+        {
+            <section class="editor-card themes-editor">
+
+                <header class="editor-card-header themes-editor-header">
+
+                    <h2>@(_isNew ? "Nuevo tema" : _draft.Theme.Name)</h2>
+
+                    @if (IsDirty)
+                    {
+                        <span class="themes-dirty">Sin guardar</span>
+                    }
+
+                </header>
+
+                <div class="editor-card-body">
+
+                    <div class="form-group">
+                        <label for="theme-name">Nombre</label>
+                        <input id="theme-name"
+                               value="@_draft.Theme.Name"
+                               maxlength="@ReportThemeRules.MaxNameLength"
+                               placeholder="Corporativo"
+                               @oninput="NameChanged" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="theme-id">Identificador</label>
+                        <input id="theme-id"
+                               value="@_draft.Theme.Id"
+                               maxlength="@ReportThemeRules.MaxIdLength"
+                               disabled="@(!_isNew)"
+                               @oninput="IdChanged" />
+                        <small>
+                            @if (_isNew)
+                            {
+                                @:Es lo que guardan los presets. No se puede cambiar después.
+                            }
+                            else
+                            {
+                                @:Lo referencian los presets: no se puede cambiar.
+                            }
+                        </small>
+                    </div>
+
+                    <label class="themes-default">
+                        <input type="checkbox"
+                               checked="@_draft.IsDefault"
+                               @onchange="DefaultChanged" />
+                        <span>
+                            <strong>Tema por defecto</strong>
+                            <small>@DefaultHint</small>
+                        </span>
+                    </label>
+
+                    <ReportThemeEditor Theme="_draft.Theme"
+                                       Changed="MarkDirty" />
+
+                    @if (_errors.Count > 0)
+                    {
+                        <ul class="themes-errors">
+                            @foreach (var error in _errors)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    }
+
+                </div>
+
+                <footer class="themes-editor-actions">
+
+                    @if (!_isNew)
+                    {
+                        <button type="button"
+                                class="icon-button"
+                                title="Duplicar"
+                                disabled="@_saving"
+                                @onclick="Duplicate">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+
+                        <button type="button"
+                                class="icon-button themes-delete"
+                                title="Borrar"
+                                disabled="@_saving"
+                                @onclick="DeleteAsync">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    }
+
+                    <span class="themes-actions-spacer"></span>
+
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@(_saving || (!IsDirty && !_isNew))"
+                            @onclick="Discard">
+                        @(_isNew ? "Cancelar" : "Descartar")
+                    </button>
+
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@(_saving || (!IsDirty && !_isNew))"
+                            @onclick="SaveAsync">
+                        @if (_saving)
+                        {
+                            <i class="fa-solid fa-circle-notch fa-spin"></i>
+                        }
+                        Guardar
+                    </button>
+
+                </footer>
+
+            </section>
+
+            @* -------------------------------------------- vista previa *@
+
+            <section class="editor-card themes-preview">
+
+                <header class="editor-card-header">
+                    <h2>Vista previa</h2>
+                    @if (ShowUsage && !_isNew && SelectedUsage > 0)
+                    {
+                        <span class="themes-usage">
+                            Al guardar cambia en @SelectedUsage
+                            @(SelectedUsage == 1 ? UsageSingular : UsagePlural)
+                        </span>
+                    }
+                </header>
+
+                <div class="themes-preview-canvas">
+                    <ReportThemeSample Theme="_draft.Theme" />
+                </div>
+
+            </section>
+        }
+
+    </div>
+}
+
+@code {
+
+    /// <summary>
+    /// Temas del tenant. Nulo si no se han podido cargar (el anfitrión ya ha
+    /// avisado).
+    /// </summary>
+    [Parameter, EditorRequired]
+    public Func<Task<IReadOnlyCollection<TenantReportTheme>?>> Load { get; set; } = default!;
+
+    /// <summary>
+    /// Crea o actualiza. Falso si no se ha guardado (el anfitrión avisa).
+    /// </summary>
+    [Parameter, EditorRequired]
+    public Func<TenantReportTheme, Task<bool>> Save { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Func<string, Task<bool>> Delete { get; set; } = default!;
+
+    /// <summary>
+    /// Tema que se abre al entrar (?theme= desde el diseñador).
+    /// </summary>
+    [Parameter]
+    public string? SelectedThemeId { get; set; }
+
+    /// <summary>
+    /// Cuántos documentos usan cada tema (lo calcula la API para presets).
+    /// En el DeCA no significa nada: se apaga.
+    /// </summary>
+    [Parameter]
+    public bool ShowUsage { get; set; } = true;
+
+    [Parameter]
+    public string UsageSingular { get; set; } = "preset";
+
+    [Parameter]
+    public string UsagePlural { get; set; } = "presets";
+
+    [Parameter]
+    public string DefaultHint { get; set; } = "Los presets nuevos nacen con él.";
+
+    /// <summary>
+    /// La lista ha cambiado (al cargar, guardar o borrar).
+    /// </summary>
+    [Parameter]
+    public EventCallback<IReadOnlyList<TenantReportTheme>> ThemesChanged { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+
+    private IReadOnlyList<TenantReportTheme> _themes = [];
+
+    /// <summary>
+    /// Copia en edición. El original de la lista no se toca hasta guardar,
+    /// para poder descartar.
+    /// </summary>
+    private TenantReportTheme? _draft;
+
+    private bool _isNew;
+
+    /// <summary>
+    /// Foto del borrador al abrirlo o guardarlo. "Sin guardar" es que el
+    /// borrador ya no coincide con ella: abrir una plantilla y cambiar a
+    /// otra sin tocar nada no es un cambio, y deshacer a mano un color
+    /// tampoco deja el aviso puesto.
+    /// </summary>
+    private string? _baseline;
+
+    private bool IsDirty =>
+        _draft is not null &&
+        _baseline is not null &&
+        !string.Equals(Snapshot(_draft), _baseline, StringComparison.Ordinal);
+
+    private static string Snapshot(
+        TenantReportTheme draft) =>
+        System.Text.Json.JsonSerializer.Serialize(
+            new { draft.Theme, draft.IsDefault });
+
+    /// <summary>
+    /// El usuario ha escrito el id a mano: deja de seguir al nombre.
+    /// </summary>
+    private bool _idEdited;
+
+    private IReadOnlyList<string> _errors = [];
+
+    private int SelectedUsage =>
+        _draft is null
+            ? 0
+            : _themes.FirstOrDefault(x => IsSelected(x.Theme.Id))?.PresetCount ?? 0;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync(SelectedThemeId);
+    }
+
+    private async Task LoadAsync(
+        string? select)
+    {
+        _loading = _themes.Count == 0;
+
+        try
+        {
+            var themes = await Load();
+
+            _themes = themes?.ToList() ?? [];
+
+            await ThemesChanged.InvokeAsync(_themes);
+
+            var selected =
+                _themes.FirstOrDefault(x =>
+                    string.Equals(x.Theme.Id, select, StringComparison.OrdinalIgnoreCase))
+                ?? (select is null ? _themes.FirstOrDefault() : null);
+
+            if (selected is not null)
+                Edit(selected, isNew: false);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+    // ------------------------------------------------------------ selección
+
+    private bool IsSelected(string themeId) =>
+        !_isNew &&
+        _draft is not null &&
+        string.Equals(_draft.Theme.Id, themeId, StringComparison.OrdinalIgnoreCase);
+
+    private async Task SelectAsync(
+        TenantReportTheme stored)
+    {
+        if (IsSelected(stored.Theme.Id) || !await ConfirmDiscardAsync())
+            return;
+
+        Edit(stored, isNew: false);
+    }
+
+    private void Edit(
+        TenantReportTheme source,
+        bool isNew)
+    {
+        _draft =
+            new TenantReportTheme
+            {
+                Theme = source.Theme.Clone(),
+                IsDefault = source.IsDefault,
+                PresetCount = source.PresetCount
+            };
+
+        _isNew = isNew;
+        _baseline = Snapshot(_draft);
+        _idEdited = false;
+        _errors = [];
+    }
+
+    private async Task StartNewAsync(
+        ThemeTemplate? template)
+    {
+        if (!await ConfirmDiscardAsync())
+            return;
+
+        var theme = (template?.Theme ?? new ReportTheme()).Clone();
+
+        theme.Name = template is null ? "Nuevo tema" : template.Theme.Name;
+        theme.Id = UniqueId(ReportThemeRules.SlugFrom(theme.Name));
+
+        Edit(
+            new TenantReportTheme
+            {
+                Theme = theme,
+                IsDefault = _themes.Count == 0
+            },
+            isNew: true);
+    }
+
+    private void Duplicate()
+    {
+        if (_draft is null)
+            return;
+
+        var theme = _draft.Theme.Clone();
+
+        theme.Name = $"{_draft.Theme.Name} (copia)";
+        theme.Id = UniqueId(ReportThemeRules.SlugFrom(theme.Name));
+
+        Edit(
+            new TenantReportTheme { Theme = theme },
+            isNew: true);
+    }
+
+    private string UniqueId(
+        string baseId)
+    {
+        var id = baseId;
+        var suffix = 2;
+
+        while (_themes.Any(x => string.Equals(x.Theme.Id, id, StringComparison.OrdinalIgnoreCase)))
+            id = $"{baseId}-{suffix++}";
+
+        return id;
+    }
+
+
+    // ------------------------------------------------------------ edición
+
+    private void MarkDirty()
+    {
+        // IsDirty compara con la foto; aquí sólo se limpian los errores.
+        _errors = [];
+    }
+
+    private void NameChanged(
+        ChangeEventArgs e)
+    {
+        if (_draft is null)
+            return;
+
+        _draft.Theme.Name = e.Value?.ToString() ?? string.Empty;
+
+        // Mientras es nuevo, el id sigue al nombre hasta que se toque a mano.
+        if (_isNew && !_idEdited)
+            _draft.Theme.Id = UniqueId(ReportThemeRules.SlugFrom(_draft.Theme.Name));
+
+        MarkDirty();
+    }
+
+    private void IdChanged(
+        ChangeEventArgs e)
+    {
+        if (_draft is null || !_isNew)
+            return;
+
+        _draft.Theme.Id = (e.Value?.ToString() ?? string.Empty).Trim().ToLowerInvariant();
+        _idEdited = true;
+
+        MarkDirty();
+    }
+
+    private void DefaultChanged(
+        ChangeEventArgs e)
+    {
+        if (_draft is null)
+            return;
+
+        _draft.IsDefault = e.Value is true;
+        MarkDirty();
+    }
+
+    private void Discard()
+    {
+        if (_draft is null)
+            return;
+
+        var original =
+            _themes.FirstOrDefault(x => IsSelected(x.Theme.Id));
+
+        if (_isNew || original is null)
+        {
+            _draft = null;
+            _isNew = false;
+            _baseline = null;
+
+            var first = _themes.FirstOrDefault();
+
+            if (first is not null)
+                Edit(first, isNew: false);
+
+            return;
+        }
+
+        Edit(original, isNew: false);
+    }
+
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        if (!IsDirty)
+            return true;
+
+        return await JS.InvokeAsync<bool>(
+            "confirm",
+            "Hay cambios sin guardar en el tema. ¿Descartarlos?");
+    }
+
+
+    // ------------------------------------------------------------ guardar
+
+    private async Task SaveAsync()
+    {
+        if (_draft is null || _saving)
+            return;
+
+        // Validación local antes de llamar a la API: mensajes inline.
+        var errors =
+            ReportThemeRules.Validate(_draft.Theme).ToList();
+
+        if (_isNew &&
+            _themes.Any(x => string.Equals(x.Theme.Id, _draft.Theme.Id, StringComparison.OrdinalIgnoreCase)))
+        {
+            errors.Add($"Ya existe un tema con el identificador '{_draft.Theme.Id}'.");
+        }
+
+        _errors = errors;
+
+        if (_errors.Count > 0)
+            return;
+
+        _saving = true;
+
+        try
+        {
+            var themeId = _draft.Theme.Id;
+
+            var saved = await Save(_draft);
+
+            if (!saved)
+                return;
+
+            _baseline = Snapshot(_draft);
+
+            await LoadAsync(themeId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_draft is null || _isNew)
+            return;
+
+        var usage = SelectedUsage;
+
+        var message =
+            !ShowUsage || usage == 0
+                ? $"¿Borrar el tema \"{_draft.Theme.Name}\"? Lo que lo use seguirá saliendo igual, con la copia que guarda, pero ya no se actualizará."
+                : $"¿Borrar el tema \"{_draft.Theme.Name}\"? Lo usan {usage} {(usage == 1 ? UsageSingular : UsagePlural)}: seguirán saliendo igual, con la copia que guardan, pero ya no se actualizarán.";
+
+        if (!await JS.InvokeAsync<bool>("confirm", message))
+            return;
+
+        var themeId = _draft.Theme.Id;
+
+        var deleted = await Delete(themeId);
+
+        if (!deleted)
+            return;
+
+        _draft = null;
+        _baseline = null;
+
+        await LoadAsync(null);
+    }
+
+
+    // ------------------------------------------------------------ pintado
+
+    private string UsageText(
+        TenantReportTheme stored)
+    {
+        if (!ShowUsage)
+            return (stored.Theme.FontFamily ?? string.Empty).Split(',')[0].Trim('"', ' ');
+
+        return stored.PresetCount switch
+        {
+            0 => $"Sin {UsagePlural}",
+            1 => $"1 {UsageSingular}",
+            var count => $"{count} {UsagePlural}"
+        };
+    }
+
+    private static RenderFragment Swatches(
+        ReportTheme theme) =>
+        @<span class="themes-swatches" aria-hidden="true">
+            <span style="@($"background:{theme.PrimaryColor}")"></span>
+            <span style="@($"background:{theme.SectionBackgroundColor}")"></span>
+            <span style="@($"background:{theme.TableHeaderBackgroundColor}")"></span>
+            <span style="@($"background:{theme.BorderColor}")"></span>
+        </span>;
+
+
+    // ------------------------------------------------------------ plantillas
+
+    private sealed record ThemeTemplate(
+        ReportTheme Theme,
+        string Description);
+
+    /// <summary>
+    /// Puntos de partida. No se guardan: al elegir una se crea un tema nuevo
+    /// del tenant con sus colores.
+    /// </summary>
+    private static IReadOnlyList<ThemeTemplate> Templates { get; } =
+    [
+        new(
+            new ReportTheme
+            {
+                Id = "corporativo",
+                Name = "Corporativo",
+                PrimaryColor = "#173D4F",
+                SecondaryColor = "#E8EFF3",
+                TextColor = "#25313A",
+                MutedTextColor = "#6D7B83",
+                BorderColor = "#D8E1E7",
+                SectionBackgroundColor = "#E8EFF3",
+                SectionTextColor = "#173D4F",
+                TableHeaderBackgroundColor = "#E8EFF3",
+                TableHeaderTextColor = "#173D4F",
+                BackgroundColor = "#FFFFFF",
+                FontFamily = "\"Segoe UI\", Arial, sans-serif",
+                TitleColor = "#173D4F"
+            },
+            "Limpio, para documentos de negocio"),
+
+        new(
+            new ReportTheme
+            {
+                Id = "compacto",
+                Name = "Compacto oscuro",
+                PrimaryColor = "#00285A",
+                SecondaryColor = "#EEF3F6",
+                TextColor = "#1F2D33",
+                MutedTextColor = "#687A82",
+                BorderColor = "#C9D5DB",
+                SectionBackgroundColor = "#EEF3F6",
+                SectionTextColor = "#00285A",
+                TableHeaderBackgroundColor = "#00285A",
+                TableHeaderTextColor = "#FFFFFF",
+                BackgroundColor = "#FFFFFF",
+                FontFamily = "Arial, \"Helvetica Neue\", Helvetica, sans-serif",
+                TableStripeColor = "#F4F7F9"
+            },
+            "Factura, albarán o packing list"),
+
+        new(
+            new ReportTheme
+            {
+                Id = "suave",
+                Name = "Suave",
+                PrimaryColor = "#325D6B",
+                SecondaryColor = "#F1F6F7",
+                TextColor = "#22343B",
+                MutedTextColor = "#75868E",
+                BorderColor = "#E0E8EB",
+                SectionBackgroundColor = "#F1F6F7",
+                SectionTextColor = "#325D6B",
+                TableHeaderBackgroundColor = "#F1F6F7",
+                TableHeaderTextColor = "#325D6B",
+                BackgroundColor = "#FFFFFF",
+                FontFamily = "\"Segoe UI\", Arial, sans-serif"
+            },
+            "Informes internos: calidad, producción"),
+
+        new(
+            new ReportTheme
+            {
+                Id = "clasico",
+                Name = "Clásico",
+                PrimaryColor = "#7A2E2E",
+                SecondaryColor = "#F3EEE8",
+                TextColor = "#2B2622",
+                MutedTextColor = "#7A7068",
+                BorderColor = "#D9D0C7",
+                SectionBackgroundColor = "#F3EEE8",
+                SectionTextColor = "#7A2E2E",
+                TableHeaderBackgroundColor = "#7A2E2E",
+                TableHeaderTextColor = "#FFFFFF",
+                BackgroundColor = "#FFFFFF",
+                FontFamily = "Georgia, \"Times New Roman\", serif",
+                TitleColor = "#7A2E2E",
+                FieldLabelBackgroundColor = "#FAF7F3"
+            },
+            "Serif, para certificados y cartas")
+    ];
+}

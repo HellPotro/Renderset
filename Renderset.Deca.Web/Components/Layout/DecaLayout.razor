@@ -1,7 +1,7 @@
 @inherits LayoutComponentBase
 @inject TenantSession Session
 
-@* Barra superior en vez de la lateral de RenderSet: el portal tiene tres
+@* Barra superior en vez de la lateral de RenderSet: el portal tiene pocas
    pantallas y lo que importa es el contenido. Salir es un formulario POST
    normal (toca la cookie, cosa que un circuito no puede hacer). *@
 
@@ -26,9 +26,17 @@
                 <i class="fa-solid fa-plus"></i>
                 Nuevo
             </NavLink>
+            <NavLink href="deca/import">
+                <i class="fa-solid fa-file-import"></i>
+                Importar
+            </NavLink>
             <NavLink href="deca/design">
-                <i class="fa-solid fa-palette"></i>
+                <i class="fa-solid fa-pen-ruler"></i>
                 Diseño
+            </NavLink>
+            <NavLink href="deca/brand">
+                <i class="fa-solid fa-palette"></i>
+                Marca
             </NavLink>
         </nav>
 

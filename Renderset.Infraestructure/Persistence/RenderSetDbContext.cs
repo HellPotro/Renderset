@@ -56,6 +56,9 @@ public sealed class RenderSetDbContext : DbContext
     public DbSet<DocumentBundleAccessEntity> DocumentBundleAccesses =>
         Set<DocumentBundleAccessEntity>();
 
+    public DbSet<TenantAssetEntity> TenantAssets =>
+        Set<TenantAssetEntity>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {

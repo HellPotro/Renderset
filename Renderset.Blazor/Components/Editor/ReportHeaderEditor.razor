@@ -6,7 +6,12 @@
 @using Renderset.Core.Resolved
 @using Renderset.Core.Reports
 
-<div class="report-editor-section">
+@* Cabecera en tres grupos (textos, logo, QR), cada uno con su interruptor
+   en la línea del título. Las explicaciones largas van en el icono de
+   ayuda, no en párrafos: la barra es estrecha y con todo a la vista no se
+   distinguía qué era opción y qué explicación. *@
+
+<div class="report-editor-section is-header-footer">
 
     <div class="report-editor-section-header">
 
@@ -15,19 +20,34 @@
             <input type="checkbox"
                    class="report-editor-toggle-input"
                    checked="@IsVisible"
+                   @onclick="HeaderToggleClicked"
+                   @onclick:preventDefault="HeaderLockedVisible"
                    @onchange="ToggleVisibleAsync" />
 
-            <span class="report-editor-toggle">
+            <span class="report-editor-toggle @(HeaderLocked ? "is-locked" : null)">
                 <span></span>
             </span>
 
-            <strong>Cabecera</strong>
+            <span class="report-editor-section-name">Cabecera</span>
 
         </label>
 
+        <div class="report-editor-section-chips">
+            <span class="report-editor-section-chip is-plain">@Summary</span>
+        </div>
+
+        <div class="report-editor-section-actions">
+            <button type="button"
+                    class="report-editor-collapse-button"
+                    title="@(_collapsed ? "Desplegar" : "Plegar")"
+                    @onclick="() => _collapsed = !_collapsed">
+                <span class="report-editor-chevron @(_collapsed ? null : "expanded")"></span>
+            </button>
+        </div>
+
     </div>
 
-    @if (IsVisible)
+    @if (IsVisible && !_collapsed)
     {
         <div class="report-editor-section-content">
 
@@ -52,228 +72,289 @@
                 </div>
             }
 
-            <div class="report-editor-property @(ShowTitle ? null : "is-hidden-text")">
+            @* ------------------------------------------------ textos *@
 
-                <div class="report-editor-property-heading">
-                    <label for="report-header-title">Título</label>
+            <div class="report-editor-group">
 
-                    <label class="report-editor-toggle-row is-compact"
-                           title="@(ShowTitle ? "Ocultar el título en el documento" : "Mostrar el título en el documento")">
+                <div class="report-editor-group-header">
+                    <span class="report-editor-group-title">Título</span>
 
-                        <input type="checkbox"
-                               class="report-editor-toggle-input"
-                               checked="@ShowTitle"
-                               @onchange="ToggleTitleAsync" />
-
-                        <span class="report-editor-toggle">
-                            <span></span>
-                        </span>
-
-                        <span>@(ShowTitle ? "Visible" : "Oculto")</span>
-
-                    </label>
+                    @if (DataFields.Count > 0)
+                    {
+                        <i class="fa-regular fa-circle-question report-editor-help"
+                           title="Con &quot;+ Dato&quot; el texto lleva un valor del documento, por ejemplo Albarán &#123;&#123;data.numero&#125;&#125;. También vale en las líneas de un bloque de cabecera."></i>
+                    }
                 </div>
 
-                <div class="report-editor-input-row">
-                    <input id="report-header-title"
-                           type="text"
-                           value="@HeaderTitle"
-                           disabled="@(!ShowTitle)"
-                           @onchange="TitleChangedAsync" />
+                <div class="report-editor-group-body">
 
-                    <DataFieldPicker Fields="DataFields"
-                                     Disabled="@(!ShowTitle)"
-                                     Selected="InsertTitleDataAsync" />
-                </div>
-            </div>
+                    <div class="report-editor-property @(ShowTitle ? null : "is-hidden-text")">
 
-            <div class="report-editor-property @(ShowSubtitle ? null : "is-hidden-text")">
+                        <div class="report-editor-property-heading">
+                            <label for="report-header-title">Título</label>
 
-                <div class="report-editor-property-heading">
-                    <label for="report-header-subtitle">Subtítulo</label>
+                            <label class="report-editor-toggle-row is-compact"
+                                   title="@(ShowTitle ? "Ocultar el título en el documento" : "Mostrar el título en el documento")">
 
-                    <label class="report-editor-toggle-row is-compact"
-                           title="@(ShowSubtitle ? "Ocultar el subtítulo en el documento" : "Mostrar el subtítulo en el documento")">
+                                <input type="checkbox"
+                                       class="report-editor-toggle-input"
+                                       checked="@ShowTitle"
+                                       @onchange="ToggleTitleAsync" />
 
-                        <input type="checkbox"
-                               class="report-editor-toggle-input"
-                               checked="@ShowSubtitle"
-                               @onchange="ToggleSubtitleAsync" />
+                                <span class="report-editor-toggle">
+                                    <span></span>
+                                </span>
 
-                        <span class="report-editor-toggle">
-                            <span></span>
-                        </span>
+                            </label>
+                        </div>
 
-                        <span>@(ShowSubtitle ? "Visible" : "Oculto")</span>
+                        <div class="report-editor-input-row">
+                            <input id="report-header-title"
+                                   type="text"
+                                   value="@HeaderTitle"
+                                   disabled="@(!ShowTitle)"
+                                   @onchange="TitleChangedAsync" />
 
-                    </label>
-                </div>
-
-                <div class="report-editor-input-row">
-                    <input id="report-header-subtitle"
-                           type="text"
-                           value="@HeaderSubtitle"
-                           disabled="@(!ShowSubtitle)"
-                           @onchange="SubtitleChangedAsync" />
-
-                    <DataFieldPicker Fields="DataFields"
-                                     Disabled="@(!ShowSubtitle)"
-                                     Selected="InsertSubtitleDataAsync" />
-                </div>
-
-                @if (DataFields.Count > 0)
-                {
-                    <small>
-                        Con "+ Dato" el texto lleva un valor del documento, por
-                        ejemplo Albarán &#123;&#123;data.numero&#125;&#125;.
-                        También vale en las líneas de un bloque de cabecera.
-                    </small>
-                }
-            </div>
-
-            @if (ShowTitle || ShowSubtitle)
-            {
-                <div class="report-editor-property">
-                    <label>Posición del título</label>
-
-                    <div class="report-layout-picker-modes" role="radiogroup" aria-label="Posición del título">
-                        @foreach (var (label, placement) in TitlePlacements)
-                        {
-                            <button type="button"
-                                    role="radio"
-                                    aria-checked="@(TitlePlacement == placement ? "true" : "false")"
-                                    class="@(TitlePlacement == placement ? "is-active" : null)"
-                                    @onclick="() => TitlePlacementChangedAsync(placement)">
-                                @label
-                            </button>
-                        }
+                            <DataFieldPicker Fields="DataFields"
+                                             Disabled="@(!ShowTitle)"
+                                             Selected="InsertTitleDataAsync" />
+                        </div>
                     </div>
 
-                    <small>
-                        En banda, el título va a todo el ancho y arriba quedan
-                        logo, datos de empresa y QR en una sola fila.
-                    </small>
+                    <div class="report-editor-property @(ShowSubtitle ? null : "is-hidden-text")">
+
+                        <div class="report-editor-property-heading">
+                            <label for="report-header-subtitle">Subtítulo</label>
+
+                            <label class="report-editor-toggle-row is-compact"
+                                   title="@(ShowSubtitle ? "Ocultar el subtítulo en el documento" : "Mostrar el subtítulo en el documento")">
+
+                                <input type="checkbox"
+                                       class="report-editor-toggle-input"
+                                       checked="@ShowSubtitle"
+                                       @onchange="ToggleSubtitleAsync" />
+
+                                <span class="report-editor-toggle">
+                                    <span></span>
+                                </span>
+
+                            </label>
+                        </div>
+
+                        <div class="report-editor-input-row">
+                            <input id="report-header-subtitle"
+                                   type="text"
+                                   value="@HeaderSubtitle"
+                                   disabled="@(!ShowSubtitle)"
+                                   @onchange="SubtitleChangedAsync" />
+
+                            <DataFieldPicker Fields="DataFields"
+                                             Disabled="@(!ShowSubtitle)"
+                                             Selected="InsertSubtitleDataAsync" />
+                        </div>
+                    </div>
+
+                    @if (ShowTitle || ShowSubtitle)
+                    {
+                        <div class="report-editor-inline-property">
+                            <label>
+                                Posición
+                                <i class="fa-regular fa-circle-question report-editor-help"
+                                   title="Debajo o encima, el título va a todo el ancho y logo, datos de empresa y QR quedan en una sola fila."></i>
+                            </label>
+
+                            <div class="report-layout-picker-modes is-compact" role="radiogroup" aria-label="Posición del título">
+                                @foreach (var (label, placement) in TitlePlacements)
+                                {
+                                    <button type="button"
+                                            role="radio"
+                                            aria-checked="@(TitlePlacement == placement ? "true" : "false")"
+                                            class="@(TitlePlacement == placement ? "is-active" : null)"
+                                            @onclick="() => TitlePlacementChangedAsync(placement)">
+                                        @label
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+
                 </div>
-            }
+
+            </div>
+
+            @* ------------------------------------------------ logo *@
 
             @if (Definition.AllowLogo)
             {
-                <label class="report-editor-toggle-row">
+                <div class="report-editor-group @(ShowLogo ? null : "is-off")">
 
-                    <input type="checkbox"
-                           class="report-editor-toggle-input"
-                           checked="@ShowLogo"
-                           @onchange="ToggleLogoAsync" />
+                    <div class="report-editor-group-header">
 
-                    <span class="report-editor-toggle">
-                        <span></span>
-                    </span>
+                        <label class="report-editor-toggle-row is-compact">
 
-                    <span>Mostrar logo</span>
+                            <input type="checkbox"
+                                   class="report-editor-toggle-input"
+                                   checked="@ShowLogo"
+                                   @onchange="ToggleLogoAsync" />
 
-                </label>
+                            <span class="report-editor-toggle">
+                                <span></span>
+                            </span>
 
-                @if (ShowLogo)
+                            <span class="report-editor-group-title">Logo</span>
+
+                        </label>
+
+                    </div>
+
+                    @if (ShowLogo)
+                    {
+                        <div class="report-editor-group-body">
+
+                            @if (!string.IsNullOrWhiteSpace(LogoSettingsUrl))
+                            {
+                                <div class="report-editor-logo-managed">
+
+                                    @if (!string.IsNullOrWhiteSpace(Resolved?.LogoUrl))
+                                    {
+                                        <img src="@Resolved.LogoUrl" alt="" />
+                                    }
+                                    else
+                                    {
+                                        <span class="report-editor-logo-empty">Sin logo</span>
+                                    }
+
+                                    <span>
+                                        El de la empresa.
+                                        <a href="@LogoSettingsUrl">Cambiarlo en Marca</a>
+                                    </span>
+
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="report-editor-property">
+                                    <input type="url"
+                                           aria-label="URL del logo"
+                                           value="@Resolved?.LogoUrl"
+                                           @oninput="LogoUrlChangedAsync"
+                                           placeholder="https://.../logo.png" />
+                                </div>
+                            }
+
+                        </div>
+                    }
+
+                </div>
+            }
+
+            @* ------------------------------------------------ QR *@
+
+            <div class="report-editor-group @(ShowQr ? null : "is-off")">
+
+                <div class="report-editor-group-header">
+
+                    <label class="report-editor-toggle-row is-compact">
+
+                        <input type="checkbox"
+                               class="report-editor-toggle-input"
+                               checked="@ShowQr"
+                               @onclick="QrToggleClicked"
+                               @onclick:preventDefault="QrLockedVisible"
+                               @onchange="ToggleQrAsync" />
+
+                        <span class="report-editor-toggle @(QrLocked ? "is-locked" : null)">
+                            <span></span>
+                        </span>
+
+                        <span class="report-editor-group-title">Código QR</span>
+
+                    </label>
+
+                    @if (QrLocked)
+                    {
+                        <span class="report-editor-locked-chip"
+                               title="Obligatorio: no se puede quitar ni cambiar lo que lleva">
+                            <i class="fa-solid fa-lock"></i>
+                            Obligatorio
+                        </span>
+                    }
+                    else if (ShowQr)
+                    {
+                        <i class="fa-regular fa-circle-question report-editor-help"
+                           title="@QrHelp"></i>
+                    }
+
+                </div>
+
+                @if (ShowQr)
                 {
-                    <div class="report-editor-property">
-                        <label>URL del logo</label>
+                    <div class="report-editor-group-body">
 
-                        <input type="url"
-                               value="@Resolved?.LogoUrl"
-                               @oninput="LogoUrlChangedAsync"
-                               placeholder="https://..." />
+                        <div class="report-editor-inline-property">
+                            <label for="report-header-qr-kind">Lleva</label>
+
+                            @if (QrLocked)
+                            {
+                                <span class="report-editor-fixed-value">@(Lock!.Locks.QrDescription)</span>
+                            }
+                            else
+                            {
+                                <select id="report-header-qr-kind"
+                                        value="@QrKind"
+                                        @onchange="QrKindChangedAsync">
+                                    <option value="document">Abrir el documento</option>
+                                    <option value="pdf">Descargar el PDF</option>
+                                    <option value="custom">Enlace o texto propio</option>
+                                </select>
+                            }
+                        </div>
+
+                        @if (QrIsCustom && !QrLocked)
+                        {
+                            <div class="report-editor-property">
+                                <input type="text"
+                                       aria-label="Contenido del QR"
+                                       value="@QrContent"
+                                       @onchange="QrContentChangedAsync"
+                                       placeholder="https://erp/salidas/{salidaid}" />
+
+                                @if (MissingQrTokens.Count > 0)
+                                {
+                                    <small class="report-editor-warning">
+                                        No están en los datos de ejemplo:
+                                        @(string.Join(", ", MissingQrTokens.Select(x => "{" + x + "}"))).
+                                        Sin ellos el documento sale sin QR.
+                                    </small>
+                                }
+                            </div>
+                        }
+
+                        <div class="report-editor-inline-property">
+                            <label>Tamaño</label>
+
+                            <div class="report-layout-picker-modes is-compact" role="radiogroup" aria-label="Tamaño del QR">
+                                @foreach (var (label, size) in QrSizes)
+                                {
+                                    var tooSmall = MinQrSize is { } min && size < min;
+
+                                    <button type="button"
+                                            role="radio"
+                                            aria-checked="@(QrSize == size ? "true" : "false")"
+                                            class="@(QrSize == size ? "is-active" : null)"
+                                            disabled="@tooSmall"
+                                            title="@(tooSmall ? $"Mínimo {MinQrSize} px para que se lea impreso" : $"{size} px")"
+                                            @onclick="() => QrSizeChangedAsync(size)">
+                                        @label
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
                     </div>
                 }
-            }
 
-            <label class="report-editor-toggle-row">
-
-                <input type="checkbox"
-                       class="report-editor-toggle-input"
-                       checked="@ShowQr"
-                       @onchange="ToggleQrAsync" />
-
-                <span class="report-editor-toggle">
-                    <span></span>
-                </span>
-
-                <span>Código QR</span>
-
-            </label>
-
-            @if (ShowQr)
-            {
-                <div class="report-editor-property">
-                    <label for="report-header-qr-kind">Contenido</label>
-
-                    <select id="report-header-qr-kind"
-                            value="@QrKind"
-                            @onchange="QrKindChangedAsync">
-                        <option value="document">Abrir el documento (página para verlo y bajarlo)</option>
-                        <option value="pdf">Descargar el PDF directamente</option>
-                        <option value="custom">Enlace o texto propio</option>
-                    </select>
-
-                    @if (QrIsCustom)
-                    {
-                        <input type="text"
-                               value="@QrContent"
-                               @onchange="QrContentChangedAsync"
-                               placeholder="https://erp/salidas/{salidaid}" />
-
-                        <small>
-                            Entre llaves, cualquier dato del documento por su
-                            ruta ({salidaid}, {cliente.codigo}), o
-                            {documentUrl} (enlace público), {pdfUrl} (descarga
-                            del PDF), {viewerUrl} (visor
-                            interno, con sesión) / {documentId}.
-                        </small>
-
-                        @if (MissingQrTokens.Count > 0)
-                        {
-                            <small class="report-editor-warning">
-                                No están en los datos de ejemplo:
-                                @(string.Join(", ", MissingQrTokens.Select(x => "{" + x + "}"))).
-                                Sin ellos el documento sale sin QR.
-                            </small>
-                        }
-                    }
-                    else if (QrKind == "pdf")
-                    {
-                        <small>
-                            Al leer el QR se descarga el PDF, sin pasar por
-                            ninguna página y sin cuenta. El móvil lo abre con
-                            su lector de QR (eso no se puede evitar), pero la
-                            respuesta es el fichero. El enlace va firmado.
-                        </small>
-                    }
-                    else
-                    {
-                        <small>
-                            Cualquiera que lea el QR ve el documento y puede
-                            bajarlo en PDF, sin cuenta. El enlace va firmado:
-                            no se puede adivinar el de otro documento.
-                        </small>
-                    }
-                </div>
-
-                <div class="report-editor-property">
-                    <label>Tamaño</label>
-
-                    <div class="report-layout-picker-modes" role="radiogroup" aria-label="Tamaño del QR">
-                        @foreach (var (label, size) in QrSizes)
-                        {
-                            <button type="button"
-                                    role="radio"
-                                    aria-checked="@(QrSize == size ? "true" : "false")"
-                                    class="@(QrSize == size ? "is-active" : null)"
-                                    @onclick="() => QrSizeChangedAsync(size)">
-                                @label
-                            </button>
-                        }
-                    </div>
-                </div>
-            }
+            </div>
 
         </div>
     }
@@ -309,6 +390,80 @@
     /// </summary>
     [Parameter]
     public IReadOnlyList<ReportDataFieldOption> DataFields { get; set; } = [];
+
+    /// <summary>
+    /// El logo se cambia en otra pantalla: se enseña con un enlace a ella en
+    /// vez de pedir la URL de la imagen.
+    /// </summary>
+    [Parameter]
+    public string? LogoSettingsUrl { get; set; }
+
+    [CascadingParameter]
+    public ReportEditorLockContext? Lock { get; set; }
+
+    private bool _collapsed = true;
+
+    private bool HeaderLocked =>
+        Lock?.Locks.Header == true;
+
+    private bool HeaderLockedVisible =>
+        HeaderLocked && IsVisible;
+
+    private bool QrLocked =>
+        Lock?.Locks.QrContent is not null;
+
+    private bool QrLockedVisible =>
+        QrLocked && ShowQr;
+
+    private int? MinQrSize =>
+        Lock?.Locks.MinQrSize;
+
+    private void HeaderToggleClicked()
+    {
+        if (HeaderLockedVisible)
+            Lock!.Reject("La cabecera");
+    }
+
+    private void QrToggleClicked()
+    {
+        if (QrLockedVisible)
+            Lock!.Reject("El código QR");
+    }
+
+    /// <summary>
+    /// Lo que hay en la cabecera, para verlo con el grupo plegado.
+    /// </summary>
+    private string Summary
+    {
+        get
+        {
+            if (!IsVisible)
+                return "Oculta";
+
+            var parts = new List<string>();
+
+            if (ShowTitle)
+                parts.Add("título");
+
+            if (Definition.AllowLogo && ShowLogo)
+                parts.Add("logo");
+
+            if (ShowQr)
+                parts.Add("QR");
+
+            return parts.Count == 0
+                ? "Vacía"
+                : string.Join(" · ", parts);
+        }
+    }
+
+    private string QrHelp =>
+        QrKind switch
+        {
+            "pdf" => "Al leer el QR se descarga el PDF, sin pasar por ninguna página y sin cuenta. El enlace va firmado.",
+            "custom" => "Entre llaves, cualquier dato del documento por su ruta ({salidaid}, {cliente.codigo}), o {documentUrl} (enlace público), {pdfUrl} (descarga del PDF), {viewerUrl} (visor interno, con sesión) y {documentId}.",
+            _ => "Cualquiera que lea el QR ve el documento y puede bajarlo en PDF, sin cuenta. El enlace va firmado: no se puede adivinar el de otro documento."
+        };
 
     private async Task InsertTitleDataAsync(string path)
     {

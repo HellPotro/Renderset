@@ -2405,3 +2405,225 @@
     color: #23333c;
     font-size: 13px;
 }
+
+
+/* =========================================================
+   CABECERA Y PIE: grupos
+   =========================================================
+   Cada parte (título, logo, QR; texto, fecha y páginas) es un grupo con
+   su interruptor en la línea del título. Lo apagado se queda en una sola
+   línea, y las explicaciones van en el icono de ayuda. */
+
+.report-editor-section.is-header-footer > .report-editor-section-header {
+    flex-wrap: nowrap;
+}
+
+    .report-editor-section.is-header-footer > .report-editor-section-header .report-editor-section-chips {
+        margin-left: auto;
+    }
+
+.report-editor-group {
+    margin-bottom: 8px;
+    border: 1px solid #e1e8ec;
+    border-radius: 7px;
+    background: #fff;
+}
+
+    .report-editor-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .report-editor-group.is-off .report-editor-group-header {
+        border-bottom: 0;
+    }
+
+    .report-editor-group.is-off .report-editor-group-title {
+        color: #98a6ad;
+    }
+
+.report-editor-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 5px 10px;
+    border-bottom: 1px solid #edf1f3;
+}
+
+    .report-editor-group-header .report-editor-toggle-row.is-compact {
+        flex: 0 1 auto;
+    }
+
+.report-editor-group-title {
+    color: #3f525c;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.report-editor-group-spacer {
+    flex: 1;
+}
+
+.report-editor-group-body {
+    padding: 9px 10px 10px;
+}
+
+    .report-editor-group-body > :last-child {
+        margin-bottom: 0;
+    }
+
+.report-editor-help {
+    color: #a0adb4;
+    font-size: 11px;
+    cursor: help;
+}
+
+    .report-editor-help:hover {
+        color: #52636c;
+    }
+
+/* Etiqueta a la izquierda y control a la derecha: posición del título,
+   tamaño y contenido del QR, formato de página. */
+.report-editor-inline-property {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+    .report-editor-inline-property > label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: #52636c;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .report-editor-inline-property > select,
+    .report-editor-inline-property > input[type="text"] {
+        width: 100%;
+        min-width: 0;
+        padding: 6px 8px;
+        border: 1px solid #d8e1e7;
+        border-radius: 6px;
+        background: #f8fafb;
+        color: #1f2d33;
+        font-size: 12px;
+        outline: none;
+    }
+
+        .report-editor-inline-property > select:focus,
+        .report-editor-inline-property > input[type="text"]:focus {
+            background: #fff;
+            border-color: #8ba4b3;
+        }
+
+.report-layout-picker-modes.is-compact {
+    grid-template-columns: none;
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
+}
+
+    .report-layout-picker-modes.is-compact button {
+        padding: 4px 6px;
+        white-space: nowrap;
+    }
+
+    .report-layout-picker-modes button:disabled {
+        color: #b6c1c6;
+        cursor: not-allowed;
+    }
+
+.report-editor-toggle-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+    .report-editor-toggle-grid:last-child {
+        margin-bottom: 0;
+    }
+
+    .report-editor-toggle-grid .report-editor-toggle-row.is-compact {
+        color: #3f525c;
+        font-size: 11.5px;
+    }
+
+.report-editor-fixed-value {
+    padding: 6px 8px;
+    border: 1px dashed #d8e1e7;
+    border-radius: 6px;
+    color: #52636c;
+    font-size: 12px;
+}
+
+/* Logo que se gestiona en Marca: miniatura y enlace. */
+.report-editor-logo-managed {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #52636c;
+    font-size: 11.5px;
+    line-height: 1.4;
+}
+
+    .report-editor-logo-managed img {
+        max-width: 96px;
+        max-height: 36px;
+        object-fit: contain;
+    }
+
+    .report-editor-logo-managed a {
+        color: #2f5c70;
+        font-weight: 600;
+    }
+
+.report-editor-logo-empty {
+    padding: 6px 10px;
+    border: 1px dashed #d8e1e7;
+    border-radius: 6px;
+    color: #98a6ad;
+}
+
+
+/* =========================================================
+   OBLIGATORIOS (ReportEditorLocks)
+   ========================================================= */
+
+/* Encendido y con candado: se ve que está, pero no invita a apagarlo. */
+.report-editor-toggle.is-locked {
+    opacity: .6;
+}
+
+.report-editor-toggle-input:checked + .report-editor-toggle.is-locked {
+    background: #5c8a70;
+}
+
+.report-editor-lock {
+    flex: none;
+    color: #9aa9b1;
+    font-size: 10px;
+}
+
+.report-editor-locked-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: #eef3f6;
+    color: #52636c;
+    font-size: 9.5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+    .report-editor-locked-chip i {
+        font-size: 8.5px;
+    }

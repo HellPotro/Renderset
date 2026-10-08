@@ -29,19 +29,31 @@
             <label class="report-editor-toggle-row"
                    @onclick:stopPropagation="true">
 
+                @* Obligatorio y visible: el clic no cambia nada, avisa. *@
                 <input type="checkbox"
                        class="report-editor-toggle-input"
                        checked="@Visible"
+                       @onclick="LockedClick"
+                       @onclick:preventDefault="IsLockedVisible"
                        @onchange="e => VisibleChanged.InvokeAsync(e.Value is bool value && value)" />
 
-                <span class="report-editor-toggle"></span>
+                <span class="report-editor-toggle @(IsLocked ? "is-locked" : null)"></span>
 
+                @* Con candado, pulsar el nombre sólo despliega: no "pulsa" el
+                   interruptor de la etiqueta (y no salta el aviso). *@
                 <span class="report-editor-toggle-label report-editor-item-title"
-                      @onclick="Toggle">
+                      @onclick="Toggle"
+                      @onclick:preventDefault="IsLocked">
                     @Title
                 </span>
 
             </label>
+
+            @if (IsLocked)
+            {
+                <i class="fa-solid fa-lock report-editor-lock"
+                   title="Obligatorio: no se puede ocultar"></i>
+            }
 
         </div>
 
@@ -138,6 +150,27 @@
 
     [Parameter]
     public EventCallback DragEnd { get; set; }
+
+    /// <summary>
+    /// Nombre del dato si es obligatorio (no se puede ocultar). Nulo = libre.
+    /// </summary>
+    [Parameter]
+    public string? LockedName { get; set; }
+
+    [CascadingParameter]
+    public ReportEditorLockContext? Lock { get; set; }
+
+    private bool IsLocked =>
+        LockedName is not null;
+
+    private bool IsLockedVisible =>
+        IsLocked && Visible;
+
+    private void LockedClick()
+    {
+        if (IsLockedVisible)
+            Lock?.Reject(LockedName!);
+    }
 
     /// <summary>Botones extra a la derecha (p. ej. quitar de la sección).</summary>
     [Parameter]

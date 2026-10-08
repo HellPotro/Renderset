@@ -41,13 +41,21 @@ else
                 <input type="checkbox"
                        class="report-editor-toggle-input"
                        checked="@Resolved.Visible"
+                       @onclick="SectionToggleClicked"
+                       @onclick:preventDefault="SectionLockedVisible"
                        @onchange="e => SetSectionVisibleAsync(GetBool(e))" />
 
-                <span class="report-editor-toggle"></span>
+                <span class="report-editor-toggle @(SectionLockName is null ? null : "is-locked")"></span>
 
                 <span class="report-editor-section-name">
                     @Resolved.Name
                 </span>
+
+                @if (SectionLockName is not null)
+                {
+                    <i class="fa-solid fa-lock report-editor-lock"
+                       title="Obligatoria: no se puede ocultar"></i>
+                }
             </label>
 
             <div class="report-editor-section-chips">
@@ -142,6 +150,7 @@ else
                                     Label="@GetFieldLabel(fieldDefinition)"
                                     DefaultLabel="@fieldDefinition.Label"
                                     Visible="resolvedField.Visible"
+                                    LockedName="@Lock?.Locks.Field(fieldDefinition.Id)"
                                     Type="resolvedField.Type"
                                     InferredType="fieldDefinition.Type"
                                     CssClass="@GetDragClass(DragItemType.Field, fieldDefinition.Id)"
@@ -197,6 +206,9 @@ else
                             if (resolvedColumn is null)
                                 continue;
 
+                            var columnLock = Lock?.Locks.Column(columnDefinition.Id);
+                            var columnLockedVisible = columnLock is not null && resolvedColumn.Visible;
+
                             <div class="report-editor-column @(resolvedColumn.Visible ? null : "is-hidden") @GetDragClass(DragItemType.Column, columnDefinition.Id)"
                                  draggable="true"
                                  @key="columnDefinition.Id"
@@ -211,14 +223,16 @@ else
                                 </span>
 
                                 <label class="report-editor-toggle-row"
-                                       title="@(resolvedColumn.Visible ? "Ocultar columna" : "Mostrar columna")">
+                                       title="@(columnLock is not null ? "Obligatoria: no se puede ocultar" : resolvedColumn.Visible ? "Ocultar columna" : "Mostrar columna")">
 
                                     <input type="checkbox"
                                            class="report-editor-toggle-input"
                                            checked="@resolvedColumn.Visible"
+                                           @onclick="() => ColumnToggleClicked(columnLock, columnLockedVisible)"
+                                           @onclick:preventDefault="columnLockedVisible"
                                            @onchange="e => SetColumnVisibleAsync(columnDefinition, GetBool(e))" />
 
-                                    <span class="report-editor-toggle"></span>
+                                    <span class="report-editor-toggle @(columnLock is null ? null : "is-locked")"></span>
 
                                 </label>
 
@@ -451,14 +465,41 @@ else
     [Parameter]
     public bool StartExpanded { get; set; }
 
+    /// <summary>
+    /// Obligatorios del diseñador (ver <see cref="ReportEditorLocks"/>).
+    /// </summary>
+    [CascadingParameter]
+    public ReportEditorLockContext? Lock { get; set; }
+
     private bool _collapsed = true;
     private DragItem? _dragItem;
 
     protected override void OnInitialized()
     {
-        // Abierta si es la que se acaba de abrir para editar, o si tiene
-        // subsecciones (que ahora son una lista corta de "Editar").
-        _collapsed = !StartExpanded && Definition.Sections.Count == 0;
+        // Todo plegado al abrir el diseñador: se ve la estructura entera de
+        // un vistazo y se despliega lo que se va a tocar. Sólo se abre la
+        // subsección en la que se acaba de entrar con "Editar".
+        _collapsed = !StartExpanded;
+    }
+
+    private string? SectionLockName =>
+        Lock?.Locks.Section(Definition.Id);
+
+    private bool SectionLockedVisible =>
+        SectionLockName is not null && Resolved.Visible;
+
+    private void SectionToggleClicked()
+    {
+        if (SectionLockedVisible)
+            Lock!.Reject(SectionLockName!);
+    }
+
+    private void ColumnToggleClicked(
+        string? lockName,
+        bool lockedVisible)
+    {
+        if (lockedVisible)
+            Lock?.Reject(lockName!);
     }
 
     private IReadOnlyList<string> OwnPath =>

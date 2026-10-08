@@ -31,7 +31,25 @@ public static class DelimitedTextParser
         string text,
         out IReadOnlyList<string> renamedHeaders,
         char? delimiter = null,
-        bool firstRowIsHeader = true)
+        bool firstRowIsHeader = true) =>
+        Parse(text, out renamedHeaders, delimiter, firstRowIsHeader, inferTypes: true);
+
+    /// <summary>
+    /// Igual, pero todas las columnas como texto: para quien interpreta los
+    /// valores él mismo.
+    /// </summary>
+    public static TabularPayload ParseAsText(
+        string text,
+        out IReadOnlyList<string> renamedHeaders,
+        char? delimiter = null) =>
+        Parse(text, out renamedHeaders, delimiter, firstRowIsHeader: true, inferTypes: false);
+
+    private static TabularPayload Parse(
+        string text,
+        out IReadOnlyList<string> renamedHeaders,
+        char? delimiter,
+        bool firstRowIsHeader,
+        bool inferTypes)
     {
         var payload = new TabularPayload();
         var renamed = new List<string>();
@@ -68,7 +86,7 @@ public static class DelimitedTextParser
         if (firstRowIsHeader)
             grid = [grid[0], .. JoinBrokenRows(grid.Skip(1).ToList(), grid[0].Count)];
 
-        return FromGrid(grid, renamed, firstRowIsHeader);
+        return FromGrid(grid, renamed, firstRowIsHeader, inferTypes: inferTypes);
     }
 
     /// <summary>
@@ -82,11 +100,17 @@ public static class DelimitedTextParser
     /// usa la cultura del servidor, que es lo correcto para texto pegado; un
     /// Excel escribe sus números siempre con punto.
     /// </param>
+    /// <param name="inferTypes">
+    /// Falso: todas las columnas como texto, tal cual. Para quien interpreta
+    /// él mismo los valores (la importación del DeCA lee "09/10/2026" como
+    /// fecha española, no como 10 de septiembre).
+    /// </param>
     internal static TabularPayload FromGrid(
         List<List<string>> grid,
         List<string> renamed,
         bool firstRowIsHeader = true,
-        char? ambiguousDecimalSeparator = null)
+        char? ambiguousDecimalSeparator = null,
+        bool inferTypes = true)
     {
         var payload = new TabularPayload();
 
@@ -129,7 +153,10 @@ public static class DelimitedTextParser
                     .Select(row => row[column])
                     .ToList();
 
-            var analysis = ColumnAnalysis.Analyze(values, ambiguousDecimalSeparator);
+            var analysis =
+                inferTypes
+                    ? ColumnAnalysis.Analyze(values, ambiguousDecimalSeparator)
+                    : ColumnAnalysis.Text;
 
             analyses.Add(analysis);
 
@@ -369,6 +396,12 @@ public static class DelimitedTextParser
             Type = type;
             DecimalSeparator = decimalSeparator;
         }
+
+        /// <summary>
+        /// Texto sin interpretar (ver inferTypes en FromGrid).
+        /// </summary>
+        public static ColumnAnalysis Text { get; } =
+            new(ReportDataType.String, '.');
 
         public ReportDataType Type { get; }
 

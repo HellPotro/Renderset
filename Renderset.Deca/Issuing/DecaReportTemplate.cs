@@ -134,7 +134,8 @@ public static class DecaReportTemplate
                 Visible = true,
                 ShowTitle = true,
                 ShowSubtitle = true,
-                ShowLogo = !string.IsNullOrWhiteSpace(logo),
+                // El de la marca del tenant (Marca / Página pública). Sin
+                // logo no sale nada: no hace falta apagarlo.
                 LogoUrl = logo,
                 LogoMaxHeight = 56,
                 Layout = ReportHeaderLayout.LogoLeft,
@@ -145,7 +146,8 @@ public static class DecaReportTemplate
                 // En el DeCA {pdfUrl} es el enlace corto /q/{código}.
                 ShowQr = true,
                 QrContent = Core.Rendering.ReportQrContent.PdfUrlTemplate,
-                QrSize = 104
+                // "Grande" en el diseñador: impreso se lee mejor.
+                QrSize = 112
             },
 
             Sections =

@@ -4,6 +4,7 @@
 @using Renderset.Blazor.Components.Editor
 @using Renderset.Core.Configurations
 @using Renderset.Core.Localization
+@using Renderset.Core.Rendering
 @using Renderset.Core.Services
 @using Renderset.Core.Themes
 @using Renderset.Deca.Issuing
@@ -35,35 +36,23 @@ else
 
         <header class="deca-designer-bar">
 
+            @* Lo justo: qué diseño es y si hay cambios. Lo que no se puede
+               quitar lo dice el propio editor (candado y toast). *@
             <div class="deca-designer-title">
                 <strong>Diseño del DeCA</strong>
-                <span>
-                    @if (_isBase)
-                    {
-                        <span>Diseño base</span>
-                    }
-                    else
-                    {
-                        <span>Versión @_version</span>
-                    }
-                    · Los DeCA ya emitidos no cambian: su PDF es el de su día.
+                <span class="deca-designer-version"
+                      title="Los DeCA ya emitidos no cambian: su PDF es el de su día.">
+                    @(_isBase ? "Base" : $"v{_version}")
                 </span>
             </div>
 
             @if (Forced.Count > 0)
             {
+                @* Sólo con un JSON importado: el editor no deja ocultarlos. *@
                 <span class="deca-designer-note is-warning"
                       title="@string.Join(", ", Forced)">
                     <i class="fa-solid fa-lock"></i>
                     @Forced.Count obligatorio(s) se volverán a mostrar al guardar
-                </span>
-            }
-            else
-            {
-                <span class="deca-designer-note"
-                      title="Se puede cambiar todo menos quitar los datos obligatorios y el QR de descarga">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    Los datos obligatorios no se pueden quitar
                 </span>
             }
 
@@ -125,6 +114,10 @@ else
                           Data="_data"
                           DataChanged="DataChanged"
                           Texts="_texts"
+                          Themes="_themes"
+                          ThemesUrl="deca/brand"
+                          LogoSettingsUrl="deca/brand"
+                          Locks="Locks"
                           HasUnsavedChanges="HasUnsavedChanges"
                           SaveRequested="SaveAsync" />
         </div>
@@ -148,6 +141,28 @@ else
 
     private int _version;
     private bool _isBase = true;
+
+    /// <summary>
+    /// Temas de empresa (Marca → Temas), para la pestaña Tema.
+    /// </summary>
+    private IReadOnlyCollection<TenantReportTheme> _themes = [];
+
+    /// <summary>
+    /// Lo que la norma exige: el editor no deja ocultarlo y avisa con un
+    /// toast. El servidor lo vuelve a comprobar al guardar y al emitir.
+    /// </summary>
+    private static readonly ReportEditorLocks Locks =
+        new()
+        {
+            Sections = ReportEditorLocks.Map(DecaTemplateGuard.RequiredSectionList),
+            Fields = ReportEditorLocks.Map(DecaTemplateGuard.RequiredFields),
+            Columns = ReportEditorLocks.Map(DecaTemplateGuard.RequiredColumns),
+            Header = true,
+            QrContent = ReportQrContent.PdfUrlTemplate,
+            QrDescription = "Descarga del PDF",
+            MinQrSize = DecaTemplateGuard.MinQrSize,
+            Reason = DecaTemplateGuard.LockReason
+        };
 
     /// <summary>
     /// Se cambia al cargar otro diseño (guardar, restablecer) para que el
@@ -218,6 +233,14 @@ else
                     () => Api.GetTemplateAsync(CurrentTenant.Id),
                     errorTitle: "No se ha podido cargar el diseño");
 
+            // Sin temas se puede diseñar igual (colores propios): el error
+            // se avisa y se sigue.
+            _themes =
+                await Toasts.RunAsync(
+                    () => Api.GetThemesAsync(CurrentTenant.Id),
+                    errorTitle: "No se han podido cargar los temas")
+                ?? [];
+
             if (template is not null)
                 Load(template);
 
@@ -234,6 +257,15 @@ else
     {
         _configuration = template.Configuration;
         _theme = template.Theme;
+
+        // Enlazado a un tema de empresa: se ve (y se emite) con el tema vivo,
+        // no con la copia de cuando se guardó.
+        var linked =
+            _themes.FirstOrDefault(x =>
+                string.Equals(x.Theme.Id, _configuration?.ThemeId, StringComparison.OrdinalIgnoreCase));
+
+        if (linked is not null)
+            _theme = linked.Theme.Clone();
         _version = template.Version;
         _isBase = template.IsBase;
 
@@ -286,6 +318,10 @@ else
 
         _saving = true;
 
+        // Lo obligatorio oculto (sólo con un JSON importado) se vuelve a
+        // mostrar al guardar: se dice qué.
+        var forced = Forced;
+
         try
         {
             var saved =
@@ -303,7 +339,16 @@ else
                     errorTitle: "No se ha guardado el diseño");
 
             if (saved is not null)
+            {
                 Load(saved);
+
+                if (forced.Count > 0)
+                {
+                    Toasts.Warning(
+                        string.Join(", ", forced),
+                        "Se han vuelto a mostrar porque son obligatorios");
+                }
+            }
         }
         finally
         {

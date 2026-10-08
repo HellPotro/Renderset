@@ -400,6 +400,17 @@ public interface IRenderSetApi
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Sube el logo (PNG, JPG, WebP o GIF) y devuelve su URL pública. No
+    /// cambia la configuración: la URL se guarda con el resto de la marca.
+    /// </summary>
+    [Multipart]
+    [Post("/api/assets/{tenantId}/logo")]
+    Task<Renderset.Core.Tenancy.TenantAssetResponse> UploadLogoAsync(
+        string tenantId,
+        [AliasAs("file")] StreamPart file,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// HTML de la página pública con la configuración sin guardar.
     /// </summary>
     [Post("/api/sharing/{tenantId}/preview")]

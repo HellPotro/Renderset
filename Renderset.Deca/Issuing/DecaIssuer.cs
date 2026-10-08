@@ -5,6 +5,7 @@ using Renderset.Core.Rendering.Pdf;
 using Renderset.Core.Services;
 using Renderset.Core.Sharing;
 using Renderset.Core.Tenancy;
+using Renderset.Core.Themes;
 using Renderset.Deca.Validation;
 
 namespace Renderset.Deca.Issuing;
@@ -98,6 +99,7 @@ public sealed class DecaIssuer
     private readonly TimeProvider _time;
     private readonly IHtmlAssetInliner? _assetInliner;
     private readonly IDecaTemplateRepository? _templates;
+    private readonly IReportThemeRepository? _themes;
 
     public DecaIssuer(
         IDecaRepository decas,
@@ -108,7 +110,8 @@ public sealed class DecaIssuer
         DecaOptions options,
         TimeProvider time,
         IHtmlAssetInliner? assetInliner = null,
-        IDecaTemplateRepository? templates = null)
+        IDecaTemplateRepository? templates = null,
+        IReportThemeRepository? themes = null)
     {
         _decas = decas;
         _renderer = renderer;
@@ -119,6 +122,7 @@ public sealed class DecaIssuer
         _time = time;
         _assetInliner = assetInliner;
         _templates = templates;
+        _themes = themes;
     }
 
     public async Task<DecaIssueResult> IssueAsync(
@@ -196,6 +200,19 @@ public sealed class DecaIssuer
                 : await _templates.GetCurrentAsync(tenantId, cancellationToken);
 
         var design = DecaTemplateGuard.Resolve(template, branding);
+
+        // Un diseño enlazado a un tema de empresa (Marca → Temas) se pinta
+        // con el tema vivo, como los presets de RenderSet; si el tema ya no
+        // existe, con la copia que guarda el diseño.
+        if (_themes is not null &&
+            design.TemplateVersion != DecaTemplate.BaseVersion &&
+            template?.Configuration?.ThemeId is { Length: > 0 } themeId)
+        {
+            var linked = await _themes.GetByIdAsync(tenantId, themeId, cancellationToken);
+
+            if (linked is not null)
+                design = design with { Theme = linked.Theme };
+        }
 
         var local = TimeZoneInfo.ConvertTime(now, _options.Zone);
 

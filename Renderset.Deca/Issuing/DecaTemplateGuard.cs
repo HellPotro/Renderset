@@ -56,16 +56,29 @@ public static class DecaTemplateGuard
         ("envios.cantidad", "Peso o magnitud")
     ];
 
+    /// <summary>
+    /// Secciones que no se pueden ocultar: llevan los obligatorios.
+    /// </summary>
+    public static IReadOnlyList<(string Id, string Name)> RequiredSectionList { get; } =
+    [
+        ("cargador", "La sección Cargador contractual"),
+        ("transportista", "La sección Transportista efectivo"),
+        ("transporte", "La sección Transporte"),
+        ("envios", "La tabla de envíos"),
+        ("observaciones", "La sección Observaciones"),
+        ("emision", "La sección Emisión")
+    ];
+
+    /// <summary>
+    /// Lo que se enseña en el diseñador cuando se intenta quitar algo.
+    /// </summary>
+    public const string LockReason =
+        "lo exige la normativa del DeCA (Orden FOM/2861/2012) y no se puede quitar.";
+
+    public const string QrName = "Código QR de descarga del PDF";
+
     private static readonly HashSet<string> RequiredSections =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "cargador",
-            "transportista",
-            "transporte",
-            "envios",
-            "observaciones",
-            "emision"
-        };
+        RequiredSectionList.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly HashSet<string> RequiredFieldIds =
         RequiredFields.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -197,7 +210,7 @@ public static class DecaTemplateGuard
         if (resolved.Header is not { Visible: true, ShowQr: true } header ||
             !string.Equals(header.QrContent, ReportQrContent.PdfUrlTemplate, StringComparison.OrdinalIgnoreCase))
         {
-            missing.Add("Código QR de descarga del PDF");
+            missing.Add(QrName);
         }
 
         return missing;
@@ -224,7 +237,7 @@ public static class DecaTemplateGuard
             var resolved =
                 resolver.Resolve(
                     DecaReportTemplate.Definition,
-                    Enforce(configuration),
+                    WithBranding(Enforce(configuration), branding),
                     bodyBlocks: null,
                     new ReportTextCatalog(
                         new Dictionary<string, string>(template.Texts, StringComparer.OrdinalIgnoreCase),
@@ -245,6 +258,61 @@ public static class DecaTemplateGuard
         }
 
         return Base(branding, []);
+    }
+
+    /// <summary>
+    /// El logo del DeCA es el de la marca del tenant (Marca en el portal,
+    /// Página pública en RenderSet) mientras el diseño no ponga otro: así
+    /// cambiar el logo de la empresa cambia los DeCA siguientes sin tocar
+    /// el diseño. Modifica y devuelve la misma configuración.
+    /// </summary>
+    public static ReportConfiguration WithBranding(
+        ReportConfiguration configuration,
+        TenantBranding? branding)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (string.IsNullOrWhiteSpace(branding?.LogoUrl))
+            return configuration;
+
+        configuration.Header ??= new ReportHeaderConfiguration();
+
+        if (string.IsNullOrWhiteSpace(configuration.Header.LogoUrl))
+            configuration.Header.LogoUrl = branding.LogoUrl;
+
+        return configuration;
+    }
+
+    /// <summary>
+    /// Lo contrario, al guardar: un logo igual al de la marca no se guarda
+    /// en el diseño (seguiría al de la marca), y un logo apagado porque la
+    /// empresa no tenía ninguno tampoco (se encenderá cuando lo tenga).
+    /// </summary>
+    public static ReportConfiguration WithoutBranding(
+        ReportConfiguration configuration,
+        TenantBranding? branding)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (configuration.Header is not { } header)
+            return configuration;
+
+        var brandLogo = branding?.LogoUrl;
+
+        if (!string.IsNullOrWhiteSpace(header.LogoUrl) &&
+            string.Equals(header.LogoUrl.Trim(), brandLogo, StringComparison.Ordinal))
+        {
+            header.LogoUrl = null;
+        }
+
+        if (string.IsNullOrWhiteSpace(brandLogo) &&
+            string.IsNullOrWhiteSpace(header.LogoUrl) &&
+            header.ShowLogo == false)
+        {
+            header.ShowLogo = null;
+        }
+
+        return configuration;
     }
 
     private static Design Base(

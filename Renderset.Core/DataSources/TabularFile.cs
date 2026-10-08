@@ -67,14 +67,15 @@ public static class TabularFile
                 "Ábrelo en Excel y guárdalo como .xlsx sin contraseña, o como CSV.");
         }
 
-        return ReadText(content, fileName);
+        return ReadText(content, fileName, options);
     }
 
     // ------------------------------------------------------------ texto
 
     private static TabularFileResult ReadText(
         ReadOnlyMemory<byte> content,
-        string fileName)
+        string fileName,
+        TabularFileOptions options)
     {
         var (text, encoding) = Decode(content.Span);
 
@@ -84,10 +85,12 @@ public static class TabularFile
                 "El fichero no es texto ni un Excel (.xlsx). Sube un .xlsx, .csv o .txt.");
         }
 
+        IReadOnlyList<string> renamed;
+
         var payload =
-            DelimitedTextParser.Parse(
-                text,
-                out var renamed);
+            options.InferTypes
+                ? DelimitedTextParser.Parse(text, out renamed)
+                : DelimitedTextParser.ParseAsText(text, out renamed);
 
         return new TabularFileResult
         {
@@ -232,7 +235,8 @@ public static class TabularFile
                     grid,
                     renamed,
                     firstRowIsHeader: true,
-                    ambiguousDecimalSeparator: '.');
+                    ambiguousDecimalSeparator: '.',
+                    inferTypes: options.InferTypes);
 
             return new TabularFileResult
             {
@@ -304,6 +308,11 @@ public sealed class TabularFileOptions
     /// detectarla (se saltan los títulos de encima).
     /// </summary>
     public int? HeaderRow { get; set; }
+
+    /// <summary>
+    /// Falso: todo como texto, sin adivinar números ni fechas.
+    /// </summary>
+    public bool InferTypes { get; set; } = true;
 }
 
 public enum TabularFileFormat

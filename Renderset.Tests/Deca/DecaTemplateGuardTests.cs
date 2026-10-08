@@ -139,3 +139,70 @@ public sealed class DecaTemplateGuardTests
         design.TemplateVersion.Should().Be(DecaTemplate.BaseVersion);
     }
 }
+
+public sealed class DecaTemplateBrandingTests
+{
+    private static readonly Renderset.Core.Tenancy.TenantBranding Brand =
+        Renderset.Core.Tenancy.TenantBranding.Create(
+            "oranauto",
+            "Oran",
+            "https://api.renderset.app/assets/oranauto/0123456789abcdef0123456789abcdef.png",
+            null,
+            null);
+
+    [Fact]
+    public void WithoutBranding_ShouldNotStoreTheCompanyLogoInTheDesign()
+    {
+        var configuration = DecaReportTemplate.Configuration(Brand);
+
+        configuration.Header!.LogoUrl.Should().Be(Brand.LogoUrl);
+
+        DecaTemplateGuard.WithoutBranding(configuration, Brand);
+
+        configuration.Header.LogoUrl.Should().BeNull();
+
+        // Y al pintar vuelve a ser el de la empresa, el que tenga entonces.
+        DecaTemplateGuard.WithBranding(configuration, Brand)
+            .Header!.LogoUrl.Should().Be(Brand.LogoUrl);
+    }
+
+    [Fact]
+    public void WithoutBranding_ShouldKeepALogoOfItsOwn()
+    {
+        var configuration = DecaReportTemplate.Configuration(Brand);
+        configuration.Header!.LogoUrl = "https://otra.web/logo.png";
+
+        DecaTemplateGuard.WithoutBranding(configuration, Brand);
+        DecaTemplateGuard.WithBranding(configuration, Brand);
+
+        configuration.Header.LogoUrl.Should().Be("https://otra.web/logo.png");
+    }
+
+    [Fact]
+    public void Resolve_ShouldUseTheCurrentCompanyLogoForASavedDesign()
+    {
+        var saved = DecaReportTemplate.Configuration(branding: null);
+
+        var design =
+            DecaTemplateGuard.Resolve(
+                new DecaTemplate { TenantId = "oranauto", Version = 2, Configuration = saved },
+                Brand);
+
+        design.TemplateVersion.Should().Be(2);
+        design.Resolved.Header!.LogoUrl.Should().Be(Brand.LogoUrl);
+        design.Resolved.Header.ShowLogo.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RequiredSections_ShouldHaveANameForTheDesigner()
+    {
+        DecaTemplateGuard.RequiredSectionList
+            .Select(x => x.Id)
+            .Should()
+            .BeEquivalentTo(DecaReportTemplate.Definition.Sections.Select(x => x.Id));
+
+        DecaTemplateGuard.RequiredSectionList
+            .Should()
+            .OnlyContain(x => !string.IsNullOrWhiteSpace(x.Name));
+    }
+}

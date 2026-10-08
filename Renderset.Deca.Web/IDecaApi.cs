@@ -1,10 +1,14 @@
 using Refit;
+using Renderset.Core.Sharing;
+using Renderset.Core.Tenancy;
+using Renderset.Core.Themes;
 
 namespace Renderset.Deca.Web;
 
 /// <summary>
-/// /api/deca de la API. Lo registra el host (Renderset.Web) con el mismo
-/// HttpClient que IRenderSetApi: clave de servicio y token del usuario.
+/// La API de RenderSet que usa el portal: /api/deca y, para Marca, los temas,
+/// la marca del tenant (logo y colores) y la subida del logo. Con la clave
+/// de servicio del portal y el token del usuario (TenantTokenHandler).
 /// </summary>
 public interface IDecaApi
 {
@@ -47,6 +51,54 @@ public interface IDecaApi
     Task<DecaTemplateResponse> ResetTemplateAsync(
         string tenantId,
         [Query] int expectedVersion,
+        CancellationToken cancellationToken = default);
+
+    // ------------------------------------------------------------ marca
+    //
+    // Viven en RenderSet: son del tenant, no del DeCA. Lo que se cambie aquí
+    // se ve también en RenderSet (Temas, Compartir → Página pública).
+
+    [Get("/api/themes/{tenantId}")]
+    Task<IReadOnlyCollection<TenantReportTheme>> GetThemesAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
+    [Put("/api/themes/{tenantId}/{themeId}")]
+    Task SaveThemeAsync(
+        string tenantId,
+        string themeId,
+        [Body] TenantReportTheme theme,
+        CancellationToken cancellationToken = default);
+
+    [Delete("/api/themes/{tenantId}/{themeId}")]
+    Task DeleteThemeAsync(
+        string tenantId,
+        string themeId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Logo, colores y nombre del tenant (los de la página pública).
+    /// </summary>
+    [Get("/api/sharing/{tenantId}/settings")]
+    Task<DocumentSharingSettingsResponse> GetBrandAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Rol Admin. Se manda la configuración entera: los textos de la página
+    /// pública que aquí no se tocan van tal como se leyeron.
+    /// </summary>
+    [Put("/api/sharing/{tenantId}/settings")]
+    Task SaveBrandAsync(
+        string tenantId,
+        [Body] DocumentSharingSettings settings,
+        CancellationToken cancellationToken = default);
+
+    [Multipart]
+    [Post("/api/assets/{tenantId}/logo")]
+    Task<TenantAssetResponse> UploadLogoAsync(
+        string tenantId,
+        [AliasAs("file")] StreamPart file,
         CancellationToken cancellationToken = default);
 
     [Post("/api/deca/{tenantId}/{decaId}/finish")]

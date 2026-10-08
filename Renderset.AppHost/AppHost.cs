@@ -62,6 +62,13 @@ apiService.WithEnvironment(
     "Deca__PublicBaseUrl",
     apiHttps.Exists ? apiHttps : apiService.GetEndpoint("http"));
 
+// Logos subidos (Marca / Página pública): la API los sirve en /assets, así
+// que su dirección pública es la de la API. En Azure, Assets__PublicBaseUrl
+// (o DocumentSharing__PublicBaseUrl) con el dominio público de la API.
+apiService.WithEnvironment(
+    "Assets__PublicBaseUrl",
+    apiHttps.Exists ? apiHttps : apiService.GetEndpoint("http"));
+
 // Portal DeCA: aplicación propia, con su login (mismos usuarios que Web) y
 // su clave de servicio. Los usuarios están en la base de datos de
 // RenderSet: ConnectionStrings:RenderSet en sus user-secrets, como en Web.

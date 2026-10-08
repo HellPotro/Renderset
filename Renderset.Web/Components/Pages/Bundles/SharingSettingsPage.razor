@@ -1,6 +1,7 @@
 @page "/bundles/settings"
 @attribute [Authorize(Policy = TenantPolicies.Admin)]
 
+@using Renderset.Blazor.Components.Branding
 @using Renderset.Blazor.Components.Editor
 @using Renderset.Core.Localization
 @using Renderset.Core.Sharing
@@ -77,29 +78,14 @@
                     </div>
 
                     <div class="form-group">
-                        <label>URL del logo</label>
-                        <input @bind="_settings.LogoUrl"
-                               @bind:event="oninput"
-                               @bind:after="SchedulePreviewAsync"
-                               maxlength="@DocumentSharingSettings.MaxLogoUrlLength"
-                               placeholder="https://oranauto.com/logo.png" />
+                        <label>Logo</label>
 
-                        @if (!LogoIsValid)
-                        {
-                            <small class="sharing-error">
-                                Tiene que ser una URL completa que empiece por https:// o http://.
-                            </small>
-                        }
-                        else if (!string.IsNullOrWhiteSpace(_settings.LogoUrl))
-                        {
-                            <div class="sharing-logo-preview">
-                                <img src="@_settings.LogoUrl" alt="Logo" />
-                            </div>
-                        }
-                        else
-                        {
-                            <small>Sin logo se enseña el nombre de la empresa.</small>
-                        }
+                        @* Subido se guarda en RenderSet; enlazado, se usa la URL. Lo
+                           comparten la página pública y el DeCA. *@
+                        <LogoInput Value="@_settings.LogoUrl"
+                                   ValueChanged="LogoChangedAsync"
+                                   Upload="UploadLogoAsync"
+                                   EmptyText="Sin logo: se enseña el nombre" />
                     </div>
 
                     <div class="sharing-colors">
@@ -469,6 +455,32 @@
     /// Espera a que se deje de escribir (o de arrastrar el selector de color)
     /// antes de pedir la vista previa: si no, cada tecla sería una llamada.
     /// </summary>
+    private Task LogoChangedAsync(
+        string? url)
+    {
+        _settings.LogoUrl = url;
+        return SchedulePreviewAsync();
+    }
+
+    /// <summary>
+    /// La imagen se sube ya; el logo cambia al guardar la página, como el
+    /// resto de la marca.
+    /// </summary>
+    private async Task<string?> UploadLogoAsync(
+        byte[] content,
+        string fileName)
+    {
+        var uploaded =
+            await Toasts.RunAsync(
+                () => RenderSetApi.UploadLogoAsync(
+                    CurrentTenant.Id,
+                    new Refit.StreamPart(new MemoryStream(content), fileName)),
+                success: "Logo subido. Guarda para usarlo.",
+                errorTitle: "No se ha podido subir el logo");
+
+        return uploaded?.Url;
+    }
+
     private async Task SchedulePreviewAsync()
     {
         var version = ++_previewVersion;

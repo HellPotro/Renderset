@@ -5,7 +5,10 @@
 @using Renderset.Core.Rendering
 @using Renderset.Core.Reports
 
-<div class="report-editor-section">
+@* Pie en dos grupos, como la cabecera: el texto y lo que se añade solo
+   (fecha, número de página). *@
+
+<div class="report-editor-section is-header-footer">
 
     <div class="report-editor-section-header">
 
@@ -20,13 +23,26 @@
                 <span></span>
             </span>
 
-            <strong>Pie de página</strong>
+            <span class="report-editor-section-name">Pie de página</span>
 
         </label>
 
+        <div class="report-editor-section-chips">
+            <span class="report-editor-section-chip is-plain">@Summary</span>
+        </div>
+
+        <div class="report-editor-section-actions">
+            <button type="button"
+                    class="report-editor-collapse-button"
+                    title="@(_collapsed ? "Desplegar" : "Plegar")"
+                    @onclick="() => _collapsed = !_collapsed">
+                <span class="report-editor-chevron @(_collapsed ? null : "expanded")"></span>
+            </button>
+        </div>
+
     </div>
 
-    @if (IsVisible)
+    @if (IsVisible && !_collapsed)
     {
         <div class="report-editor-section-content">
 
@@ -51,73 +67,96 @@
                 </div>
             }
 
-            <div class="report-editor-property">
-                <div class="report-editor-property-heading">
-                    <label>Texto</label>
+            <div class="report-editor-group">
+
+                <div class="report-editor-group-header">
+
+                    <span class="report-editor-group-title">Texto</span>
+
+                    <i class="fa-regular fa-circle-question report-editor-help"
+                       title="El pie va al final de la hoja y, al imprimir o en el PDF, se repite en todas las páginas. Admite datos del documento: &#123;&#123;data.numero&#125;&#125;."></i>
+
+                    <span class="report-editor-group-spacer"></span>
 
                     <DataFieldPicker Fields="DataFields"
                                      Selected="InsertDataAsync" />
+
                 </div>
 
-                <textarea rows="3"
-                          value="@FooterText"
-                          @onchange="TextChangedAsync"
-                          placeholder="Texto legal, datos de contacto..."></textarea>
+                <div class="report-editor-group-body">
+                    <div class="report-editor-property">
+                        <textarea rows="2"
+                                  aria-label="Texto del pie"
+                                  value="@FooterText"
+                                  @onchange="TextChangedAsync"
+                                  placeholder="Texto legal, datos de contacto..."></textarea>
+                    </div>
+                </div>
+
             </div>
 
-            <label class="report-editor-toggle-row">
+            <div class="report-editor-group">
 
-                <input type="checkbox"
-                       class="report-editor-toggle-input"
-                       checked="@ShowGenerationDate"
-                       @onchange="GenerationDateChangedAsync" />
-
-                <span class="report-editor-toggle">
-                    <span></span>
-                </span>
-
-                <span>Mostrar fecha de generación</span>
-
-            </label>
-
-            <label class="report-editor-toggle-row">
-
-                <input type="checkbox"
-                       class="report-editor-toggle-input"
-                       checked="@ShowPageNumber"
-                       @onchange="PageNumberChangedAsync" />
-
-                <span class="report-editor-toggle">
-                    <span></span>
-                </span>
-
-                <span>Numerar las páginas</span>
-
-            </label>
-
-            @if (ShowPageNumber)
-            {
-                <div class="report-editor-property">
-                    <label>Formato</label>
-
-                    <input type="text"
-                           value="@PageNumberFormat"
-                           @onchange="PageNumberFormatChangedAsync"
-                           placeholder="@ResolvedReportFooter.DefaultPageNumberFormat" />
-
-                    <small>
-                        {page} es la página y {pages} el total. Se traduce en el
-                        diccionario (footer.pageNumber).
-                    </small>
+                <div class="report-editor-group-header">
+                    <span class="report-editor-group-title">Se añade solo</span>
                 </div>
-            }
 
-            <p class="report-editor-hint">
-                <i class="fa-solid fa-file-lines"></i>
-                El pie va al final de la hoja y, al imprimir o en el PDF, se
-                repite en todas las páginas. El texto admite datos del
-                documento: &#123;&#123;data.numero&#125;&#125;.
-            </p>
+                <div class="report-editor-group-body">
+
+                    <div class="report-editor-toggle-grid">
+
+                        <label class="report-editor-toggle-row is-compact">
+
+                            <input type="checkbox"
+                                   class="report-editor-toggle-input"
+                                   checked="@ShowGenerationDate"
+                                   @onchange="GenerationDateChangedAsync" />
+
+                            <span class="report-editor-toggle">
+                                <span></span>
+                            </span>
+
+                            <span>Fecha de generación</span>
+
+                        </label>
+
+                        <label class="report-editor-toggle-row is-compact">
+
+                            <input type="checkbox"
+                                   class="report-editor-toggle-input"
+                                   checked="@ShowPageNumber"
+                                   @onchange="PageNumberChangedAsync" />
+
+                            <span class="report-editor-toggle">
+                                <span></span>
+                            </span>
+
+                            <span>Número de página</span>
+
+                        </label>
+
+                    </div>
+
+                    @if (ShowPageNumber)
+                    {
+                        <div class="report-editor-inline-property">
+                            <label for="report-footer-page-format">
+                                Formato
+                                <i class="fa-regular fa-circle-question report-editor-help"
+                                   title="{page} es la página y {pages} el total. Se traduce en el diccionario (footer.pageNumber)."></i>
+                            </label>
+
+                            <input id="report-footer-page-format"
+                                   type="text"
+                                   value="@PageNumberFormat"
+                                   @onchange="PageNumberFormatChangedAsync"
+                                   placeholder="@ResolvedReportFooter.DefaultPageNumberFormat" />
+                        </div>
+                    }
+
+                </div>
+
+            </div>
 
         </div>
     }
@@ -150,6 +189,32 @@
 
     [Parameter]
     public IReadOnlyList<ReportDataFieldOption> DataFields { get; set; } = [];
+
+    private bool _collapsed = true;
+
+    private string Summary
+    {
+        get
+        {
+            if (!IsVisible)
+                return "Oculto";
+
+            var parts = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(FooterText))
+                parts.Add("texto");
+
+            if (ShowGenerationDate)
+                parts.Add("fecha");
+
+            if (ShowPageNumber)
+                parts.Add("páginas");
+
+            return parts.Count == 0
+                ? "Vacío"
+                : string.Join(" · ", parts);
+        }
+    }
 
     private async Task InsertDataAsync(string path)
     {

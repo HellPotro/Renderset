@@ -123,6 +123,13 @@
 
     private TabularFileOptions _options = new();
 
+    /// <summary>
+    /// Falso: todas las columnas como texto (quien lo usa interpreta los
+    /// valores él mismo).
+    /// </summary>
+    [Parameter]
+    public bool InferTypes { get; set; } = true;
+
     public bool IsLoaded =>
         _result is not null;
 
@@ -135,7 +142,7 @@
         _content = null;
         _result = null;
         _error = null;
-        _options = new TabularFileOptions();
+        _options = new TabularFileOptions { InferTypes = InferTypes };
 
         StateHasChanged();
     }
@@ -189,7 +196,7 @@
 
             _content = memory.ToArray();
             _fileName = file.Name;
-            _options = new TabularFileOptions();
+            _options = new TabularFileOptions { InferTypes = InferTypes };
 
             await ReadAsync();
         }
@@ -209,7 +216,8 @@
         // Otra hoja tiene su propia cabecera: se vuelve a detectar.
         _options = new TabularFileOptions
         {
-            Sheet = e.Value?.ToString()
+            Sheet = e.Value?.ToString(),
+            InferTypes = InferTypes
         };
 
         await ReadAsync();

@@ -1,0 +1,452 @@
+@page "/deca/import"
+
+@using Renderset.Blazor.Components.Datasets
+@using Renderset.Core.DataSources
+@using Renderset.Deca.Import
+
+@inject IDecaApi Api
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Importar DeCA - RenderSet</PageTitle>
+
+<div class="page page-wide deca-page">
+
+    <header class="page-header">
+
+        <div>
+            <a class="back-button" href="deca">
+                <i class="fa-solid fa-arrow-left"></i>
+                DeCA
+            </a>
+
+            <h1>Importar DeCA</h1>
+
+            <p>
+                Una fila por envío. Las filas con el mismo valor en la
+                columna «DeCA» van en el mismo documento; sin esa columna se
+                juntan las que comparten cargador, transportista, fecha y
+                vehículo. Se comprueba todo antes de emitir nada.
+            </p>
+        </div>
+
+        <div class="page-actions">
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="DownloadTemplateAsync">
+                <i class="fa-solid fa-file-csv"></i>
+                Descargar plantilla
+            </button>
+        </div>
+
+    </header>
+
+    <section class="editor-card">
+
+        <div class="editor-card-body deca-import-source">
+
+            <TabularFileInput InferTypes="false"
+                              Label="Subir CSV o Excel"
+                              Loaded="FileLoaded"
+                              Cleared="Clear" />
+
+            <small>
+                Columnas de la plantilla: @string.Join(", ", DecaImport.Columns.Select(x => x.Header)).
+                El orden da igual y valen sin tildes. Fechas como 09/10/2026,
+                horas como 07:30 y pesos en kg (12500 o 12.500).
+            </small>
+
+        </div>
+
+    </section>
+
+    @if (_result is not null)
+    {
+        @if (_result.Errors.Count > 0)
+        {
+            <div class="deca-import-errors">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <div>
+                    <strong>El fichero no se puede importar así</strong>
+                    <ul>
+                        @foreach (var error in _result.Errors)
+                        {
+                            <li>@error</li>
+                        }
+                    </ul>
+                    <small>Descarga la plantilla para ver las columnas que hacen falta.</small>
+                </div>
+            </div>
+        }
+
+        @if (_result.IgnoredColumns.Count > 0)
+        {
+            <p class="deca-import-note">
+                <i class="fa-solid fa-circle-info"></i>
+                No se usan (no son de la plantilla): @string.Join(", ", _result.IgnoredColumns).
+            </p>
+        }
+
+        @if (_rows.Count > 0)
+        {
+            <div class="deca-toolbar deca-import-toolbar">
+
+                <span class="deca-count">
+                    @_rows.Count DeCA ·
+                    <strong>@ReadyCount listos</strong>
+                    @if (InvalidCount > 0)
+                    {
+                        <span> · @InvalidCount con errores</span>
+                    }
+                    @if (IssuedCount > 0)
+                    {
+                        <span> · @IssuedCount emitidos</span>
+                    }
+                </span>
+
+                <span class="deca-import-spacer"></span>
+
+                @if (_confirming)
+                {
+                    <span class="deca-confirm">
+                        <span>
+                            ¿Emitir @ReadyCount DeCA con la fecha y hora de ahora? Una vez
+                            emitidos no se pueden borrar.
+                        </span>
+                        <button type="button"
+                                class="primary-button"
+                                disabled="@_issuing"
+                                @onclick="IssueAllAsync">
+                            Sí, emitir
+                        </button>
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@_issuing"
+                                @onclick="() => _confirming = false">
+                            No
+                        </button>
+                    </span>
+                }
+                else
+                {
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@(_issuing || ReadyCount == 0 || _result.Errors.Count > 0)"
+                            @onclick="() => _confirming = true">
+                        @if (_issuing)
+                        {
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                            <span>Emitiendo @_progress de @_toIssue...</span>
+                        }
+                        else
+                        {
+                            <i class="fa-solid fa-file-signature"></i>
+                            <span>Emitir @ReadyCount DeCA</span>
+                        }
+                    </button>
+                }
+
+            </div>
+
+            <div class="deca-import-list">
+
+                @foreach (var row in _rows)
+                {
+                    <article class="deca-import-row @RowClass(row)" @key="row">
+
+                        <div class="deca-import-key">
+                            <strong>@row.Item.Key</strong>
+                            <small>@RowsText(row.Item.Rows)</small>
+                        </div>
+
+                        <div class="deca-import-main">
+
+                            <div class="deca-import-parties">
+                                <span title="Cargador contractual">@(row.Item.Data.Shipper.Name ?? "Sin cargador")</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                                <span title="Transportista efectivo">@(row.Item.Data.Carrier.Name ?? "Sin transportista")</span>
+                            </div>
+
+                            <div class="deca-import-meta">
+                                <span><i class="fa-regular fa-calendar"></i> @DecaFormat.Date(row.Item.Data.TransportDate)</span>
+                                <span class="is-mono"><i class="fa-solid fa-truck"></i> @(row.Item.Data.Vehicle.TractorPlate ?? "—")</span>
+                                <span>@ShipmentsText(row.Item.Data.Shipments.Count)</span>
+                                @if (!string.IsNullOrWhiteSpace(row.Item.Data.Reference))
+                                {
+                                    <span>@row.Item.Data.Reference</span>
+                                }
+                            </div>
+
+                            @if (row.Messages.Count > 0)
+                            {
+                                <ul class="deca-import-issues">
+                                    @foreach (var message in row.Messages.Take(MaxMessages))
+                                    {
+                                        <li class="@(message.IsWarning ? "is-warning" : null)">@message.Text</li>
+                                    }
+
+                                    @if (row.Messages.Count > MaxMessages)
+                                    {
+                                        <li>y @(row.Messages.Count - MaxMessages) más</li>
+                                    }
+                                </ul>
+                            }
+
+                        </div>
+
+                        <div class="deca-import-status">
+                            @switch (row.State)
+                            {
+                                case ImportState.Issued:
+                                    <a class="deca-status is-issued" href="@($"deca/{row.DecaId}")">
+                                        <i class="fa-solid fa-check"></i>
+                                        @row.Number
+                                    </a>
+                                    break;
+
+                                case ImportState.Failed:
+                                    <span class="deca-status is-error">
+                                        <i class="fa-solid fa-xmark"></i>
+                                        No emitido
+                                    </span>
+                                    break;
+
+                                case ImportState.Issuing:
+                                    <span class="deca-status">
+                                        <i class="fa-solid fa-spinner fa-spin"></i>
+                                        Emitiendo
+                                    </span>
+                                    break;
+
+                                default:
+                                    if (row.IsValid)
+                                    {
+                                        <span class="deca-status is-ready">
+                                            <i class="fa-solid fa-circle-check"></i>
+                                            Listo
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="deca-status is-error">
+                                            <i class="fa-solid fa-circle-exclamation"></i>
+                                            Con errores
+                                        </span>
+                                    }
+                                    break;
+                            }
+                        </div>
+
+                    </article>
+                }
+
+            </div>
+        }
+    }
+
+</div>
+
+@code {
+
+    /// <summary>
+    /// Por fichero. Más es un proceso para el ERP (POST /api/deca), no para
+    /// subir a mano.
+    /// </summary>
+    private const int MaxDecas = 200;
+
+    private const int MaxMessages = 4;
+
+    private static readonly TimeZoneInfo Zone = new DecaOptions().Zone;
+
+    private DecaImportResult? _result;
+    private List<ImportRow> _rows = [];
+
+    private bool _confirming;
+    private bool _issuing;
+    private int _progress;
+    private int _toIssue;
+
+    private int ReadyCount =>
+        _rows.Count(x => x.IsValid && x.State is ImportState.Pending or ImportState.Failed);
+
+    private int InvalidCount =>
+        _rows.Count(x => !x.IsValid);
+
+    private int IssuedCount =>
+        _rows.Count(x => x.State == ImportState.Issued);
+
+    private async Task DownloadTemplateAsync()
+    {
+        // Con la marca UTF-8 delante, Excel lee bien las tildes al abrirlo
+        // con doble clic.
+        await JS.InvokeVoidAsync(
+            "renderSet.downloadText",
+            DecaImport.TemplateFileName,
+            "﻿" + DecaImport.Template(DecaFormat.Today.AddDays(1)),
+            "text/csv;charset=utf-8");
+    }
+
+    private void FileLoaded(
+        TabularFileResult file)
+    {
+        _confirming = false;
+
+        var result =
+            DecaImport.Read(
+                file.Payload,
+                decimalPoint: file.Format == TabularFileFormat.Excel,
+                firstDataRow: (file.HeaderRow ?? 1) + 1);
+
+        if (result.Items.Count > MaxDecas)
+            result.Errors.Add($"El fichero tiene {result.Items.Count} DeCA y se pueden importar {MaxDecas} de una vez. Divídelo en varios.");
+
+        _result = result;
+        _rows = result.Items.Select(Validate).ToList();
+    }
+
+    private void Clear()
+    {
+        _result = null;
+        _rows = [];
+        _confirming = false;
+    }
+
+    /// <summary>
+    /// Las mismas reglas que el formulario y la API, sobre los datos ya
+    /// normalizados (que es lo que se emitiría).
+    /// </summary>
+    private static ImportRow Validate(
+        DecaImportItem item)
+    {
+        var validation =
+            DecaValidator.Validate(
+                DecaNormalizer.Normalize(item.Data),
+                DateTimeOffset.UtcNow,
+                Zone);
+
+        var messages =
+            item.Problems
+                .Select(x => new ImportMessage(x, IsWarning: false))
+                .Concat(
+                    validation.Issues
+                        .OrderBy(x => x.IsWarning)
+                        .Select(x => new ImportMessage(x.Message, x.IsWarning)))
+                .ToList();
+
+        return new ImportRow(item)
+        {
+            IsValid = validation.IsValid && item.Problems.Count == 0,
+            Messages = messages
+        };
+    }
+
+    /// <summary>
+    /// Uno detrás de otro: cada emisión genera su PDF. Si uno falla se
+    /// avisa y se sigue con los demás; volver a pulsar reintenta sólo los
+    /// que faltan.
+    /// </summary>
+    private async Task IssueAllAsync()
+    {
+        _confirming = false;
+
+        if (_issuing || _result is null || _result.Errors.Count > 0)
+            return;
+
+        var pending =
+            _rows
+                .Where(x => x.IsValid && x.State is ImportState.Pending or ImportState.Failed)
+                .ToList();
+
+        _issuing = true;
+        _progress = 0;
+        _toIssue = pending.Count;
+
+        var issued = 0;
+
+        try
+        {
+            foreach (var row in pending)
+            {
+                _progress++;
+                row.State = ImportState.Issuing;
+                StateHasChanged();
+
+                var detail =
+                    await Toasts.RunAsync(
+                        () => Api.IssueAsync(CurrentTenant.Id, row.Item.Data),
+                        errorTitle: $"DeCA «{row.Item.Key}» no emitido");
+
+                if (detail is null)
+                {
+                    row.State = ImportState.Failed;
+                    continue;
+                }
+
+                row.State = ImportState.Issued;
+                row.DecaId = detail.Deca.Id;
+                row.Number = detail.Deca.Number;
+                issued++;
+            }
+        }
+        finally
+        {
+            _issuing = false;
+        }
+
+        if (issued > 0)
+        {
+            Toasts.Success(
+                issued == 1
+                    ? "1 DeCA emitido."
+                    : $"{issued} DeCA emitidos.");
+        }
+    }
+
+    private static string? RowClass(
+        ImportRow row) =>
+        row.State switch
+        {
+            ImportState.Issued => "is-issued",
+            ImportState.Failed => "is-failed",
+            _ => row.IsValid ? null : "is-invalid"
+        };
+
+    private static string RowsText(
+        IReadOnlyList<int> rows) =>
+        rows.Count == 1
+            ? $"Fila {rows[0]}"
+            : $"Filas {string.Join(", ", rows.Take(6))}{(rows.Count > 6 ? "…" : null)}";
+
+    private static string ShipmentsText(
+        int count) =>
+        count == 1 ? "1 envío" : $"{count} envíos";
+
+    private enum ImportState
+    {
+        Pending,
+        Issuing,
+        Issued,
+        Failed
+    }
+
+    private sealed record ImportMessage(
+        string Text,
+        bool IsWarning);
+
+    private sealed class ImportRow(
+        DecaImportItem item)
+    {
+        public DecaImportItem Item { get; } = item;
+
+        public bool IsValid { get; init; }
+
+        public List<ImportMessage> Messages { get; init; } = [];
+
+        public ImportState State { get; set; }
+
+        public string? DecaId { get; set; }
+
+        public string? Number { get; set; }
+    }
+}

@@ -18,6 +18,11 @@
 
 @inject IJSRuntime JS
 @inject IReportConfigurationComposer ConfigurationComposer
+@inject IServiceProvider Services
+
+@* Los obligatorios (Locks) llegan a cada sección, fila y cabecera por
+   cascada: así no hay que pasarlos de mano en mano por todo el árbol. *@
+<CascadingValue Value="_lockContext" IsFixed="true">
 
 <div class="report-editor" @ref="_root">
 
@@ -309,13 +314,21 @@
 
                                     <div class="report-editor-section-header">
 
+                                        @{
+                                            // Con un obligatorio dentro, ocultarla lo ocultaría.
+                                            var customLock = CustomSectionLock(item.SectionId!, resolvedSection.Name);
+                                            var customLockedVisible = customLock is not null && resolvedSection.Visible;
+                                        }
+
                                         <label class="report-editor-toggle-row">
                                             <input type="checkbox"
                                                    class="report-editor-toggle-input"
                                                    checked="@resolvedSection.Visible"
+                                                   @onclick="() => LockedToggleClicked(customLock, customLockedVisible)"
+                                                   @onclick:preventDefault="customLockedVisible"
                                                    @onchange="e => SetCustomSectionVisibleAsync(sectionConfiguration, e.Value is bool on && on)" />
 
-                                            <span class="report-editor-toggle"></span>
+                                            <span class="report-editor-toggle @(customLock is null ? null : "is-locked")"></span>
 
                                             <span class="report-editor-section-name">
                                                 @resolvedSection.Name
@@ -418,6 +431,7 @@
                                                                     DefaultLabel="@(fieldDefinition?.Label ?? field.Label)"
                                                                     LabelHint="La etiqueta es la del campo: cambia también donde más aparezca."
                                                                     Visible="field.Visible"
+                                                                    LockedName="@Locks.Field(field.Id)"
                                                                     Type="field.Type"
                                                                     InferredType="@(fieldDefinition?.Type ?? field.Type)"
                                                                     CssClass="@(IsDraggingPlaced(sectionConfiguration, field.Id) ? "report-editor-item-dragging" : null)"
@@ -526,6 +540,7 @@
                                         Blocks="HeaderBlocks"
                                         Texts="Texts"
                                         DataFields="_dataFields"
+                                        LogoSettingsUrl="@LogoSettingsUrl"
                                         Changed="ConfigurationUpdated" />
                 }
 
@@ -556,6 +571,7 @@
             <ReportThemeTab Configuration="Configuration"
                             Theme="Theme"
                             Themes="Themes"
+                            ThemesUrl="@ThemesUrl"
                             Changed="ThemeReplacedAsync" />
         }
 
@@ -612,6 +628,8 @@
                  Data="_previewData"
                  DataChanged="PreviewDataChangedAsync"
                  Closed="() => _showData = false" />
+
+</CascadingValue>
 
 @code {
     private const string StructureTab = "structure";
@@ -791,15 +809,94 @@
             .OrderBy(x => x.Name)
             .ToList();
 
-    private readonly HashSet<string> _collapsedItems = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Secciones personalizadas desplegadas. Como las de datos, empiezan
+    /// plegadas.
+    /// </summary>
+    private readonly HashSet<string> _expandedItems = new(StringComparer.OrdinalIgnoreCase);
 
     private bool IsCollapsed(string itemId) =>
-        _collapsedItems.Contains(itemId);
+        !_expandedItems.Contains(itemId);
 
     private void ToggleCollapsed(string itemId)
     {
-        if (!_collapsedItems.Remove(itemId))
-            _collapsedItems.Add(itemId);
+        if (!_expandedItems.Remove(itemId))
+            _expandedItems.Add(itemId);
+    }
+
+    /// <summary>
+    /// Lo que este diseñador no deja quitar. Por defecto, nada.
+    /// </summary>
+    [Parameter]
+    public ReportEditorLocks Locks { get; set; } = ReportEditorLocks.None;
+
+    /// <summary>
+    /// Pantalla de temas de la aplicación anfitriona (pestaña Tema).
+    /// </summary>
+    [Parameter]
+    public string ThemesUrl { get; set; } = "styles";
+
+    /// <summary>
+    /// Si el logo se gestiona en otra pantalla (marca del tenant), su URL: la
+    /// cabecera enlaza a ella en vez de pedir la dirección de la imagen.
+    /// </summary>
+    [Parameter]
+    public string? LogoSettingsUrl { get; set; }
+
+    private ReportEditorLockContext _lockContext = default!;
+
+    protected override void OnInitialized()
+    {
+        _lockContext =
+            new ReportEditorLockContext(
+                () => Locks,
+                RejectLocked);
+    }
+
+    /// <summary>
+    /// El toast es opcional: un anfitrión sin IToastService (un test) no
+    /// tiene por qué romperse por un aviso.
+    /// </summary>
+    private void RejectLocked(
+        string message)
+    {
+        var toasts =
+            Services.GetService(typeof(Renderset.Blazor.Components.Toasts.IToastService))
+                as Renderset.Blazor.Components.Toasts.IToastService;
+
+        toasts?.Warning(
+            message,
+            "No se puede quitar");
+    }
+
+    private void LockedToggleClicked(
+        string? lockName,
+        bool lockedVisible)
+    {
+        if (lockedVisible)
+            _lockContext.Reject(lockName!);
+    }
+
+    /// <summary>
+    /// Una sección personalizada con algún obligatorio colocado dentro no se
+    /// puede ocultar: ocultaría también el obligatorio.
+    /// </summary>
+    private string? CustomSectionLock(
+        string sectionId,
+        string sectionName)
+    {
+        if (Locks.Fields.Count == 0)
+            return null;
+
+        var locked =
+            Configuration.FieldPlacements
+                .Where(x => string.Equals(x.SectionId, sectionId, StringComparison.OrdinalIgnoreCase))
+                .Select(x => Locks.Field(x.FieldId))
+                .FirstOrDefault(x => x is not null);
+
+        return locked is null
+            ? null
+            : $"La sección {sectionName} (lleva {locked})";
     }
 
     private ElementReference _root;

@@ -379,7 +379,24 @@ public static class DecaEndpoints
         if (settings is null)
             return Results.NotFound();
 
-        var configuration = DecaTemplateGuard.Enforce(request.Configuration);
+        if (request?.Configuration is null)
+        {
+            return Error(
+                StatusCodes.Status400BadRequest,
+                "deca.template_required",
+                "Falta la configuración del diseño.",
+                "configuration");
+        }
+
+        var branding = settings.Normalized().ToBranding(tenantId);
+
+        // El logo de la marca no se guarda en el diseño: así sigue al de la
+        // empresa cuando lo cambien en Marca.
+        var configuration =
+            DecaTemplateGuard.WithoutBranding(
+                DecaTemplateGuard.Enforce(request.Configuration),
+                branding);
+
         var texts = request.Texts ?? [];
 
         var candidate =
@@ -434,7 +451,7 @@ public static class DecaEndpoints
         return Results.Ok(
             TemplateResponse(
                 saved,
-                settings.Normalized().ToBranding(tenantId)));
+                branding));
     }
 
     private static async Task<IResult> ResetTemplateAsync(
@@ -491,7 +508,9 @@ public static class DecaEndpoints
         template is { Configuration: { } configuration }
             ? new DecaTemplateResponse
             {
-                Configuration = DecaTemplateGuard.Enforce(configuration),
+                Configuration = DecaTemplateGuard.WithBranding(
+                    DecaTemplateGuard.Enforce(configuration),
+                    branding),
                 Theme = template.Theme ?? DecaReportTemplate.Theme(branding),
                 Texts = template.Texts,
                 Version = template.Version,
