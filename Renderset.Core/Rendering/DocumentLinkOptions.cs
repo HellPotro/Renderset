@@ -129,6 +129,18 @@ public sealed class DocumentLinkOptions
         return baseUri + PublicPath(tenantId, documentId, signature);
     }
 
+    /// <summary>
+    /// Descarga directa del PDF: lo que lleva el QR con {pdfUrl}. Sin
+    /// enlace público, el visor interno (no hay PDF sin sesión fuera de
+    /// /d/...).
+    /// </summary>
+    public string? PdfUrl(
+        string tenantId,
+        string documentId) =>
+        PublicDocumentUrl(tenantId, documentId) is { } url
+            ? url + "/pdf"
+            : DocumentUrl(documentId);
+
     public static string PublicPath(
         string tenantId,
         string documentId,

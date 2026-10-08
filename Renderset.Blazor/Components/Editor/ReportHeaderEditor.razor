@@ -207,9 +207,10 @@
                     <label for="report-header-qr-kind">Contenido</label>
 
                     <select id="report-header-qr-kind"
-                            value="@(QrIsCustom ? "custom" : "document")"
+                            value="@QrKind"
                             @onchange="QrKindChangedAsync">
-                        <option value="document">Enlace público del documento</option>
+                        <option value="document">Abrir el documento (página para verlo y bajarlo)</option>
+                        <option value="pdf">Descargar el PDF directamente</option>
                         <option value="custom">Enlace o texto propio</option>
                     </select>
 
@@ -223,7 +224,8 @@
                         <small>
                             Entre llaves, cualquier dato del documento por su
                             ruta ({salidaid}, {cliente.codigo}), o
-                            {documentUrl} (enlace público), {viewerUrl} (visor
+                            {documentUrl} (enlace público), {pdfUrl} (descarga
+                            del PDF), {viewerUrl} (visor
                             interno, con sesión) / {documentId}.
                         </small>
 
@@ -235,6 +237,15 @@
                                 Sin ellos el documento sale sin QR.
                             </small>
                         }
+                    }
+                    else if (QrKind == "pdf")
+                    {
+                        <small>
+                            Al leer el QR se descarga el PDF, sin pasar por
+                            ninguna página y sin cuenta. El móvil lo abre con
+                            su lector de QR (eso no se puede evitar), pero la
+                            respuesta es el fichero. El enlace va firmado.
+                        </small>
                     }
                     else
                     {
@@ -416,11 +427,15 @@
         ?? Resolved?.QrContent
         ?? ReportQrContent.DocumentUrlTemplate;
 
+    private string QrKind =>
+        string.Equals(QrContent, ReportQrContent.DocumentUrlTemplate, StringComparison.OrdinalIgnoreCase)
+            ? "document"
+            : string.Equals(QrContent, ReportQrContent.PdfUrlTemplate, StringComparison.OrdinalIgnoreCase)
+                ? "pdf"
+                : "custom";
+
     private bool QrIsCustom =>
-        !string.Equals(
-            QrContent,
-            ReportQrContent.DocumentUrlTemplate,
-            StringComparison.OrdinalIgnoreCase);
+        QrKind == "custom";
 
     private int QrSize =>
         Resolved?.QrSize
@@ -461,9 +476,17 @@
         // Al pasar a propio se parte de un ejemplo editable; volver al
         // enlace del documento es el valor por defecto: nulo.
         Header.QrContent =
-            e.Value?.ToString() == "custom"
-                ? "{documentUrl}?ref={documentId}"
-                : null;
+            e.Value?.ToString() switch
+            {
+                "custom" => "{documentUrl}?ref={documentId}",
+                "pdf" => ReportQrContent.PdfUrlTemplate,
+
+                // Con un bloque de cabecera hay que guardarlo explícito: el
+                // bloque podría traer el PDF y un nulo lo dejaría pasar.
+                _ => string.IsNullOrWhiteSpace(Header.BlockId)
+                    ? null
+                    : ReportQrContent.DocumentUrlTemplate
+            };
 
         await Changed.InvokeAsync();
     }

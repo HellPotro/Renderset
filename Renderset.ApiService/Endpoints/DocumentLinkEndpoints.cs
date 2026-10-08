@@ -12,7 +12,7 @@ namespace Renderset.Api.Endpoints;
 ///
 ///     GET /d/{tenantId}/{documentId}/{firma}            visor público
 ///     GET /d/{tenantId}/{documentId}/{firma}/document   el documento (iframe)
-///     GET /d/{tenantId}/{documentId}/{firma}/pdf        el documento en PDF
+///     GET /d/{tenantId}/{documentId}/{firma}/pdf        el PDF, como descarga ({pdfUrl} del QR)
 ///     GET /documents/{documentId}                       QR antiguos → visor de Web
 ///
 /// El visor público lo abre cualquiera que lea el QR, sin cuenta: la
@@ -193,10 +193,17 @@ public static class DocumentLinkEndpoints
         ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
-        if (!pdfService.IsAvailable ||
-            !links.Verify(tenantId, documentId, signature))
-        {
+        if (!links.Verify(tenantId, documentId, signature))
             return Results.NotFound();
+
+        // Un QR de descarga impreso no puede acabar en un 404 porque el
+        // conversor no esté configurado: se descarga el documento en HTML.
+        if (!pdfService.IsAvailable)
+        {
+            return Results.Redirect(
+                http.Request.PathBase +
+                DocumentLinkOptions.PublicPath(tenantId, documentId, signature.Trim()) +
+                "/document?download=true");
         }
 
         byte[]? pdf;

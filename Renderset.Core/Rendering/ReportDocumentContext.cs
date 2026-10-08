@@ -23,6 +23,13 @@ public sealed record ReportDocumentContext
     /// </summary>
     public string? ViewerUrl { get; init; }
 
+    /// <summary>
+    /// Descarga directa del PDF ({pdfUrl}): el enlace público firmado
+    /// acabado en /pdf, que responde con el fichero y no con una página.
+    /// Sin enlace público, el mismo que <see cref="DocumentUrl"/>.
+    /// </summary>
+    public string? PdfUrl { get; init; }
+
     public bool IsPreview { get; init; }
 
     public static ReportDocumentContext Preview { get; } =

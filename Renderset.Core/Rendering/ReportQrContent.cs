@@ -10,6 +10,7 @@ namespace Renderset.Core.Rendering;
 ///
 ///     {documentUrl}   enlace público del documento (por defecto): lo abre
 ///                     cualquiera, sin cuenta
+///     {pdfUrl}        descarga directa del PDF, sin página intermedia
 ///     {viewerUrl}     visor interno de RenderSet Web (pide sesión)
 ///     {documentId}    id del documento emitido
 ///     {campo}         cualquier dato del documento por su ruta: {salidaid},
@@ -26,6 +27,8 @@ public static partial class ReportQrContent
 {
     public const string DocumentUrlTemplate = "{documentUrl}";
 
+    public const string PdfUrlTemplate = "{pdfUrl}";
+
     /// <summary>
     /// Lo que cabe con holgura en un QR legible impreso a tamaño de
     /// cabecera. Más largo, el código sale tan denso que no se lee.
@@ -35,6 +38,7 @@ public static partial class ReportQrContent
     private const string DocumentUrlToken = "documentUrl";
     private const string DocumentIdToken = "documentId";
     private const string ViewerUrlToken = "viewerUrl";
+    private const string PdfUrlToken = "pdfUrl";
 
     public static string? Resolve(
         string? template,
@@ -52,7 +56,8 @@ public static partial class ReportQrContent
         // libre ("Salida 3116") se dejan tal cual.
         var isUrl = template.Contains("://", StringComparison.Ordinal) ||
                     template.StartsWith('{' + DocumentUrlToken, StringComparison.OrdinalIgnoreCase) ||
-                    template.StartsWith('{' + ViewerUrlToken, StringComparison.OrdinalIgnoreCase);
+                    template.StartsWith('{' + ViewerUrlToken, StringComparison.OrdinalIgnoreCase) ||
+                    template.StartsWith('{' + PdfUrlToken, StringComparison.OrdinalIgnoreCase);
 
         var text =
             Token().Replace(template, match =>
@@ -64,6 +69,8 @@ public static partial class ReportQrContent
                         ? document?.DocumentUrl ?? (preview ? "https://renderset/d/vista-previa" : null)
                         : name.Equals(ViewerUrlToken, StringComparison.OrdinalIgnoreCase)
                             ? document?.ViewerUrl ?? (preview ? "https://renderset/documents/vista-previa" : null)
+                        : name.Equals(PdfUrlToken, StringComparison.OrdinalIgnoreCase)
+                            ? document?.PdfUrl ?? (preview ? "https://renderset/d/vista-previa/pdf" : null)
                         : name.Equals(DocumentIdToken, StringComparison.OrdinalIgnoreCase)
                             ? document?.DocumentId ?? (preview ? "vista-previa" : null)
                             : DataValue(data, name, isUrl);
@@ -102,6 +109,7 @@ public static partial class ReportQrContent
                 .Where(x =>
                     !x.Equals(DocumentUrlToken, StringComparison.OrdinalIgnoreCase) &&
                     !x.Equals(ViewerUrlToken, StringComparison.OrdinalIgnoreCase) &&
+                    !x.Equals(PdfUrlToken, StringComparison.OrdinalIgnoreCase) &&
                     !x.Equals(DocumentIdToken, StringComparison.OrdinalIgnoreCase))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();

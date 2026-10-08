@@ -148,6 +148,17 @@
                             <span class="dsrc-reason">@_reason</span>
                         }
 
+                        @* Atajo para los listados (máquinas, stock, un
+                           extracto): un documento con todas las filas en
+                           una tabla, sin pasar por los niveles. *@
+                        <button type="button"
+                                class="dsrc-mini-button dsrc-table-shortcut"
+                                title="Un solo documento con una tabla que lleva todas las filas y todas las columnas"
+                                @onclick="MakeTableAsync">
+                            <i class="fa-solid fa-table-list"></i>
+                            Una tabla con todas las filas
+                        </button>
+
                     </div>
 
                     @if (_renamedHeaders.Count > 0)
@@ -251,6 +262,19 @@
                     <p class="dsrc-key-hint">
                         <i class="fa-solid fa-lightbulb"></i>
                         @KeyHint
+                    </p>
+                }
+
+                @if (level.Depth == 0 && _levels.Count == 1)
+                {
+                    <p class="dsrc-key-hint">
+                        <i class="fa-solid fa-table-list"></i>
+                        ¿Es un listado y no un documento con cabecera?
+                        <button type="button"
+                                class="dsrc-link-button"
+                                @onclick="MakeTableAsync">
+                            Haz una tabla con todas las filas
+                        </button>
                     </p>
                 }
 
@@ -1111,7 +1135,7 @@
 
         _reason =
             best is null
-                ? "Ninguna columna agrupa las filas: cada fila sería un documento."
+                ? "Ninguna columna agrupa las filas: cada fila sería un documento. Si es un listado, mejor una tabla."
                 : $"'{best.Column}' agruparía {_rows.Count} filas en " +
                   $"{best.GroupCount} documento(s).";
     }
@@ -1250,6 +1274,49 @@
 
         RefreshSuggestion();
     }
+
+
+    /// <summary>
+    /// Listado: un único documento sin campos propios y, dentro, una
+    /// colección con una fila por fila y todas las columnas. Es la misma
+    /// estructura que se puede montar a mano (documento sin clave + nivel
+    /// "cada fila es un elemento"), y el diseñador la pinta como tabla.
+    /// Se abre en el paso del nivel para poder ponerle nombre.
+    /// </summary>
+    private async Task MakeTableAsync()
+    {
+        if (_payload is null || _payload.Rows.Count == 0)
+            return;
+
+        _levels.Clear();
+        _syntheticKeys.Clear();
+        _error = null;
+
+        _levels.Add(
+            new LevelState
+            {
+                Depth = 0,
+                Name = string.Empty,
+                KeyColumn = null
+            });
+
+        var table =
+            new LevelState
+            {
+                Depth = 1,
+                Name = TableLevelName,
+                KeyColumn = null
+            };
+
+        _levels.Add(table);
+
+        foreach (var ordinal in AllOrdinals())
+            _assignments[ordinal].LevelPath = table.Path;
+
+        await GoToStepAsync(WizardStep.Level, 1);
+    }
+
+    private const string TableLevelName = "filas";
 
 
     private async Task RemoveActiveLevelAsync()

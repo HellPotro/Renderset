@@ -365,6 +365,27 @@
         color: #c8a63c;
     }
 
+/* Botón con aspecto de enlace, dentro de una frase. */
+.dsrc-link-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #1f5a7a;
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+    .dsrc-link-button:hover {
+        color: #173d4f;
+    }
+
+/* Al final del resumen de filas. */
+.dsrc-table-shortcut {
+    margin-left: auto;
+}
+
 
 /* ---------------------------------------------------------- columnas */
 

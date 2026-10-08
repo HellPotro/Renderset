@@ -295,7 +295,8 @@ public sealed class ReportRenderService
                     // Público si está configurado (lo abre cualquiera que
                     // lea el QR); si no, el visor de Web con sesión.
                     DocumentUrl = _links.DocumentUrl(tenantId, documentId),
-                    ViewerUrl = _links.DocumentUrl(documentId)
+                    ViewerUrl = _links.DocumentUrl(documentId),
+                    PdfUrl = _links.PdfUrl(tenantId, documentId)
                 },
                 cancellationToken);
 
