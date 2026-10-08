@@ -1,0 +1,490 @@
+@page "/deca/{DecaId}"
+
+@using Renderset.Blazor.Rendering
+
+@inject IDecaApi Api
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>@(_detail?.Deca.Number ?? "DeCA") - RenderSet</PageTitle>
+
+<div class="page page-wide deca-page">
+
+    @if (_loading)
+    {
+        <div class="deca-empty">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            Cargando...
+        </div>
+    }
+    else if (_detail is null)
+    {
+        <div class="deca-empty">
+            <i class="fa-solid fa-circle-question"></i>
+            <span>No se ha encontrado el DeCA.</span>
+            <a class="secondary-button" href="deca">Volver a DeCA</a>
+        </div>
+    }
+    else
+    {
+        var deca = _detail.Deca;
+        var data = deca.Data;
+
+        <header class="page-header">
+
+            <div>
+                <a class="back-button" href="deca">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    DeCA
+                </a>
+
+                <h1 class="deca-title">
+                    @deca.Number
+                    <DecaStatusBadge Status="deca.Status"
+                                     PublicUntilUtc="deca.PublicUntilUtc" />
+                </h1>
+
+                <p>
+                    Emitido el @DecaFormat.LocalDateTime(deca.IssuedAtUtc)
+                    @if (!string.IsNullOrWhiteSpace(data.Reference))
+                    {
+                        <span> · Ref. @data.Reference</span>
+                    }
+                    · Se conserva hasta el @DecaFormat.LocalDateTime(deca.RetainUntilUtc)
+                </p>
+            </div>
+
+            <div class="page-actions">
+
+                <a class="secondary-button"
+                   href="@($"deca/new?from={Uri.EscapeDataString(deca.Id)}")"
+                   title="Nuevo DeCA con los mismos datos y la fecha de hoy">
+                    <i class="fa-regular fa-copy"></i>
+                    Duplicar
+                </a>
+
+                <a class="primary-button"
+                   href="@PdfUrl(deca.Id)">
+                    <i class="fa-regular fa-file-pdf"></i>
+                    Descargar PDF
+                </a>
+
+            </div>
+
+        </header>
+
+        @if (_detail.Warnings.Count > 0)
+        {
+            <div class="deca-banner is-warning">
+                <i class="fa-solid fa-circle-info"></i>
+                <div>
+                    <strong>Emitido con avisos</strong>
+                    <ul>
+                        @foreach (var warning in _detail.Warnings)
+                        {
+                            <li>@warning.Message</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        <div class="deca-detail">
+
+            @* ---------------------------------------------- QR *@
+
+            <section class="editor-card deca-qr-card">
+
+                <header class="editor-card-header">
+                    <h2>Código QR</h2>
+                </header>
+
+                <div class="editor-card-body">
+
+                    @if (_detail.PublicUrl is { } url)
+                    {
+                        <div class="deca-qr @(_detail.IsPublicDownloadActive ? null : "is-off")">
+                            @if (ReportQrSvg.Render(url, 168) is { } svg)
+                            {
+                                @((MarkupString)svg)
+                            }
+                        </div>
+
+                        <p class="deca-qr-state">
+                            @if (_detail.IsPublicDownloadActive)
+                            {
+                                <span>
+                                    Descarga el PDF directamente, sin cuenta.
+                                    @if (deca.PublicUntilUtc is { } until)
+                                    {
+                                        <span>Hasta el @DecaFormat.LocalDateTime(until).</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Mientras dure el servicio.</span>
+                                    }
+                                </span>
+                            }
+                            else
+                            {
+                                <span>
+                                    El servicio terminó y pasó el plazo: el QR ya no descarga.
+                                    El DeCA se sigue conservando y puedes bajarlo desde aquí.
+                                </span>
+                            }
+                        </p>
+
+                        <div class="deca-link-row">
+                            <input readonly value="@url" onfocus="this.select()" />
+                            <button type="button"
+                                    class="icon-button"
+                                    title="Copiar enlace"
+                                    @onclick="() => CopyAsync(url)">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </div>
+
+                        @if (_detail.IsPublicDownloadActive)
+                        {
+                            <div class="deca-driver">
+                                <span>Al conductor, antes de salir:</span>
+
+                                <a class="secondary-button"
+                                   href="@WhatsAppUrl(deca, url)"
+                                   target="_blank"
+                                   rel="noopener">
+                                    <i class="fa-brands fa-whatsapp"></i>
+                                    WhatsApp
+                                </a>
+
+                                <a class="secondary-button"
+                                   href="@MailUrl(deca, url)">
+                                    <i class="fa-regular fa-envelope"></i>
+                                    Correo
+                                </a>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="deca-side-note is-error">
+                            Falta el dominio público del QR en la configuración de la API
+                            (Deca:PublicBaseUrl).
+                        </p>
+                    }
+
+                </div>
+
+            </section>
+
+            @* ------------------------------------------ datos *@
+
+            <section class="editor-card deca-data-card">
+
+                <header class="editor-card-header">
+                    <h2>Datos</h2>
+                </header>
+
+                <div class="editor-card-body">
+
+                    <dl class="deca-facts">
+                        <dt>Cargador contractual</dt>
+                        <dd>
+                            <strong>@data.Shipper.Name</strong>
+                            <span class="is-mono">@data.Shipper.TaxId</span>
+                            <small>@data.Shipper.Address</small>
+                        </dd>
+
+                        <dt>Transportista efectivo</dt>
+                        <dd>
+                            <strong>@data.Carrier.Name</strong>
+                            <span class="is-mono">@data.Carrier.TaxId</span>
+                        </dd>
+
+                        <dt>Transporte</dt>
+                        <dd>
+                            @DecaFormat.Date(data.TransportDate)
+                            @if (data.StartTime is { } start)
+                            {
+                                <span> · @start.ToString("HH:mm")</span>
+                            }
+                            · <span class="is-mono">@data.Vehicle.TractorPlate</span>
+                            @if (!string.IsNullOrWhiteSpace(data.Vehicle.TrailerPlate))
+                            {
+                                <span> + <span class="is-mono">@data.Vehicle.TrailerPlate</span></span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(data.SpecialAuthorization))
+                            {
+                                <small>Autorización especial: @data.SpecialAuthorization</small>
+                            }
+                        </dd>
+
+                        @if (!string.IsNullOrWhiteSpace(data.Observations))
+                        {
+                            <dt>Observaciones</dt>
+                            <dd class="is-prewrap">@data.Observations</dd>
+                        }
+                    </dl>
+
+                    <div class="deca-mini-table">
+
+                        <div class="deca-mini-row is-head">
+                            <span>Nº</span>
+                            <span>Origen</span>
+                            <span>Destino</span>
+                            <span>Mercancía</span>
+                            <span>Peso / magnitud</span>
+                        </div>
+
+                        @for (var i = 0; i < data.Shipments.Count; i++)
+                        {
+                            var shipment = data.Shipments[i];
+
+                            <div class="deca-mini-row">
+                                <span>@(i + 1)</span>
+                                <span>@shipment.Origin</span>
+                                <span>@shipment.Destination</span>
+                                <span>@shipment.Goods</span>
+                                <span>@Renderset.Deca.Issuing.DecaReportData.Quantity(shipment)</span>
+                            </div>
+                        }
+
+                    </div>
+
+                </div>
+
+            </section>
+
+            @* -------------------------------------- servicio *@
+
+            <section class="editor-card deca-service-card">
+
+                <header class="editor-card-header">
+                    <h2>Servicio</h2>
+                </header>
+
+                <div class="editor-card-body">
+
+                    @if (deca.Status == DecaStatus.Issued)
+                    {
+                        <p>
+                            Cuando el transporte termine, márcalo. El QR seguirá descargando
+                            unos días más (la norma pide siete naturales como mínimo) y luego
+                            se desactiva. El DeCA se conserva un año igualmente.
+                        </p>
+
+                        @if (_confirmFinish)
+                        {
+                            <div class="deca-confirm">
+                                <span>¿Terminar el servicio ahora?</span>
+
+                                <button type="button"
+                                        class="primary-button"
+                                        disabled="@_finishing"
+                                        @onclick="FinishAsync">
+                                    Sí, terminar
+                                </button>
+
+                                <button type="button"
+                                        class="secondary-button"
+                                        disabled="@_finishing"
+                                        @onclick="() => _confirmFinish = false">
+                                    No
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="() => _confirmFinish = true">
+                                <i class="fa-solid fa-flag-checkered"></i>
+                                Terminar servicio
+                            </button>
+                        }
+                    }
+                    else
+                    {
+                        <p>
+                            Terminado el @DecaFormat.LocalDateTime(deca.ServiceEndedAtUtc).
+                            El QR descarga hasta el @DecaFormat.LocalDateTime(deca.PublicUntilUtc).
+                        </p>
+                    }
+
+                </div>
+
+            </section>
+
+            @* ------------------------------------ trazabilidad *@
+
+            <section class="editor-card deca-trace-card">
+
+                <header class="editor-card-header">
+                    <h2>Trazabilidad</h2>
+                </header>
+
+                <div class="editor-card-body">
+
+                    <div class="deca-mini-table is-versions">
+
+                        <div class="deca-mini-row is-head">
+                            <span>Versión</span>
+                            <span>Emitida</span>
+                            <span>Tamaño</span>
+                            <span>SHA-256 del PDF</span>
+                        </div>
+
+                        @foreach (var version in deca.Versions)
+                        {
+                            <div class="deca-mini-row">
+                                <span>
+                                    <a href="@PdfUrl(deca.Id, version.Version)"
+                                       title="Descargar el PDF de esta versión">
+                                        @version.Version
+                                    </a>
+                                </span>
+                                <span>@DecaFormat.LocalDateTime(version.CreatedAtUtc)</span>
+                                <span>@DecaFormat.Size(version.SizeBytes)</span>
+                                <span class="is-mono is-hash" title="@version.Sha256">@version.Sha256</span>
+                            </div>
+                        }
+
+                    </div>
+
+                    <ol class="deca-events">
+                        @foreach (var item in deca.Events.OrderByDescending(x => x.AtUtc))
+                        {
+                            <li>
+                                <strong>@EventText(item.Kind)</strong>
+                                <span>@DecaFormat.LocalDateTime(item.AtUtc)</span>
+                                @if (!string.IsNullOrWhiteSpace(item.Actor))
+                                {
+                                    <span>· @item.Actor</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(item.Detail))
+                                {
+                                    <small>@item.Detail</small>
+                                }
+                            </li>
+                        }
+                    </ol>
+
+                </div>
+
+            </section>
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    [Parameter]
+    public string DecaId { get; set; } = string.Empty;
+
+    private DecaDetail? _detail;
+    private bool _loading = true;
+    private bool _confirmFinish;
+    private bool _finishing;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _confirmFinish = false;
+
+        try
+        {
+            _detail =
+                await Toasts.RunAsync(
+                    () => Api.GetAsync(CurrentTenant.Id, DecaId),
+                    errorTitle: "No se ha podido cargar el DeCA");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task FinishAsync()
+    {
+        if (_detail is null)
+            return;
+
+        _finishing = true;
+
+        try
+        {
+            var updated =
+                await Toasts.RunAsync(
+                    () => Api.FinishAsync(CurrentTenant.Id, _detail.Deca.Id, new FinishDecaRequest()),
+                    success: "Servicio terminado.",
+                    errorTitle: "No se ha podido terminar el servicio");
+
+            if (updated is not null)
+            {
+                // Los avisos son de la emisión: se conservan en pantalla.
+                _detail =
+                    new DecaDetail
+                    {
+                        Deca = updated.Deca,
+                        PublicUrl = updated.PublicUrl,
+                        IsPublicDownloadActive = updated.IsPublicDownloadActive,
+                        Warnings = _detail.Warnings
+                    };
+
+                _confirmFinish = false;
+            }
+        }
+        finally
+        {
+            _finishing = false;
+        }
+    }
+
+    private async Task CopyAsync(
+        string url) =>
+        await Toasts.RunAsync(
+            async () => await JS.InvokeVoidAsync("navigator.clipboard.writeText", url),
+            success: "Enlace copiado.",
+            errorTitle: "No se ha podido copiar al portapapeles");
+
+    /// <summary>
+    /// Pasa por Web (/files/deca) con la sesión del usuario, no por el QR:
+    /// funciona aunque el enlace público ya esté desactivado.
+    /// </summary>
+    private static string PdfUrl(
+        string decaId,
+        int? version = null) =>
+        $"files/deca/{Uri.EscapeDataString(decaId)}/pdf" +
+        (version is { } v ? $"?version={v}" : string.Empty);
+
+    private static string Message(
+        DecaDocument deca,
+        string url) =>
+        $"DeCA {deca.Number} para el transporte del {DecaFormat.Date(deca.Data.TransportDate)}" +
+        (string.IsNullOrWhiteSpace(deca.Data.Vehicle.TractorPlate) ? "" : $" ({deca.Data.Vehicle.TractorPlate})") +
+        $". Llévalo en el móvil o impreso; en una inspección basta con enseñar el QR o este enlace: {url}";
+
+    private static string WhatsAppUrl(
+        DecaDocument deca,
+        string url) =>
+        "https://wa.me/?text=" + Uri.EscapeDataString(Message(deca, url));
+
+    private static string MailUrl(
+        DecaDocument deca,
+        string url) =>
+        "mailto:?subject=" + Uri.EscapeDataString($"DeCA {deca.Number}") +
+        "&body=" + Uri.EscapeDataString(Message(deca, url));
+
+    private static string EventText(
+        DecaEventKind kind) =>
+        kind switch
+        {
+            DecaEventKind.Issued => "Emitido",
+            DecaEventKind.ServiceFinished => "Servicio terminado",
+            DecaEventKind.PublicDownloadDisabled => "QR desactivado",
+            _ => kind.ToString()
+        };
+}

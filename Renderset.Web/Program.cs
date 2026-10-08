@@ -83,7 +83,8 @@ const string ReportingApiClient = "renderset-api";
 
 builder.Services.AddHttpClient(ReportingApiClient, ConfigureReportingApi);
 
-builder.Services.AddScoped<IRenderSetApi>(services =>
+// Mismo cliente para todas las interfaces de la API (RenderSet y DeCA).
+T CreateApi<T>(IServiceProvider services)
 {
     var handler =
         new TenantTokenHandler(services.GetRequiredService<TenantTokenFactory>())
@@ -98,8 +99,10 @@ builder.Services.AddScoped<IRenderSetApi>(services =>
     var http = new HttpClient(handler, disposeHandler: false);
     ConfigureReportingApi(http);
 
-    return RestService.For<IRenderSetApi>(http, refitSettings);
-});
+    return RestService.For<T>(http, refitSettings);
+}
+
+builder.Services.AddScoped<IRenderSetApi>(CreateApi<IRenderSetApi>);
 
 // Cliente para servir documentos y PDF a través de Web (/files/...). Propio
 // y no de IHttpClientFactory: los de la factoría heredan la resiliencia de
@@ -136,7 +139,9 @@ app.MapDocumentFileEndpoints();
 app.MapAccountEndpoints();
 
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    // Páginas de cuenta (entrar, invitación, contraseña): Renderset.Identity.
+    .AddAdditionalAssemblies(typeof(Renderset.Web.Components.Account.AccountLinks).Assembly);
 
 app.MapDefaultEndpoints();
 

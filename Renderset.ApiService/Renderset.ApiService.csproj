@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Renderset.Blazor\Renderset.Blazor.csproj" />
     <ProjectReference Include="..\Renderset.Core\Renderset.Core.csproj" />
+    <ProjectReference Include="..\Renderset.Deca\Renderset.Deca.csproj" />
     <ProjectReference Include="..\Renderset.Infraestructure\Renderset.Infrastructure.csproj" />
     <ProjectReference Include="..\Renderset.ServiceDefaults\Renderset.ServiceDefaults.csproj" />
   </ItemGroup>

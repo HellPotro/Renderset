@@ -59,6 +59,31 @@ public sealed class PdfPageOptions
     /// </summary>
     public string? FooterHtml { get; set; }
 
+    /// <summary>
+    /// Metadatos que se escriben en el PDF (Title, Author, Subject, Creator,
+    /// Keywords, CreationDate, ModDate). Las fechas en ISO 8601 con zona:
+    /// 2026-10-08T18:54:00+02:00. Nulo = los que pone Chromium. Lo usa el
+    /// DeCA, que tiene que llevar fecha y hora de creación y modificación.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? Metadata { get; set; }
+
+    /// <summary>
+    /// Copia con otros metadatos.
+    /// </summary>
+    public PdfPageOptions WithMetadata(
+        IReadOnlyDictionary<string, string>? metadata) =>
+        new()
+        {
+            Paper = Paper,
+            MarginTopMm = MarginTopMm,
+            MarginBottomMm = MarginBottomMm,
+            MarginLeftMm = MarginLeftMm,
+            MarginRightMm = MarginRightMm,
+            ShowPageNumbers = ShowPageNumbers,
+            FooterHtml = FooterHtml,
+            Metadata = metadata
+        };
+
     public PdfPageOptions With(
         string footerHtml,
         double marginBottomMm) =>
@@ -70,7 +95,8 @@ public sealed class PdfPageOptions
             MarginRightMm = MarginRightMm,
             MarginBottomMm = Math.Max(MarginBottomMm, marginBottomMm),
             ShowPageNumbers = false,
-            FooterHtml = footerHtml
+            FooterHtml = footerHtml,
+            Metadata = Metadata
         };
 
     public (double WidthMm, double HeightMm) PaperSizeMm =>

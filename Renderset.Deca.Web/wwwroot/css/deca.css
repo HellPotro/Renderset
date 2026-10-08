@@ -1,0 +1,860 @@
+/*
+    Portal DeCA. Usa las variables (--rs-*) y las piezas comunes de
+    RenderSet (Renderset.Blazor/css/app.css: page, editor-card, form-group,
+    botones); aquí sólo lo propio. Una hoja normal y no CSS aislado porque
+    la comparten el layout, las páginas y los componentes.
+*/
+
+/* ---------- Estructura ---------- */
+
+/* app.css deja el body sin scroll (como en RenderSet, donde el scroll va
+   dentro del contenido): aquí lo lleva .deca-main, y la barra queda fija. */
+.deca-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.deca-topbar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    height: 56px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--rs-border);
+    background: var(--rs-surface);
+}
+
+.deca-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--rs-text);
+    text-decoration: none;
+}
+
+    .deca-brand-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background: var(--rs-primary);
+        color: #fff;
+        font-weight: 700;
+    }
+
+    .deca-brand > span:last-child {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.15;
+    }
+
+    .deca-brand strong {
+        font-size: 14px;
+    }
+
+    .deca-brand small {
+        color: var(--rs-muted);
+        font-size: 10px;
+    }
+
+.deca-topnav {
+    display: flex;
+    gap: 4px;
+}
+
+    .deca-topnav a {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 11px;
+        border-radius: var(--rs-radius-sm);
+        color: var(--rs-text-soft);
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+        .deca-topnav a:hover {
+            background: #f1f5f6;
+        }
+
+        .deca-topnav a.active {
+            background: #eef4f7;
+            color: var(--rs-primary);
+        }
+
+.deca-user {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+    .deca-user form {
+        margin: 0;
+    }
+
+.deca-user-name {
+    display: flex;
+    flex-direction: column;
+    margin-right: 6px;
+    line-height: 1.2;
+    text-align: right;
+}
+
+    .deca-user-name strong {
+        font-size: 12px;
+    }
+
+    .deca-user-name small {
+        color: var(--rs-muted);
+        font-size: 10px;
+    }
+
+.deca-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+@media (max-width: 720px) {
+    .deca-topbar {
+        gap: 12px;
+        padding: 0 12px;
+    }
+
+    .deca-brand small,
+    .deca-user-name {
+        display: none;
+    }
+
+    .deca-topnav a {
+        padding: 7px 8px;
+    }
+}
+
+.deca-page .is-mono {
+    font-family: var(--rs-mono);
+    font-size: .95em;
+    letter-spacing: .02em;
+}
+
+.deca-page .page-header .back-button {
+    margin-bottom: 8px;
+}
+
+.deca-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+/* ---------- Estado ---------- */
+
+.deca-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+    .deca-status.is-issued {
+        background: var(--rs-success-bg);
+        color: var(--rs-success);
+    }
+
+    .deca-status.is-finished {
+        background: #eef3f6;
+        color: #3d5866;
+    }
+
+    .deca-status.is-disabled {
+        background: #f3f4f5;
+        color: #7d8a90;
+    }
+
+/* ---------- Listado ---------- */
+
+.deca-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--rs-border-soft);
+}
+
+.deca-search {
+    display: flex;
+    align-items: center;
+    flex: 1 1 280px;
+    gap: 8px;
+    padding: 0 10px;
+    border: 1px solid var(--rs-border);
+    border-radius: var(--rs-radius-sm);
+    background: #fafcfc;
+    color: var(--rs-muted-2);
+}
+
+    .deca-search input {
+        flex: 1;
+        min-width: 0;
+        padding: 8px 0;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: var(--rs-text);
+        font: inherit;
+        font-size: 12px;
+    }
+
+.deca-date-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--rs-muted);
+    font-size: 11px;
+}
+
+    .deca-date-filter input {
+        padding: 6px 8px;
+        border: 1px solid var(--rs-border);
+        border-radius: var(--rs-radius-sm);
+        background: #fafcfc;
+        color: var(--rs-text);
+        font: inherit;
+        font-size: 12px;
+    }
+
+.deca-count {
+    margin-left: auto;
+    color: var(--rs-muted);
+    font-size: 11px;
+}
+
+.deca-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 48px 18px;
+    color: var(--rs-muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+    .deca-empty > i {
+        color: var(--rs-muted-2);
+        font-size: 24px;
+    }
+
+.deca-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 1.1fr) 100px minmax(0, 2fr) 110px 64px 140px;
+    align-items: center;
+    gap: 12px;
+    min-height: 54px;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--rs-border-soft);
+    color: var(--rs-text-soft);
+    font-size: 12px;
+    text-decoration: none;
+}
+
+    a.deca-row:hover {
+        background: #f8fafb;
+    }
+
+    .deca-row.is-head {
+        min-height: 36px;
+        background: #f7f9fa;
+    }
+
+        .deca-row.is-head span {
+            color: #84939a;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+.deca-number,
+.deca-parties {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+    .deca-number strong {
+        color: var(--rs-text);
+        font-family: var(--rs-mono);
+        font-size: 12px;
+    }
+
+    .deca-number small,
+    .deca-parties small {
+        overflow: hidden;
+        color: var(--rs-muted);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .deca-parties > span {
+        overflow: hidden;
+        color: var(--rs-text);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+.deca-more {
+    display: flex;
+    justify-content: center;
+    padding: 14px;
+}
+
+/* ---------- Formulario ---------- */
+
+.deca-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    align-items: start;
+    gap: 18px;
+}
+
+.deca-editor-main {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.deca-editor-side {
+    position: sticky;
+    top: 16px;
+}
+
+.deca-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+    .deca-card-header small {
+        display: block;
+        margin-top: 3px;
+        color: #89989f;
+        font-size: 11px;
+        line-height: 1.4;
+    }
+
+.deca-step {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--rs-primary);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.deca-card-action {
+    margin-left: auto;
+    flex: none;
+}
+
+.deca-grid {
+    display: grid;
+    gap: 14px 16px;
+}
+
+    .deca-grid.is-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .deca-grid.is-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .deca-grid > .form-group,
+    .deca-alternative > .form-group {
+        margin-bottom: 0;
+    }
+
+    .deca-grid > .is-wide {
+        grid-column: span 2;
+    }
+
+    .deca-grid > .is-full {
+        grid-column: 1 / -1;
+    }
+
+.deca-field input.is-mono {
+    font-family: var(--rs-mono);
+    text-transform: uppercase;
+}
+
+.deca-required {
+    color: var(--rs-danger);
+}
+
+.deca-field.has-error input,
+.deca-field.has-error textarea {
+    border-color: #e3a49c;
+    background: var(--rs-danger-bg);
+}
+
+.deca-field.has-warning input,
+.deca-field.has-warning textarea {
+    border-color: #e6cf98;
+}
+
+.deca-issue {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    line-height: 1.4;
+}
+
+    .deca-page .form-group small.deca-issue.is-error,
+    .deca-issue.is-error {
+        color: var(--rs-danger);
+    }
+
+    .deca-page .form-group small.deca-issue.is-warning,
+    .deca-issue.is-warning {
+        color: #8a6d2e;
+    }
+
+    .deca-issue i {
+        margin-top: 2px;
+    }
+
+.deca-shipments {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.deca-shipment {
+    padding: 14px;
+    border: 1px solid var(--rs-border-soft);
+    border-radius: var(--rs-radius-sm);
+    background: var(--rs-surface-muted);
+}
+
+.deca-shipment-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    color: var(--rs-text);
+    font-size: 12px;
+}
+
+.deca-alternative {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+}
+
+/* ---------- Resumen lateral ---------- */
+
+.deca-checklist ul {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+}
+
+.deca-checklist li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+    .deca-checklist li.is-ok {
+        color: var(--rs-text);
+    }
+
+        .deca-checklist li.is-ok i {
+            color: var(--rs-success);
+        }
+
+    .deca-checklist li.is-pending {
+        color: var(--rs-muted);
+    }
+
+        .deca-checklist li.is-pending i {
+            color: #d3dcdf;
+        }
+
+.deca-side-note {
+    display: flex;
+    gap: 6px;
+    margin: 12px 0 0;
+    color: var(--rs-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+    .deca-side-note.is-warning {
+        color: #8a6d2e;
+    }
+
+    .deca-side-note.is-error {
+        color: var(--rs-danger);
+    }
+
+    .deca-side-note i {
+        margin-top: 2px;
+    }
+
+.deca-issue-button {
+    width: 100%;
+    min-height: 42px;
+    margin-top: 6px;
+    font-size: 13px;
+}
+
+/* ---------- Detalle ---------- */
+
+.deca-banner {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border-radius: var(--rs-radius-sm);
+    font-size: 12px;
+}
+
+    .deca-banner.is-warning {
+        border: 1px solid #ead9b6;
+        background: #fdfaf2;
+        color: #6f5622;
+    }
+
+    .deca-banner ul {
+        margin: 4px 0 0;
+        padding-left: 18px;
+    }
+
+.deca-detail {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+}
+
+.deca-qr-card {
+    grid-row: span 2;
+}
+
+.deca-data-card,
+.deca-trace-card {
+    min-width: 0;
+}
+
+.deca-trace-card {
+    grid-column: 1 / -1;
+}
+
+.deca-qr {
+    display: flex;
+    justify-content: center;
+    padding: 10px;
+    border: 1px solid var(--rs-border-soft);
+    border-radius: var(--rs-radius-sm);
+    background: #fff;
+    line-height: 0;
+}
+
+    .deca-qr.is-off {
+        opacity: .3;
+    }
+
+.deca-qr-state {
+    margin: 12px 0;
+    color: var(--rs-text-soft);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.deca-link-row {
+    display: flex;
+    gap: 6px;
+}
+
+    .deca-link-row input {
+        flex: 1;
+        min-width: 0;
+        padding: 7px 9px;
+        border: 1px solid var(--rs-border);
+        border-radius: var(--rs-radius-sm);
+        background: #fafcfc;
+        color: var(--rs-text-soft);
+        font-family: var(--rs-mono);
+        font-size: 11px;
+    }
+
+.deca-driver {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+    color: var(--rs-muted);
+    font-size: 11px;
+}
+
+    .deca-driver > span {
+        flex-basis: 100%;
+    }
+
+.deca-facts {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 10px 16px;
+    margin: 0 0 16px;
+    font-size: 12px;
+}
+
+    .deca-facts dt {
+        color: var(--rs-muted);
+        font-weight: 600;
+    }
+
+    .deca-facts dd {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 4px 10px;
+        margin: 0;
+        color: var(--rs-text);
+    }
+
+        .deca-facts dd small {
+            flex-basis: 100%;
+            color: var(--rs-muted);
+            font-size: 11px;
+        }
+
+    .deca-facts .is-prewrap {
+        white-space: pre-wrap;
+    }
+
+.deca-mini-table {
+    border: 1px solid var(--rs-border-soft);
+    border-radius: var(--rs-radius-sm);
+    overflow: hidden;
+}
+
+.deca-mini-row {
+    display: grid;
+    grid-template-columns: 34px repeat(3, minmax(0, 1fr)) 130px;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--rs-border-soft);
+    color: var(--rs-text-soft);
+    font-size: 12px;
+}
+
+    .deca-mini-row:last-child {
+        border-bottom: 0;
+    }
+
+    .deca-mini-row.is-head {
+        background: #f7f9fa;
+        color: #84939a;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+
+.deca-mini-table.is-versions .deca-mini-row {
+    grid-template-columns: 64px 140px 80px minmax(0, 1fr);
+}
+
+.deca-mini-row .is-hash {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.deca-service-card p {
+    margin: 0 0 12px;
+    color: var(--rs-text-soft);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.deca-confirm {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.deca-events {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+}
+
+    .deca-events li {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 8px;
+        padding-left: 14px;
+        border-left: 2px solid var(--rs-border);
+        color: var(--rs-muted);
+    }
+
+        .deca-events li strong {
+            color: var(--rs-text);
+        }
+
+        .deca-events li small {
+            flex-basis: 100%;
+            overflow-wrap: anywhere;
+            font-family: var(--rs-mono);
+            font-size: 10px;
+        }
+
+/* ---------- Pantallas estrechas ---------- */
+
+@media (max-width: 980px) {
+    .deca-editor,
+    .deca-detail {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .deca-editor-side {
+        position: static;
+    }
+
+    .deca-qr-card {
+        grid-row: auto;
+    }
+
+    .deca-row {
+        grid-template-columns: minmax(0, 1fr) 100px 120px;
+    }
+
+        .deca-row > :nth-child(3),
+        .deca-row > :nth-child(4),
+        .deca-row > :nth-child(5) {
+            display: none;
+        }
+}
+
+@media (max-width: 640px) {
+    .deca-grid.is-2,
+    .deca-grid.is-3,
+    .deca-alternative,
+    .deca-facts {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .deca-grid > .is-wide {
+        grid-column: auto;
+    }
+
+    .deca-mini-row {
+        grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+        .deca-mini-row > :nth-child(4),
+        .deca-mini-row > :nth-child(5) {
+            display: none;
+        }
+}
+
+/* ---------- Diseñador ---------- */
+
+/* El editor ocupa todo el alto: sin scroll de la página alrededor, que
+   lleva el suyo propio en cada panel. */
+.deca-main:has(.deca-designer) {
+    overflow: hidden;
+}
+
+.deca-designer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+    .deca-designer > .report-designer-page {
+        flex: 1;
+        min-height: 0;
+        height: auto;
+    }
+
+.deca-designer-bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--rs-border);
+    background: var(--rs-surface);
+}
+
+.deca-designer-title {
+    display: flex;
+    flex-direction: column;
+    margin-right: auto;
+    line-height: 1.3;
+}
+
+    .deca-designer-title strong {
+        font-size: 14px;
+    }
+
+    .deca-designer-title > span {
+        color: var(--rs-muted);
+        font-size: 11px;
+    }
+
+.deca-designer-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--rs-muted);
+    font-size: 11px;
+}
+
+    .deca-designer-note.is-warning {
+        color: #8a6d2e;
+    }
+
+    .deca-designer-note.is-dirty i {
+        color: #d39b2a;
+        font-size: 7px;
+    }

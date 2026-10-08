@@ -16,6 +16,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\Renderset.Core\Renderset.Core.csproj" />
+	  <ProjectReference Include="..\Renderset.Deca\Renderset.Deca.csproj" />
 	</ItemGroup>
 
 </Project>

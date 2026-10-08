@@ -1,0 +1,564 @@
+@page "/deca/new"
+
+@inject IDecaApi Api
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+@inject NavigationManager Navigation
+
+<PageTitle>Nuevo DeCA - RenderSet</PageTitle>
+
+<div class="page page-wide deca-page">
+
+    <header class="page-header">
+
+        <div>
+            <a class="back-button" href="deca">
+                <i class="fa-solid fa-arrow-left"></i>
+                DeCA
+            </a>
+
+            <h1>@(_sourceNumber is null ? "Nuevo DeCA" : $"Nuevo DeCA a partir de {_sourceNumber}")</h1>
+
+            <p>
+                Se emite con la fecha y hora de ahora, que tiene que ser
+                anterior al inicio del transporte. Una vez emitido, el PDF no
+                cambia.
+            </p>
+        </div>
+
+    </header>
+
+    @if (_loading)
+    {
+        <div class="deca-empty">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            Cargando...
+        </div>
+    }
+    else
+    {
+        <div class="deca-editor">
+
+            <div class="deca-editor-main">
+
+                @* ------------------------------------------ cargador *@
+
+                <section class="editor-card">
+
+                    <header class="editor-card-header deca-card-header">
+                        <span class="deca-step">1</span>
+                        <div>
+                            <h2>Cargador contractual</h2>
+                            <small>Quien contrata el transporte. Responde de cargador, transportista, origen, destino y mercancía.</small>
+                        </div>
+                    </header>
+
+                    <div class="editor-card-body deca-grid is-3">
+
+                        <DecaTextField Label="Razón social"
+                                       Required="true"
+                                       MaxLength="DecaValidator.MaxNameLength"
+                                       AutoComplete="organization"
+                                       @bind-Value="_data.Shipper.Name"
+                                       Issue="@Issue("shipper.name")"
+                                       Class="is-wide" />
+
+                        <DecaTextField Label="NIF"
+                                       Required="true"
+                                       MaxLength="20"
+                                       Monospace="true"
+                                       Placeholder="B12345674"
+                                       @bind-Value="_data.Shipper.TaxId"
+                                       Issue="@Issue("shipper.taxId")" />
+
+                        <DecaTextField Label="Domicilio"
+                                       Required="true"
+                                       MaxLength="DecaValidator.MaxAddressLength"
+                                       Placeholder="Calle, número, código postal y municipio"
+                                       @bind-Value="_data.Shipper.Address"
+                                       Issue="@Issue("shipper.address")"
+                                       Class="is-full" />
+
+                    </div>
+
+                </section>
+
+                @* ------------------------------------- transportista *@
+
+                <section class="editor-card">
+
+                    <header class="editor-card-header deca-card-header">
+                        <span class="deca-step">2</span>
+                        <div>
+                            <h2>Transportista efectivo</h2>
+                            <small>Quien hace el transporte. Responde del vehículo, la fecha y las autorizaciones.</small>
+                        </div>
+                    </header>
+
+                    <div class="editor-card-body deca-grid is-3">
+
+                        <DecaTextField Label="Razón social"
+                                       Required="true"
+                                       MaxLength="DecaValidator.MaxNameLength"
+                                       @bind-Value="_data.Carrier.Name"
+                                       Issue="@Issue("carrier.name")"
+                                       Class="is-wide" />
+
+                        <DecaTextField Label="NIF"
+                                       Required="true"
+                                       MaxLength="20"
+                                       Monospace="true"
+                                       @bind-Value="_data.Carrier.TaxId"
+                                       Issue="@Issue("carrier.taxId")" />
+
+                    </div>
+
+                </section>
+
+                @* ------------------------------------------ transporte *@
+
+                <section class="editor-card">
+
+                    <header class="editor-card-header deca-card-header">
+                        <span class="deca-step">3</span>
+                        <div>
+                            <h2>Transporte</h2>
+                            <small>Fecha, vehículo y, si hace falta, la autorización especial de circulación.</small>
+                        </div>
+                    </header>
+
+                    <div class="editor-card-body deca-grid is-3">
+
+                        <div class="form-group deca-field @StateClass("transportDate")">
+                            <label for="deca-date">
+                                Fecha del transporte <span class="deca-required">*</span>
+                            </label>
+                            <input id="deca-date"
+                                   type="date"
+                                   min="@DecaFormat.Today.ToString("yyyy-MM-dd")"
+                                   @bind="_data.TransportDate" />
+                            <IssueText Issue="@Issue("transportDate")" />
+                        </div>
+
+                        <div class="form-group deca-field @StateClass("startTime")">
+                            <label for="deca-start">Hora de inicio prevista</label>
+                            <input id="deca-start"
+                                   type="time"
+                                   @bind="_data.StartTime" />
+                            <IssueText Issue="@Issue("startTime")"
+                                       Hint="Opcional. Si la indicas, se comprueba que emites antes." />
+                        </div>
+
+                        <DecaTextField Label="Referencia propia"
+                                       MaxLength="DecaValidator.MaxShortTextLength"
+                                       Placeholder="Nº de salida, pedido..."
+                                       @bind-Value="_data.Reference"
+                                       Issue="@Issue("reference")"
+                                       Hint="No es un dato legal: sirve para buscarlo." />
+
+                        <DecaTextField Label="Matrícula del tractor o rígido"
+                                       Required="true"
+                                       MaxLength="15"
+                                       Monospace="true"
+                                       Placeholder="1234BCD"
+                                       @bind-Value="_data.Vehicle.TractorPlate"
+                                       Issue="@Issue("vehicle.tractorPlate")" />
+
+                        <DecaTextField Label="Matrícula del remolque"
+                                       MaxLength="15"
+                                       Monospace="true"
+                                       Placeholder="R1234BCD"
+                                       @bind-Value="_data.Vehicle.TrailerPlate"
+                                       Issue="@Issue("vehicle.trailerPlate")"
+                                       Hint="Cuando lo haya." />
+
+                        <DecaTextField Label="Autorización especial de circulación"
+                                       MaxLength="DecaValidator.MaxShortTextLength"
+                                       @bind-Value="_data.SpecialAuthorization"
+                                       Issue="@Issue("specialAuthorization")"
+                                       Hint="Sólo cuando sea necesaria." />
+
+                    </div>
+
+                </section>
+
+                @* ------------------------------------------------ envíos *@
+
+                <section class="editor-card">
+
+                    <header class="editor-card-header deca-card-header">
+                        <span class="deca-step">4</span>
+                        <div>
+                            <h2>Envíos</h2>
+                            <small>
+                                Cada envío lleva su origen, destino, mercancía y peso. Varios envíos
+                                en un DeCA comparten cargador y transportista.
+                            </small>
+                        </div>
+
+                        <button type="button"
+                                class="secondary-button deca-card-action"
+                                disabled="@(_data.Shipments.Count >= DecaValidator.MaxShipments)"
+                                @onclick="AddShipment">
+                            <i class="fa-solid fa-plus"></i>
+                            Añadir envío
+                        </button>
+                    </header>
+
+                    <div class="editor-card-body deca-shipments">
+
+                        @for (var index = 0; index < _data.Shipments.Count; index++)
+                        {
+                            var i = index;
+                            var shipment = _data.Shipments[i];
+                            var path = $"shipments[{i}]";
+
+                            <div class="deca-shipment" @key="shipment">
+
+                                <div class="deca-shipment-head">
+                                    <strong>Envío @(i + 1)</strong>
+
+                                    @if (_data.Shipments.Count > 1)
+                                    {
+                                        <button type="button"
+                                                class="icon-button"
+                                                title="Quitar este envío"
+                                                @onclick="() => RemoveShipment(i)">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    }
+                                </div>
+
+                                <div class="deca-grid is-2">
+
+                                    <DecaTextField Label="Lugar de origen"
+                                                   Required="true"
+                                                   MaxLength="DecaValidator.MaxPlaceLength"
+                                                   @bind-Value="shipment.Origin"
+                                                   Issue="@Issue($"{path}.origin")" />
+
+                                    <DecaTextField Label="Lugar de destino"
+                                                   Required="true"
+                                                   MaxLength="DecaValidator.MaxPlaceLength"
+                                                   @bind-Value="shipment.Destination"
+                                                   Issue="@Issue($"{path}.destination")" />
+
+                                    <DecaTextField Label="Naturaleza de la mercancía"
+                                                   Required="true"
+                                                   MaxLength="DecaValidator.MaxGoodsLength"
+                                                   @bind-Value="shipment.Goods"
+                                                   Issue="@Issue($"{path}.goods")"
+                                                   Class="is-full" />
+
+                                    <div class="form-group deca-field @StateClass($"{path}.weightKg")">
+                                        <label>Peso (kg)</label>
+                                        <input type="number"
+                                               min="0"
+                                               step="0.001"
+                                               @bind="shipment.WeightKg" />
+                                        <IssueText Issue="@Issue($"{path}.weightKg")" />
+                                    </div>
+
+                                    <div class="deca-alternative">
+                                        <div class="form-group deca-field">
+                                            <label>O magnitud sustitutiva</label>
+                                            <input type="number"
+                                                   min="0"
+                                                   step="0.001"
+                                                   @bind="shipment.AlternativeQuantity" />
+                                        </div>
+
+                                        <DecaTextField Label="Unidad"
+                                                       MaxLength="40"
+                                                       Placeholder="m³, uds., litros"
+                                                       @bind-Value="shipment.AlternativeUnit"
+                                                       Issue="@Issue($"{path}.alternativeUnit")" />
+                                    </div>
+
+                                    <DecaTextField Label="Notas del envío"
+                                                   MaxLength="DecaValidator.MaxTextLength"
+                                                   Placeholder="Lo que difiera de los demás envíos"
+                                                   @bind-Value="shipment.Notes"
+                                                   Issue="@Issue($"{path}.notes")"
+                                                   Class="is-full" />
+
+                                </div>
+
+                            </div>
+                        }
+
+                        <IssueText Issue="@Issue("shipments")" />
+
+                    </div>
+
+                </section>
+
+                @* ------------------------------------------- observaciones *@
+
+                <section class="editor-card">
+
+                    <header class="editor-card-header deca-card-header">
+                        <span class="deca-step">5</span>
+                        <div>
+                            <h2>Observaciones y reservas</h2>
+                            <small>Cuando las pida alguno de los intervinientes.</small>
+                        </div>
+                    </header>
+
+                    <div class="editor-card-body">
+                        <DecaTextField Label="Observaciones"
+                                       Multiline="true"
+                                       Rows="3"
+                                       MaxLength="DecaValidator.MaxTextLength"
+                                       @bind-Value="_data.Observations"
+                                       Issue="@Issue("observations")" />
+                    </div>
+
+                </section>
+
+            </div>
+
+            @* ------------------------------------------------ resumen *@
+
+            <aside class="deca-editor-side">
+
+                <section class="editor-card deca-checklist">
+
+                    <header class="editor-card-header">
+                        <h2>Antes de emitir</h2>
+                    </header>
+
+                    <div class="editor-card-body">
+
+                        <ul>
+                            @foreach (var (label, prefix) in Checks)
+                            {
+                                var ok = !Validation.Errors.Any(x => x.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+                                <li class="@(ok ? "is-ok" : "is-pending")">
+                                    <i class="fa-solid @(ok ? "fa-circle-check" : "fa-circle")"></i>
+                                    @label
+                                </li>
+                            }
+                        </ul>
+
+                        @if (Validation.Warnings.Any())
+                        {
+                            <p class="deca-side-note is-warning">
+                                <i class="fa-solid fa-circle-info"></i>
+                                @Validation.Warnings.Count() aviso(s): se puede emitir, pero revísalos.
+                            </p>
+                        }
+
+                        @if (_attempted && !Validation.IsValid)
+                        {
+                            <p class="deca-side-note is-error">
+                                <i class="fa-solid fa-circle-exclamation"></i>
+                                Faltan datos: revisa los @Validation.Errors.Count() campos marcados.
+                            </p>
+                        }
+
+                        <button type="button"
+                                class="primary-button deca-issue-button"
+                                disabled="@_issuing"
+                                @onclick="IssueAsync">
+                            @if (_issuing)
+                            {
+                                <i class="fa-solid fa-spinner fa-spin"></i>
+                                <span>Emitiendo...</span>
+                            }
+                            else
+                            {
+                                <i class="fa-solid fa-stamp"></i>
+                                <span>Emitir DeCA</span>
+                            }
+                        </button>
+
+                        <p class="deca-side-note">
+                            Al emitir se genera el PDF con su QR y queda guardado un año.
+                            El conductor tiene que llevarlo (en el móvil o impreso) antes de salir.
+                        </p>
+
+                    </div>
+
+                </section>
+
+            </aside>
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    /// <summary>
+    /// /deca/new?from={id}: duplicar un DeCA (rutas que se repiten).
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "from")]
+    public string? FromId { get; set; }
+
+    private static readonly TimeZoneInfo Zone = new DecaOptions().Zone;
+
+    private static readonly (string Label, string Prefix)[] Checks =
+    [
+        ("Cargador contractual", "shipper."),
+        ("Transportista efectivo", "carrier."),
+        ("Fecha del transporte", "transportDate"),
+        ("Vehículo", "vehicle."),
+        ("Envíos", "shipments")
+    ];
+
+    private DecaData _data = NewData();
+    private string? _sourceNumber;
+
+    private bool _loading;
+    private bool _issuing;
+
+    /// <summary>
+    /// Los errores salen después del primer intento de emitir: un
+    /// formulario en rojo antes de escribir nada no ayuda. Los avisos (NIF
+    /// extranjero, matrícula no española) salen siempre.
+    /// </summary>
+    private bool _attempted;
+
+    private DecaValidationResult? _validation;
+
+    /// <summary>
+    /// Se calcula una vez por render y se descarta después: cualquier cambio
+    /// en el formulario provoca un render nuevo.
+    /// </summary>
+    private DecaValidationResult Validation =>
+        _validation ??= DecaValidator.Validate(
+            _data,
+            DateTimeOffset.UtcNow,
+            Zone);
+
+    protected override void OnAfterRender(
+        bool firstRender) =>
+        _validation = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(FromId))
+            return;
+
+        _loading = true;
+
+        try
+        {
+            var source =
+                await Toasts.RunAsync(
+                    () => Api.GetAsync(CurrentTenant.Id, FromId),
+                    errorTitle: "No se ha podido cargar el DeCA a duplicar");
+
+            if (source is null)
+                return;
+
+            // Mismo cargador, transportista, vehículo y envíos; la fecha
+            // vuelve a hoy porque es otro transporte.
+            var copy = source.Deca.Data.Clone();
+
+            copy.TransportDate = DecaFormat.Today;
+            copy.StartTime = null;
+
+            if (copy.Shipments.Count == 0)
+                copy.Shipments.Add(new DecaShipment());
+
+            _data = copy;
+            _sourceNumber = source.Deca.Number;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static DecaData NewData() =>
+        new()
+        {
+            TransportDate = DecaFormat.Today,
+            Shipments = [new DecaShipment()]
+        };
+
+    private DecaIssue? Issue(
+        string path)
+    {
+        var issues =
+            Validation.Issues
+                .Where(x => string.Equals(x.Path, path, StringComparison.OrdinalIgnoreCase));
+
+        return _attempted
+            ? issues.OrderBy(x => x.IsWarning).FirstOrDefault()
+            : issues.FirstOrDefault(x => x.IsWarning);
+    }
+
+    private string? StateClass(
+        string path) =>
+        Issue(path) switch
+        {
+            null => null,
+            { IsWarning: true } => "has-warning",
+            _ => "has-error"
+        };
+
+    private void AddShipment()
+    {
+        // El nuevo envío sale con el origen del anterior: lo normal es
+        // cargar en un sitio y repartir.
+        var last = _data.Shipments.LastOrDefault();
+
+        _data.Shipments.Add(
+            new DecaShipment
+            {
+                Origin = last?.Origin
+            });
+    }
+
+    private void RemoveShipment(
+        int index)
+    {
+        if (index >= 0 && index < _data.Shipments.Count && _data.Shipments.Count > 1)
+            _data.Shipments.RemoveAt(index);
+    }
+
+    private async Task IssueAsync()
+    {
+        _attempted = true;
+
+        // Las filas de envío vacías se quitan, igual que hace la API: así
+        // el formulario valida exactamente lo que se va a emitir.
+        if (_data.Shipments.Count > 1)
+            _data.Shipments.RemoveAll(DecaNormalizer.IsBlank);
+
+        if (_data.Shipments.Count == 0)
+            _data.Shipments.Add(new DecaShipment());
+
+        _validation = null;
+
+        // Validación local: lo marca en el formulario sin llamar a la API.
+        if (!Validation.IsValid)
+            return;
+
+        _issuing = true;
+
+        try
+        {
+            var detail =
+                await Toasts.RunAsync(
+                    () => Api.IssueAsync(CurrentTenant.Id, _data),
+                    errorTitle: "No se ha emitido el DeCA");
+
+            if (detail is null)
+                return;
+
+            Toasts.Success($"DeCA {detail.Deca.Number} emitido.");
+
+            Navigation.NavigateTo($"deca/{detail.Deca.Id}");
+        }
+        finally
+        {
+            _issuing = false;
+        }
+    }
+}

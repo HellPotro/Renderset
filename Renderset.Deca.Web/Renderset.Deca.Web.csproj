@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Portal DeCA: emitir, consultar y compartir DeCA. Aplicación propia (la
+    arranca AppHost como "decaweb"), con su login y su cookie, y los mismos
+    usuarios y tenants que RenderSet (Renderset.Identity). Llama a la API
+    (/api/deca) con su propia clave de servicio y el token del usuario.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>5ba54684-64e2-47a4-a15b-41453850b15d</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Refit" Version="16.3.0" />
+    <PackageReference Include="Refit.HttpClientFactory" Version="16.3.0" />
+    <PackageReference Include="Refit.Reflection" Version="16.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Renderset.Blazor\Renderset.Blazor.csproj" />
+    <ProjectReference Include="..\Renderset.Deca\Renderset.Deca.csproj" />
+    <ProjectReference Include="..\Renderset.Identity\Renderset.Identity.csproj" />
+    <ProjectReference Include="..\Renderset.ServiceDefaults\Renderset.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

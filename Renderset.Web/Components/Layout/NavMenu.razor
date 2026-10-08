@@ -1,3 +1,5 @@
+@inject IConfiguration Configuration
+
 <nav class="renderset-nav">
 
     <div class="renderset-nav-section">
@@ -96,6 +98,24 @@
 
         </NavLink>
 
+        @* El portal DeCA es otra aplicación (Renderset.Deca.Web): sólo se
+           enlaza si está configurada su URL (Deca:PortalUrl). *@
+        @if (!string.IsNullOrWhiteSpace(DecaPortalUrl))
+        {
+            <a href="@DecaPortalUrl"
+               class="renderset-nav-item"
+               target="_blank"
+               rel="noopener">
+
+                <span class="renderset-nav-icon">
+                    <i class="fa-solid fa-truck"></i>
+                </span>
+
+                <span>DeCA</span>
+
+            </a>
+        }
+
         @* Las opciones de administración sólo se enseñan a Admin y Owner; la
            protección de verdad es la política de cada página y la API. *@
         <AuthorizeView Policy="@TenantPolicies.Admin">
@@ -169,3 +189,12 @@
     </AuthorizeView>
 
 </nav>
+
+@code {
+
+    /// <summary>
+    /// Portal DeCA (Renderset.Deca.Web). En local lo pone AppHost.
+    /// </summary>
+    private string? DecaPortalUrl =>
+        Configuration["Deca:PortalUrl"];
+}

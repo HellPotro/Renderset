@@ -4,6 +4,9 @@
   <Project Path="Renderset.Blazor/Renderset.Blazor.csproj" />
   <Project Path="Renderset.Client/Renderset.Client.csproj" Id="57d661d1-9000-4025-9a8c-fcaba04af008" />
   <Project Path="Renderset.Core/Renderset.Core.csproj" />
+  <Project Path="Renderset.Deca/Renderset.Deca.csproj" />
+  <Project Path="Renderset.Deca.Web/Renderset.Deca.Web.csproj" />
+  <Project Path="Renderset.Identity/Renderset.Identity.csproj" />
   <Project Path="Renderset.Infraestructure/Renderset.Infrastructure.csproj" />
   <Project Path="Renderset.ServiceDefaults/Renderset.ServiceDefaults.csproj" />
   <Project Path="Renderset.Tests/Renderset.Tests.csproj" />

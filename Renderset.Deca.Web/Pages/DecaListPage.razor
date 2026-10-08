@@ -1,0 +1,238 @@
+@page "/"
+@page "/deca"
+
+@inject IDecaApi Api
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+
+<PageTitle>DeCA - RenderSet</PageTitle>
+
+<div class="page page-wide deca-page">
+
+    <header class="page-header">
+
+        <div>
+            <h1>DeCA</h1>
+            <p>
+                Documentos de control administrativo: se emiten antes del
+                transporte, el QR descarga el PDF sin cuenta y se conservan
+                un año.
+            </p>
+        </div>
+
+        <div class="page-actions">
+            <a class="primary-button" href="deca/new">
+                <i class="fa-solid fa-plus"></i>
+                Nuevo DeCA
+            </a>
+        </div>
+
+    </header>
+
+    <section class="editor-card">
+
+        <div class="deca-toolbar">
+
+            <div class="deca-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="search"
+                       placeholder="Número, referencia, cargador, transportista o matrícula"
+                       value="@_search"
+                       @onchange="SearchChangedAsync" />
+            </div>
+
+            <label class="deca-date-filter">
+                Transporte desde
+                <input type="date"
+                       value="@_from?.ToString("yyyy-MM-dd")"
+                       @onchange="FromChangedAsync" />
+            </label>
+
+            <label class="deca-date-filter">
+                hasta
+                <input type="date"
+                       value="@_to?.ToString("yyyy-MM-dd")"
+                       @onchange="ToChangedAsync" />
+            </label>
+
+            <span class="deca-count">
+                @if (_total > 0)
+                {
+                    @($"{_total:N0} DeCA")
+                }
+            </span>
+
+        </div>
+
+        @if (_loading && _items.Count == 0)
+        {
+            <div class="deca-empty">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Cargando...
+            </div>
+        }
+        else if (_items.Count == 0)
+        {
+            <div class="deca-empty">
+                <i class="fa-solid fa-truck"></i>
+                @if (IsFiltered)
+                {
+                    <span>Ningún DeCA con estos filtros.</span>
+                }
+                else
+                {
+                    <span>Todavía no has emitido ningún DeCA.</span>
+                    <a class="secondary-button" href="deca/new">Emitir el primero</a>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="deca-table">
+
+                <div class="deca-row is-head">
+                    <span>Número</span>
+                    <span>Transporte</span>
+                    <span>Cargador → transportista</span>
+                    <span>Vehículo</span>
+                    <span>Envíos</span>
+                    <span>Estado</span>
+                </div>
+
+                @foreach (var item in _items)
+                {
+                    <a class="deca-row" href="@($"deca/{item.Id}")" @key="item.Id">
+
+                        <span class="deca-number">
+                            <strong>@item.Number</strong>
+                            @if (!string.IsNullOrWhiteSpace(item.Reference))
+                            {
+                                <small>@item.Reference</small>
+                            }
+                        </span>
+
+                        <span>@DecaFormat.Date(item.TransportDate)</span>
+
+                        <span class="deca-parties">
+                            <span>@item.ShipperName</span>
+                            <small>@item.CarrierName</small>
+                        </span>
+
+                        <span class="is-mono">@item.TractorPlate</span>
+
+                        <span>@item.ShipmentCount</span>
+
+                        <span>
+                            <DecaStatusBadge Status="item.Status"
+                                             PublicUntilUtc="item.PublicUntilUtc" />
+                        </span>
+
+                    </a>
+                }
+
+            </div>
+
+            @if (_items.Count < _total)
+            {
+                <div class="deca-more">
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@_loading"
+                            @onclick="LoadMoreAsync">
+                        Cargar más
+                    </button>
+                </div>
+            }
+        }
+
+    </section>
+
+</div>
+
+@code {
+
+    private const int PageSize = 50;
+
+    private readonly List<DecaSummary> _items = [];
+    private int _total;
+    private bool _loading;
+
+    private string? _search;
+    private DateOnly? _from;
+    private DateOnly? _to;
+
+    private bool IsFiltered =>
+        !string.IsNullOrWhiteSpace(_search) || _from is not null || _to is not null;
+
+    protected override Task OnInitializedAsync() =>
+        ReloadAsync();
+
+    private async Task SearchChangedAsync(
+        ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString();
+        await ReloadAsync();
+    }
+
+    private async Task FromChangedAsync(
+        ChangeEventArgs e)
+    {
+        _from = ParseDate(e.Value);
+        await ReloadAsync();
+    }
+
+    private async Task ToChangedAsync(
+        ChangeEventArgs e)
+    {
+        _to = ParseDate(e.Value);
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _items.Clear();
+        _total = 0;
+
+        await LoadMoreAsync();
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            var page =
+                await Toasts.RunAsync(
+                    () => Api.SearchAsync(
+                        CurrentTenant.Id,
+                        string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                        _from?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        _to?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        _items.Count,
+                        PageSize),
+                    errorTitle: "No se han podido cargar los DeCA");
+
+            if (page is not null)
+            {
+                _items.AddRange(page.Items);
+                _total = page.Total;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static DateOnly? ParseDate(
+        object? value) =>
+        DateOnly.TryParseExact(
+            value?.ToString(),
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var date)
+            ? date
+            : null;
+}

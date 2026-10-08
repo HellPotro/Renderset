@@ -1,0 +1,104 @@
+@* Campo de texto con su error o aviso debajo. El error sale de la
+   validación local (DecaValidator), así que va en línea: es una validación
+   del formulario, no un error de la API. *@
+
+<div class="form-group deca-field @StateClass @Class">
+
+    <label for="@Id">
+        @Label
+        @if (Required)
+        {
+            <span class="deca-required" title="Obligatorio">*</span>
+        }
+    </label>
+
+    @if (Multiline)
+    {
+        <textarea id="@Id"
+                  rows="@Rows"
+                  maxlength="@MaxLength"
+                  placeholder="@Placeholder"
+                  value="@Value"
+                  @onchange="ChangedAsync"></textarea>
+    }
+    else
+    {
+        <input id="@Id"
+               type="text"
+               maxlength="@MaxLength"
+               placeholder="@Placeholder"
+               autocomplete="@AutoComplete"
+               class="@(Monospace ? "is-mono" : null)"
+               value="@Value"
+               @onchange="ChangedAsync" />
+    }
+
+    @if (Issue is { } issue)
+    {
+        <small class="deca-issue @(issue.IsWarning ? "is-warning" : "is-error")">
+            <i class="fa-solid @(issue.IsWarning ? "fa-circle-info" : "fa-circle-exclamation")"></i>
+            @issue.Message
+        </small>
+    }
+    else if (!string.IsNullOrWhiteSpace(Hint))
+    {
+        <small>@Hint</small>
+    }
+
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    [Parameter]
+    public DecaIssue? Issue { get; set; }
+
+    [Parameter]
+    public string? Hint { get; set; }
+
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    [Parameter]
+    public bool Required { get; set; }
+
+    [Parameter]
+    public bool Multiline { get; set; }
+
+    [Parameter]
+    public int Rows { get; set; } = 3;
+
+    [Parameter]
+    public int MaxLength { get; set; } = 300;
+
+    [Parameter]
+    public bool Monospace { get; set; }
+
+    [Parameter]
+    public string AutoComplete { get; set; } = "off";
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    private readonly string Id = "deca-" + Guid.NewGuid().ToString("N")[..8];
+
+    private string? StateClass =>
+        Issue switch
+        {
+            null => null,
+            { IsWarning: true } => "has-warning",
+            _ => "has-error"
+        };
+
+    private Task ChangedAsync(
+        ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(e.Value?.ToString());
+}

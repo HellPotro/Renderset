@@ -1,0 +1,335 @@
+@page "/deca/design"
+
+@using System.Text.Json
+@using Renderset.Blazor.Components.Editor
+@using Renderset.Core.Configurations
+@using Renderset.Core.Localization
+@using Renderset.Core.Services
+@using Renderset.Core.Themes
+@using Renderset.Deca.Issuing
+
+@inject IDecaApi Api
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+
+<PageTitle>Diseño del DeCA - RenderSet</PageTitle>
+
+@if (_loading)
+{
+    <div class="deca-empty">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Cargando el diseño...
+    </div>
+}
+else if (_configuration is null || _theme is null)
+{
+    <div class="deca-empty">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>No se ha podido cargar el diseño.</span>
+        <a class="secondary-button" href="deca">Volver a DeCA</a>
+    </div>
+}
+else
+{
+    <div class="deca-designer">
+
+        <header class="deca-designer-bar">
+
+            <div class="deca-designer-title">
+                <strong>Diseño del DeCA</strong>
+                <span>
+                    @if (_isBase)
+                    {
+                        <span>Diseño base</span>
+                    }
+                    else
+                    {
+                        <span>Versión @_version</span>
+                    }
+                    · Los DeCA ya emitidos no cambian: su PDF es el de su día.
+                </span>
+            </div>
+
+            @if (Forced.Count > 0)
+            {
+                <span class="deca-designer-note is-warning"
+                      title="@string.Join(", ", Forced)">
+                    <i class="fa-solid fa-lock"></i>
+                    @Forced.Count obligatorio(s) se volverán a mostrar al guardar
+                </span>
+            }
+            else
+            {
+                <span class="deca-designer-note"
+                      title="Se puede cambiar todo menos quitar los datos obligatorios y el QR de descarga">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    Los datos obligatorios no se pueden quitar
+                </span>
+            }
+
+            @if (_saving)
+            {
+                <span class="deca-designer-note">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    Guardando
+                </span>
+            }
+            else if (HasUnsavedChanges)
+            {
+                <span class="deca-designer-note is-dirty">
+                    <i class="fa-solid fa-circle"></i>
+                    Cambios sin guardar
+                </span>
+            }
+
+            @if (!_isBase)
+            {
+                @if (_confirmReset)
+                {
+                    <span class="deca-confirm">
+                        <span>¿Volver al diseño base?</span>
+                        <button type="button"
+                                class="primary-button"
+                                disabled="@_saving"
+                                @onclick="ResetAsync">
+                            Sí
+                        </button>
+                        <button type="button"
+                                class="secondary-button"
+                                @onclick="() => _confirmReset = false">
+                            No
+                        </button>
+                    </span>
+                }
+                else
+                {
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@_saving"
+                            @onclick="() => _confirmReset = true">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        Diseño base
+                    </button>
+                }
+            }
+
+        </header>
+
+        @* El mismo diseñador que RenderSet, sobre la plantilla DeCA y un DeCA
+           de ejemplo. La vista previa es la misma que el PDF. *@
+        <div class="report-designer-page">
+            <ReportEditor @key="_editorKey"
+                          Definition="DecaReportTemplate.Definition"
+                          @bind-Configuration="_configuration"
+                          @bind-Theme="_theme"
+                          Data="_data"
+                          DataChanged="DataChanged"
+                          Texts="_texts"
+                          HasUnsavedChanges="HasUnsavedChanges"
+                          SaveRequested="SaveAsync" />
+        </div>
+
+    </div>
+}
+
+@code {
+
+    private const string TextScope = "deca";
+    private const string TextCulture = "es-ES";
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _confirmReset;
+
+    private ReportConfiguration? _configuration;
+    private ReportTheme? _theme;
+    private ReportTextWorkspace _texts = ReportTextWorkspace.Detached();
+    private JsonElement _data;
+
+    private int _version;
+    private bool _isBase = true;
+
+    /// <summary>
+    /// Se cambia al cargar otro diseño (guardar, restablecer) para que el
+    /// editor empiece de cero con él.
+    /// </summary>
+    private Guid _editorKey = Guid.NewGuid();
+
+    private string? _savedSnapshot;
+
+    /// <summary>
+    /// Como en el diseñador de RenderSet: el editor cambia los objetos en
+    /// sitio, así que se compara con una foto de lo guardado.
+    /// </summary>
+    private bool HasUnsavedChanges =>
+        !_loading &&
+        _savedSnapshot is not null &&
+        (_texts.HasPendingChanges ||
+         !string.Equals(_savedSnapshot, Snapshot(), StringComparison.Ordinal));
+
+    private string Snapshot() =>
+        JsonSerializer.Serialize(
+            new
+            {
+                Configuration = _configuration,
+                Theme = _theme
+            });
+
+    /// <summary>
+    /// Lo obligatorio que el diseño tiene oculto ahora mismo y que el
+    /// guardián volverá a mostrar al guardar. Se calcula sobre el diseño tal
+    /// cual, sin corregir, para avisar mientras se edita.
+    /// </summary>
+    private IReadOnlyList<string> Forced
+    {
+        get
+        {
+            if (_configuration is null)
+                return [];
+
+            try
+            {
+                var resolved =
+                    new ReportConfigurationResolver().Resolve(
+                        DecaReportTemplate.Definition,
+                        _configuration,
+                        bodyBlocks: null,
+                        _texts.ToCatalog());
+
+                return DecaTemplateGuard.Missing(resolved)
+                    .Where(x => !x.StartsWith("Código QR", StringComparison.Ordinal))
+                    .ToList();
+            }
+            catch (Exception)
+            {
+                // Una configuración a medio editar no tiene que romper la
+                // barra: al guardar se valida de verdad.
+                return [];
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var template =
+                await Toasts.RunAsync(
+                    () => Api.GetTemplateAsync(CurrentTenant.Id),
+                    errorTitle: "No se ha podido cargar el diseño");
+
+            if (template is not null)
+                Load(template);
+
+            _data = SampleData();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Load(
+        DecaTemplateResponse template)
+    {
+        _configuration = template.Configuration;
+        _theme = template.Theme;
+        _version = template.Version;
+        _isBase = template.IsBase;
+
+        _texts =
+            new ReportTextWorkspace(
+                TextScope,
+                TextCulture,
+                template.Texts.Select(x => new ReportResource
+                {
+                    Scope = TextScope,
+                    Key = x.Key,
+                    Culture = TextCulture,
+                    Value = x.Value
+                }));
+
+        _savedSnapshot = Snapshot();
+        _editorKey = Guid.NewGuid();
+    }
+
+    /// <summary>
+    /// DeCA de ejemplo con dos envíos para ver todo lo que puede salir. Se
+    /// puede tocar desde el panel de datos del editor para probar.
+    /// </summary>
+    private static JsonElement SampleData() =>
+        DecaReportData.Build(
+            DecaSample.Data(DecaFormat.Today.AddDays(1)),
+            DecaSample.Number,
+            version: 1,
+            DecaFormat.NowLocal,
+            "https://deca.ejemplo.es/q/AbCdEfGhIjKlMnOpQrStUv");
+
+    private void DataChanged(
+        JsonElement data) =>
+        _data = data;
+
+    /// <summary>
+    /// Los textos son los del área de trabajo (etiquetas, título, pie): se
+    /// guardan todos, no sólo los cambiados, porque el diseño es un todo.
+    /// </summary>
+    private Dictionary<string, string> CurrentTexts() =>
+        _texts
+            .ToCatalog()
+            .Entries
+            .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+
+    private async Task SaveAsync()
+    {
+        if (_configuration is null || _theme is null || _saving)
+            return;
+
+        _saving = true;
+
+        try
+        {
+            var saved =
+                await Toasts.RunAsync(
+                    () => Api.SaveTemplateAsync(
+                        CurrentTenant.Id,
+                        new SaveDecaTemplateRequest
+                        {
+                            Configuration = _configuration,
+                            Theme = _theme,
+                            Texts = CurrentTexts(),
+                            ExpectedVersion = _version
+                        }),
+                    success: "Diseño guardado. Los próximos DeCA saldrán así.",
+                    errorTitle: "No se ha guardado el diseño");
+
+            if (saved is not null)
+                Load(saved);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        _saving = true;
+
+        try
+        {
+            var reset =
+                await Toasts.RunAsync(
+                    () => Api.ResetTemplateAsync(CurrentTenant.Id, _version),
+                    success: "Diseño base restablecido.",
+                    errorTitle: "No se ha podido restablecer el diseño");
+
+            if (reset is not null)
+                Load(reset);
+        }
+        finally
+        {
+            _saving = false;
+            _confirmReset = false;
+        }
+    }
+}

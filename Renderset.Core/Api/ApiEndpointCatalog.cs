@@ -349,6 +349,61 @@ public static class ApiEndpointCatalog
                     "Todo en un ZIP",
                     "Los documentos del bundle en HTML dentro de un ZIP.",
                     Public: true)
+            ]),
+
+        new(
+            "DeCA",
+            "Documento electrónico de control administrativo (Orden FOM/2861/2012, Resolución de 5 de junio de 2026). El PDF se genera y congela al emitir, con fecha y hora en los metadatos y un QR que lo descarga sin login.",
+            [
+                new("GET", "/api/deca/{tenantId}",
+                    "Buscar DeCA",
+                    "Listado sin contenido, los más recientes primero. Filtros: search (número, referencia, cargador, transportista o matrícula), from y to (fecha del transporte), skip y take (máx. 200). Devuelve { items, total }.",
+                    Integration: true),
+
+                new("GET", "/api/deca/{tenantId}/{decaId}",
+                    "Ver un DeCA",
+                    "Datos de la versión vigente, versiones con su SHA-256, eventos, el enlace del QR y si descarga ahora mismo.",
+                    Integration: true),
+
+                new("POST", "/api/deca/{tenantId}/validate",
+                    "Validar sin emitir",
+                    "Las mismas comprobaciones que al emitir (NIF con letra de control, matrículas, fecha anterior al transporte, envíos con origen, destino, mercancía y peso). Devuelve { isValid, issues }; los avisos llevan isWarning = true.",
+                    Integration: true),
+
+                new("POST", "/api/deca/{tenantId}",
+                    "Emitir un DeCA",
+                    "Valida, genera el PDF (máx. 5 MB) con fecha y hora de creación y el QR, y lo guarda. Devuelve 201 con el DeCA y publicUrl. Errores de datos: 400 con code, path y message. Sin conversor de PDF: 503, y no se emite nada.",
+                    Integration: true),
+
+                new("POST", "/api/deca/{tenantId}/{decaId}/finish",
+                    "Terminar el servicio",
+                    "Marca el fin del servicio (endedAtUtc, o ahora). El QR sigue descargando durante el plazo configurado, siete días naturales como mínimo; el DeCA se conserva un año igualmente.",
+                    Integration: true),
+
+                new("GET", "/api/deca/{tenantId}/{decaId}/pdf",
+                    "Descargar el PDF",
+                    "El PDF tal como se emitió, para el emisor: sin plazo (se conserva un año). ?version=N para una versión anterior y ?download=true como adjunto.",
+                    Integration: true),
+
+                new("GET", "/api/deca/{tenantId}/template",
+                    "Ver el diseño del DeCA",
+                    "Configuración, tema y textos del diseño del tenant, o el base con su logo y colores si no tiene. version va de vuelta al guardar.",
+                    Integration: false),
+
+                new("PUT", "/api/deca/{tenantId}/template",
+                    "Guardar el diseño del DeCA",
+                    "Guarda una versión nueva ({ configuration, theme, texts, expectedVersion }). Lo obligatorio que se oculte se vuelve a mostrar; si aun así faltase algo, 400 con la lista. 409 si otro ha guardado entretanto.",
+                    Integration: false),
+
+                new("DELETE", "/api/deca/{tenantId}/template",
+                    "Volver al diseño base",
+                    "Guarda una versión que restablece el diseño base (?expectedVersion=N). Los DeCA ya emitidos no cambian.",
+                    Integration: false),
+
+                new("GET", "/q/{code}",
+                    "Descargar el DeCA (QR)",
+                    "El PDF del DeCA, sin autenticación ni interacción: es la URL del QR. Sirve el PDF guardado al emitir. 410 cuando ha pasado el plazo tras terminar el servicio.",
+                    Public: true)
             ])
     ];
 

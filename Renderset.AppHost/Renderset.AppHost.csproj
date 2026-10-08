@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Renderset.ApiService\Renderset.ApiService.csproj" />
     <ProjectReference Include="..\Renderset.Web\Renderset.Web.csproj" />
+    <ProjectReference Include="..\Renderset.Deca.Web\Renderset.Deca.Web.csproj" />
   </ItemGroup>
 
 </Project>

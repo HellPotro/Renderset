@@ -1,0 +1,21 @@
+@using System.Globalization
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@using Microsoft.JSInterop
+@using Renderset.Blazor.Components.Toasts
+@using Renderset.Core.Tenancy
+@using Renderset.Deca
+@using Renderset.Deca.Validation
+@using Renderset.Deca.Web
+@using Renderset.Deca.Web.Components
+@using Renderset.Deca.Web.Components.Layout
+@using Renderset.Web.Identity
+@using Renderset.Web.Components.Account
+
+@* Todas las páginas exigen sesión. Las de cuenta (Renderset.Identity) lo
+   abren con [AllowAnonymous]. *@
+@attribute [Authorize]

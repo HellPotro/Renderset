@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!--
+    Usuarios, sesión, tenants, token para la API y páginas de cuenta (entrar,
+    invitación, contraseña), compartidos por Renderset.Web y
+    Renderset.Deca.Web: mismos usuarios y mismos tenants en las dos
+    aplicaciones, cada una con su propia cookie.
+
+    RootNamespace es Renderset.Web a propósito: el código salió de
+    Renderset.Web y conserva sus namespaces (Renderset.Web.Identity,
+    Renderset.Web.Email, Renderset.Web.Components.Account), así que nada de
+    lo que ya los usaba ha tenido que cambiar.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Renderset.Web</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Communication.Email" Version="1.1.0" />
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Renderset.Core\Renderset.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Los usings implícitos de una aplicación web (Microsoft.NET.Sdk.Web),
+       que es donde se escribió este código. -->
+  <ItemGroup>
+    <Using Include="System.Net.Http.Json" />
+    <Using Include="Microsoft.AspNetCore.Builder" />
+    <Using Include="Microsoft.AspNetCore.Hosting" />
+    <Using Include="Microsoft.AspNetCore.Http" />
+    <Using Include="Microsoft.AspNetCore.Routing" />
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+</Project>

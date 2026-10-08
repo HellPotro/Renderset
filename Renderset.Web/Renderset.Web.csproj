@@ -20,7 +20,12 @@
   <ItemGroup>
     <ProjectReference Include="..\Renderset.Blazor\Renderset.Blazor.csproj" />
     <ProjectReference Include="..\Renderset.Core\Renderset.Core.csproj" />
+    <ProjectReference Include="..\Renderset.Identity\Renderset.Identity.csproj" />
     <ProjectReference Include="..\Renderset.ServiceDefaults\Renderset.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\js\" />
   </ItemGroup>
 
 </Project>

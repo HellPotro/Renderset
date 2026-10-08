@@ -1,4 +1,7 @@
-<Router AppAssembly="typeof(Program).Assembly">
+@* Las páginas de cuenta (entrar, invitación, contraseña) están en
+   Renderset.Identity, compartidas con el portal DeCA. *@
+<Router AppAssembly="typeof(Program).Assembly"
+        AdditionalAssemblies="new[] { typeof(Renderset.Web.Components.Account.AccountLinks).Assembly }">
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
             <NotAuthorized>

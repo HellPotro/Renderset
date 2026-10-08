@@ -1,0 +1,66 @@
+@inherits LayoutComponentBase
+@inject TenantSession Session
+
+@* Barra superior en vez de la lateral de RenderSet: el portal tiene tres
+   pantallas y lo que importa es el contenido. Salir es un formulario POST
+   normal (toca la cookie, cosa que un circuito no puede hacer). *@
+
+<div class="deca-shell">
+
+    <header class="deca-topbar">
+
+        <a class="deca-brand" href="">
+            <span class="deca-brand-mark">D</span>
+            <span>
+                <strong>DeCA</strong>
+                <small>Documento de control administrativo</small>
+            </span>
+        </a>
+
+        <nav class="deca-topnav">
+            <NavLink href="deca" Match="NavLinkMatch.All">
+                <i class="fa-solid fa-list"></i>
+                DeCA emitidos
+            </NavLink>
+            <NavLink href="deca/new">
+                <i class="fa-solid fa-plus"></i>
+                Nuevo
+            </NavLink>
+            <NavLink href="deca/design">
+                <i class="fa-solid fa-palette"></i>
+                Diseño
+            </NavLink>
+        </nav>
+
+        <div class="deca-user">
+
+            <span class="deca-user-name">
+                <strong>@(Session.Current.UserDisplayName ?? "Usuario")</strong>
+                <small>@Session.Current.Name</small>
+            </span>
+
+            <a class="icon-button"
+               href="account/password"
+               data-enhance-nav="false"
+               title="Cambiar la contraseña">
+                <i class="fa-solid fa-lock"></i>
+            </a>
+
+            <form method="post" action="account/logout" data-enhance="false">
+                <AntiforgeryToken />
+                <button type="submit" class="icon-button" title="Salir">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                </button>
+            </form>
+
+        </div>
+
+    </header>
+
+    <main class="deca-main">
+        @Body
+
+        <ToastHost />
+    </main>
+
+</div>

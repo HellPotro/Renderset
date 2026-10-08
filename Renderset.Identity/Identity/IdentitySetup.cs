@@ -24,11 +24,22 @@ namespace Renderset.Web.Identity;
 /// </summary>
 public static class IdentitySetup
 {
+    /// <param name="configure">
+    /// Lo que cambia entre aplicaciones (Renderset.Web, Renderset.Deca.Web):
+    /// cookie, propietario inicial y marca de las páginas de cuenta. Los
+    /// usuarios y los tenants son los mismos.
+    /// </param>
     public static WebApplicationBuilder AddRendersetIdentity(
-        this WebApplicationBuilder builder)
+        this WebApplicationBuilder builder,
+        Action<RendersetIdentityOptions>? configure = null)
     {
         var services = builder.Services;
         var configuration = builder.Configuration;
+
+        var identityOptions = new RendersetIdentityOptions();
+        configure?.Invoke(identityOptions);
+
+        services.AddSingleton(identityOptions);
 
         var connectionString = configuration.GetConnectionString("RenderSet");
 
@@ -111,7 +122,7 @@ public static class IdentitySetup
 
         services.ConfigureApplicationCookie(options =>
         {
-            options.Cookie.Name = "rs.session";
+            options.Cookie.Name = identityOptions.CookieName;
             options.Cookie.HttpOnly = true;
             options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             options.Cookie.SameSite = SameSiteMode.Lax;
@@ -215,7 +226,10 @@ public static class IdentitySetup
 
         services.AddScoped<TenantTokenFactory>();
 
-        services.AddHostedService<BootstrapOwner>();
+        // Sólo una aplicación crea el propietario inicial: si lo hicieran
+        // las dos a la vez, se mandarían dos invitaciones.
+        if (identityOptions.BootstrapOwner)
+            services.AddHostedService<BootstrapOwner>();
 
         return builder;
     }
@@ -226,4 +240,33 @@ public static class IdentitySetup
         if (services.All(x => x.ServiceType != typeof(TimeProvider)))
             services.AddSingleton(TimeProvider.System);
     }
+}
+
+
+/// <summary>
+/// Lo que distingue a cada aplicación que usa la misma identidad.
+/// </summary>
+public sealed class RendersetIdentityOptions
+{
+    /// <summary>
+    /// Cookie de sesión. Distinta por aplicación: así cada una tiene su
+    /// sesión aunque compartan dominio (en local, localhost con otro
+    /// puerto comparte cookies).
+    /// </summary>
+    public string CookieName { get; set; } = "rs.session";
+
+    /// <summary>
+    /// Crear el propietario inicial (Bootstrap:OwnerEmail) al arrancar.
+    /// </summary>
+    public bool BootstrapOwner { get; set; } = true;
+
+    /// <summary>
+    /// Nombre en la cabecera de las páginas de cuenta.
+    /// </summary>
+    public string ProductName { get; set; } = "RenderSet";
+
+    /// <summary>
+    /// Letra del logotipo de las páginas de cuenta.
+    /// </summary>
+    public string ProductMark { get; set; } = "R";
 }

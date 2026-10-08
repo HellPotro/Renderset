@@ -11,6 +11,11 @@ var serviceKey = builder.AddParameter("renderset-service-key", secret: true);
 // (Parameters:renderset-user-token-private-key / -public-key), en Base64 de
 // una línea o PEM.
 var userTokenPrivateKey = builder.AddParameter("renderset-user-token-private-key", secret: true);
+
+// Clave de servicio propia del portal DeCA: se puede revocar sin tocar la
+// de Web. User-secrets de AppHost (Parameters:renderset-deca-service-key),
+// mínimo 32 caracteres.
+var decaServiceKey = builder.AddParameter("renderset-deca-service-key", secret: true);
 var userTokenPublicKey = builder.AddParameter("renderset-user-token-public-key", secret: true);
 
 // Conversión a PDF: Chromium headless detrás de una API HTTP. En Azure va
@@ -24,6 +29,8 @@ var apiService = builder.AddProject<Projects.Renderset_ApiService>("apiservice")
     .WithEnvironment("Pdf__GotenbergUrl", gotenberg.GetEndpoint("http"))
     .WithEnvironment("Security__ServiceKeys__0__Name", "web")
     .WithEnvironment("Security__ServiceKeys__0__Key", serviceKey)
+    .WithEnvironment("Security__ServiceKeys__1__Name", "deca")
+    .WithEnvironment("Security__ServiceKeys__1__Key", decaServiceKey)
     .WithEnvironment("Security__UserTokenPublicKey", userTokenPublicKey)
     .WaitFor(gotenberg);
 
@@ -45,5 +52,33 @@ var webHttps = web.GetEndpoint("https");
 apiService.WithEnvironment(
     "DocumentLinks__BaseUrl",
     webHttps.Exists ? webHttps : web.GetEndpoint("http"));
+
+// DeCA: el QR de cada DeCA lleva https://<api>/q/{código}. En Azure,
+// Deca__PublicBaseUrl con el dominio corto y definitivo (deca.tudominio),
+// apuntando a la API con HTTPS.
+var apiHttps = apiService.GetEndpoint("https");
+
+apiService.WithEnvironment(
+    "Deca__PublicBaseUrl",
+    apiHttps.Exists ? apiHttps : apiService.GetEndpoint("http"));
+
+// Portal DeCA: aplicación propia, con su login (mismos usuarios que Web) y
+// su clave de servicio. Los usuarios están en la base de datos de
+// RenderSet: ConnectionStrings:RenderSet en sus user-secrets, como en Web.
+var decaWeb = builder.AddProject<Projects.Renderset_Deca_Web>("decaweb")
+    .WithExternalHttpEndpoints()
+    .WithHttpHealthCheck("/health")
+    .WithReference(apiService)
+    .WithEnvironment("ReportingApi", apiHttps)
+    .WithEnvironment("ReportingApiKey", decaServiceKey)
+    .WithEnvironment("Security__UserTokenPrivateKey", userTokenPrivateKey)
+    .WaitFor(apiService);
+
+// Enlace "DeCA" del menú de Web. Sólo la URL: sin WaitFor.
+var decaWebHttps = decaWeb.GetEndpoint("https");
+
+web.WithEnvironment(
+    "Deca__PortalUrl",
+    decaWebHttps.Exists ? decaWebHttps : decaWeb.GetEndpoint("http"));
 
 builder.Build().Run();

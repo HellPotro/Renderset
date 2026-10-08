@@ -61,7 +61,9 @@ public sealed class RenderSetDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // Las de DeCA van en su propia base de datos (DecaDbContext).
         modelBuilder.ApplyConfigurationsFromAssembly(
-            typeof(RenderSetDbContext).Assembly);
+            typeof(RenderSetDbContext).Assembly,
+            type => type.Namespace != DecaDbContext.EntityNamespace);
     }
 }

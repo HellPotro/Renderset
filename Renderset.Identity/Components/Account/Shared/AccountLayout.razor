@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@inject RendersetIdentityOptions Product
 
 @* Páginas de cuenta: estáticas, sin menú. Una tarjeta centrada. *@
 
@@ -7,8 +8,8 @@
     <div class="account-card">
 
         <div class="account-brand">
-            <span class="account-brand-mark">R</span>
-            <strong>RenderSet</strong>
+            <span class="account-brand-mark">@Product.ProductMark</span>
+            <strong>@Product.ProductName</strong>
         </div>
 
         @Body

@@ -1,0 +1,30 @@
+@page "/Error"
+@using System.Diagnostics
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+
+<PageTitle>Error - DeCA</PageTitle>
+
+<div class="page">
+    <div class="deca-empty">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <strong>No se ha podido procesar la solicitud.</strong>
+        <span>Ha ocurrido un error inesperado. El detalle está en los logs del servidor.</span>
+
+        @if (!string.IsNullOrEmpty(_requestId))
+        {
+            <code>@_requestId</code>
+        }
+    </div>
+</div>
+
+@code {
+
+    [CascadingParameter]
+    public HttpContext? HttpContext { get; set; }
+
+    private string? _requestId;
+
+    protected override void OnInitialized() =>
+        _requestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

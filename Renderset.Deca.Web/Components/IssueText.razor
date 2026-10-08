@@ -1,0 +1,23 @@
+@* El error o aviso de un campo que no es DecaTextField (fecha, hora,
+   números), con el mismo aspecto. *@
+
+@if (Issue is { } issue)
+{
+    <small class="deca-issue @(issue.IsWarning ? "is-warning" : "is-error")">
+        <i class="fa-solid @(issue.IsWarning ? "fa-circle-info" : "fa-circle-exclamation")"></i>
+        @issue.Message
+    </small>
+}
+else if (!string.IsNullOrWhiteSpace(Hint))
+{
+    <small>@Hint</small>
+}
+
+@code {
+
+    [Parameter]
+    public DecaIssue? Issue { get; set; }
+
+    [Parameter]
+    public string? Hint { get; set; }
+}

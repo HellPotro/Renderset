@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+
+    @* Las piezas comunes de RenderSet (botones, tarjetas, formularios,
+       toasts) y las páginas de cuenta vienen de sus librerías; aquí sólo
+       se añade lo propio del portal. *@
+    <link rel="stylesheet" href="@Assets["_content/Renderset.Blazor/css/app.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Renderset.Blazor/css/components.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Renderset.Identity/css/account.css"]" />
+
+    @* Diseñador (ReportEditor) y vista previa del documento. *@
+    <link rel="stylesheet" href="@Assets["_content/Renderset.Blazor/css/report-fonts.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Renderset.Blazor/css/report-document.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Renderset.Blazor/css/reporting.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Renderset.Blazor/css/report-composer.css"]" />
+    <link rel="stylesheet" href="@Assets["css/deca.css"]" />
+    <link rel="stylesheet" href="@Assets["Renderset.Deca.Web.styles.css"]" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+
+    <ImportMap />
+
+    <meta name="theme-color" content="#173d4f" />
+
+    <HeadOutlet @rendermode="PageRenderMode" />
+</head>
+
+<body>
+    <Routes @rendermode="PageRenderMode" />
+
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["_content/Renderset.Blazor/js/reporting.js"]"></script>
+</body>
+
+</html>
+
+@code {
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    /// <summary>
+    /// Todo interactivo salvo las páginas de cuenta, que escriben la cookie
+    /// de sesión y tienen que ser estáticas ([ExcludeFromInteractiveRouting]).
+    /// </summary>
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext.AcceptsInteractiveRouting()
+            ? InteractiveServer
+            : null;
+}

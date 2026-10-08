@@ -144,6 +144,17 @@ public sealed class GotenbergPdfConverter
         AddField(form, "printBackground", "true");
         AddField(form, "preferCssPageSize", "false");
 
+        // Gotenberg 8 escribe los metadatos con ExifTool después de
+        // convertir: el PDF sale ya con su fecha de creación y de
+        // modificación.
+        if (page.Metadata is { Count: > 0 } metadata)
+        {
+            AddField(
+                form,
+                "metadata",
+                System.Text.Json.JsonSerializer.Serialize(metadata));
+        }
+
         return await SendAsync(
             "forms/chromium/convert/html",
             form,

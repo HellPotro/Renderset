@@ -1,0 +1,47 @@
+@* Estado de cara al usuario: lo que importa es si el QR descarga. *@
+
+<span class="deca-status @Css" title="@Title">
+    <i class="fa-solid @Icon"></i>
+    @Text
+</span>
+
+@code {
+
+    [Parameter]
+    public DecaStatus Status { get; set; }
+
+    [Parameter]
+    public DateTime? PublicUntilUtc { get; set; }
+
+    private bool Disabled =>
+        PublicUntilUtc is { } until &&
+        DateTime.UtcNow >= until;
+
+    private string Css =>
+        Disabled
+            ? "is-disabled"
+            : Status == DecaStatus.Finished
+                ? "is-finished"
+                : "is-issued";
+
+    private string Icon =>
+        Disabled
+            ? "fa-link-slash"
+            : Status == DecaStatus.Finished
+                ? "fa-flag-checkered"
+                : "fa-qrcode";
+
+    private string Text =>
+        Disabled
+            ? "QR desactivado"
+            : Status == DecaStatus.Finished
+                ? "Terminado"
+                : "Emitido";
+
+    private string Title =>
+        Disabled
+            ? "El servicio terminó y pasó el plazo: el QR ya no descarga. El DeCA se conserva."
+            : Status == DecaStatus.Finished
+                ? $"Servicio terminado. El QR descarga hasta el {DecaFormat.LocalDateTime(PublicUntilUtc)}."
+                : "El QR descarga el PDF.";
+}

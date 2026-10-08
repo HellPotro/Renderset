@@ -3,6 +3,7 @@
 @inject UserManager<RendersetUser> UserManager
 @inject TenantSignIn TenantSignIn
 @inject NavigationManager Navigation
+@inject RendersetIdentityOptions Product
 
 <PageTitle>Entrar - RenderSet</PageTitle>
 
@@ -22,7 +23,7 @@
        un bucle entre esta página y la aplicación. *@
     <p class="account-hint">
         Ya has entrado como <strong>@signedInAs</strong>.
-        <a href="@AccountLinks.SafeReturnUrl(ReturnUrl)">Ir a RenderSet</a>
+        <a href="@AccountLinks.SafeReturnUrl(ReturnUrl)">Ir a @Product.ProductName</a>
     </p>
 }
 

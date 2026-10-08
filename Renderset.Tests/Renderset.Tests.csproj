@@ -30,6 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Renderset.AppHost\Renderset.AppHost.csproj" />
     <ProjectReference Include="..\Renderset.Core\Renderset.Core.csproj" />
+    <ProjectReference Include="..\Renderset.Deca\Renderset.Deca.csproj" />
     <ProjectReference Include="..\Renderset.Client\Renderset.Client.csproj" />
   </ItemGroup>
 

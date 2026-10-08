@@ -1,0 +1,26 @@
+@* Las páginas de cuenta (entrar, invitación, contraseña) están en
+   Renderset.Identity, las mismas que en RenderSet Web. *@
+<Router AppAssembly="typeof(Program).Assembly"
+        AdditionalAssemblies="new[] { typeof(AccountLinks).Assembly }">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(DecaLayout)">
+            <NotAuthorized>
+                @if (context.User.Identity?.IsAuthenticated != true)
+                {
+                    <RedirectToLogin />
+                }
+                else
+                {
+                    <div class="page">
+                        <div class="deca-empty">
+                            <i class="fa-solid fa-lock"></i>
+                            <span>No tienes permiso para esta página.</span>
+                            <a class="secondary-button" href="">Volver a DeCA</a>
+                        </div>
+                    </div>
+                }
+            </NotAuthorized>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>

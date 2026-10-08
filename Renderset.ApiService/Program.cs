@@ -22,6 +22,8 @@ using Renderset.Core.Themes;
 using Renderset.Core.Translations;
 using Renderset.Core.Variables;
 using Renderset.Blazor.Rendering;
+using Renderset.Deca;
+using Renderset.Deca.Issuing;
 using Renderset.Blazor.Sharing;
 using Renderset.Infrastructure.Pdf;
 using Renderset.Infrastructure.Persistence;
@@ -145,6 +147,69 @@ builder.Services.AddRendersetDataProtection(
     documentSharing.DataProtectionKeysPath);
 
 builder.Services.AddSingleton<IBundleTokenProtector, DataProtectionBundleTokenProtector>();
+
+// ---------------------------------------------------------------- DeCA
+
+// Dominio del QR (Deca:PublicBaseUrl): va impreso en cada DeCA durante un
+// año, así que conviene uno corto y propio (deca.tudominio). Sin él se usa
+// el de los enlaces compartidos. Tiene que llegar a esta API por HTTPS.
+var deca =
+    builder.Configuration
+        .GetSection(DecaOptions.SectionName)
+        .Get<DecaOptions>()
+    ?? new DecaOptions();
+
+if (string.IsNullOrWhiteSpace(deca.PublicBaseUrl))
+    deca.PublicBaseUrl = documentSharing.PublicBaseUrl;
+
+builder.Services.AddSingleton(deca);
+
+// Base de datos propia (ConnectionStrings:Deca), aislada de la de RenderSet.
+// Sin ella la API arranca igual y /api/deca y /q no existen.
+var decaConnectionString =
+    builder.Configuration.GetConnectionString("Deca");
+
+var decaEnabled =
+    !string.IsNullOrWhiteSpace(decaConnectionString);
+
+if (decaEnabled)
+{
+    builder.Services.AddDbContextFactory<DecaDbContext>(options =>
+    {
+        options.UseSqlServer(decaConnectionString);
+    });
+
+    builder.Services.AddScoped<IDecaRepository, EfDecaRepository>();
+    builder.Services.AddScoped<IDecaTemplateRepository, EfDecaTemplateRepository>();
+    builder.Services.AddScoped<IDecaIssuer, DecaIssuer>();
+
+    // PDF de los DeCA: en la base de datos Deca salvo que Deca:Storage diga
+    // otra cosa (mismo formato que DocumentStorage, contenedor "deca" por
+    // defecto). Su propio almacén, aparte de los documentos de RenderSet.
+    var decaStorage =
+        builder.Configuration
+            .GetSection(DecaOptions.SectionName + ":Storage")
+            .Get<DocumentStorageOptions>();
+
+    switch (decaStorage?.Provider)
+    {
+        case DocumentStorageProvider.AzureBlob:
+            if (string.IsNullOrWhiteSpace(builder.Configuration[DecaOptions.SectionName + ":Storage:ContainerName"]))
+                decaStorage!.ContainerName = "deca";
+
+            builder.Services.AddSingleton(
+                new DecaContentStore(
+                    AzureBlobDocumentContentStore.Create(decaStorage!)));
+            break;
+
+        case DocumentStorageProvider.FileSystem:
+            builder.Services.AddSingleton(
+                new DecaContentStore(
+                    new FileSystemDocumentContentStore(
+                        decaStorage!.RootPath!)));
+            break;
+    }
+}
 
 builder.Services.AddScoped<IDocumentBundleRepository, EfDocumentBundleRepository>();
 builder.Services.AddScoped<IDocumentBundleService, DocumentBundleService>();
@@ -324,6 +389,8 @@ api.MapReportVariableEndpoints();
 api.MapReportResourceEndpoints();
 api.MapTenantCultureEndpoints();
 api.MapApiKeyEndpoints();
+if (decaEnabled)
+    api.MapDecaEndpoints();
 
 // Público: enlaces compartidos con token propio.
 app.MapSharingEndpoints();
@@ -334,6 +401,13 @@ app.MapSharingEndpoints();
 // una página en blanco. Con BaseUrl ya corregida se redirige al visor, así
 // que los QR que ya están impresos siguen valiendo.
 app.MapDocumentLinkRedirect();
+
+// Público: el QR de cada DeCA descarga su PDF (/q/{código}).
+if (decaEnabled)
+    app.MapDecaPublicEndpoints();
+else
+    app.Logger.LogWarning(
+        "DeCA desactivado: falta ConnectionStrings:Deca (base de datos de DeCA).");
 
 app.MapDefaultEndpoints();
 

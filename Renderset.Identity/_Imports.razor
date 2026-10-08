@@ -1,0 +1,15 @@
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@using Renderset.Core.Tenancy
+@using Renderset.Web.Identity
+@using Renderset.Web.Email
+@using Renderset.Web.Components.Account
+@using Renderset.Web.Components.Account.Shared
+
+@* Como en las aplicaciones que la usan: todo exige sesión. Las páginas de
+   entrar lo abren con [AllowAnonymous] en su _Imports. *@
+@attribute [Authorize]
