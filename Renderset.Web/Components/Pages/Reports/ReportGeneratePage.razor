@@ -1,0 +1,573 @@
+@page "/reports/{ReportId}/generate"
+
+@using Microsoft.AspNetCore.Components.Forms
+@using Renderset.Core.DataSources
+@using Renderset.Core.Localization
+@using Renderset.Core.Mapping
+@using Renderset.Core.Persistence
+@using Renderset.Core.Rendering
+@using Renderset.Core.Reports
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+
+<PageTitle>Generar - RenderSet</PageTitle>
+
+<div class="page report-generate-page">
+
+    <header class="page-header">
+
+        <div>
+            <a class="back-button" href="/reports">
+                <i class="fa-solid fa-arrow-left"></i>
+                Reports
+            </a>
+
+            <h1>Generar @(_report is null ? null : $"· {_report.Name}")</h1>
+
+            <p>
+                Pega el resultado de tu consulta y genera los documentos con el
+                diseño y el mapping guardados. Es la misma llamada que hará el
+                ERP: lo que salga aquí es lo que saldrá por API.
+            </p>
+        </div>
+
+    </header>
+
+    @if (_loading)
+    {
+        <div class="rgen-empty">
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            Cargando…
+        </div>
+    }
+    else if (_report is null)
+    {
+        <div class="rgen-empty">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            No se ha podido abrir el report.
+        </div>
+    }
+    else if (_mapping is null)
+    {
+        <section class="editor-card rgen-missing">
+            <i class="fa-solid fa-table"></i>
+            <div>
+                <strong>Este report todavía no sabe leer filas planas.</strong>
+                <p>Configura antes el mapping con unas filas de ejemplo.</p>
+            </div>
+            <a class="primary-button" href="@($"reports/{Uri.EscapeDataString(_report.Id)}/data")">
+                Configurar datos
+            </a>
+        </section>
+    }
+    else
+    {
+        <div class="rgen-layout">
+
+            @* ------------------------------------------------ datos *@
+
+            <section class="editor-card">
+
+                <header class="editor-card-header rgen-card-header">
+                    <h2>Filas</h2>
+                    <a class="rgen-link" href="@($"reports/{Uri.EscapeDataString(_report.Id)}/data")">
+                        Mapping: @_mapping.Name
+                    </a>
+                </header>
+
+                <div class="editor-card-body">
+
+                    <textarea class="rgen-input"
+                              rows="12"
+                              spellcheck="false"
+                              placeholder="Pega aquí la rejilla de SSMS con cabeceras (clic derecho → Copiar con encabezados)"
+                              value="@_raw"
+                              @onchange="RawChanged"></textarea>
+
+                    <label class="rgen-file">
+                        <i class="fa-solid fa-file-arrow-up"></i>
+                        o carga un .txt / .csv exportado
+                        <InputFile accept=".txt,.csv,.tsv" OnChange="FileChangedAsync" />
+                    </label>
+
+                    @if (_payload is not null)
+                    {
+                        <div class="rgen-summary">
+                            <span><strong>@_payload.Rows.Count</strong> filas</span>
+                            <span><strong>@_payload.Columns.Count</strong> columnas</span>
+                            <span><strong>@_groups.Count</strong> @(_groups.Count == 1 ? "documento" : "documentos")</span>
+                            @if (_mapping.Root.KeyColumns.Count > 0)
+                            {
+                                <span class="rgen-muted">@KeyText</span>
+                            }
+                        </div>
+                    }
+
+                    @if (_errors.Count > 0)
+                    {
+                        <ul class="rgen-errors">
+                            @foreach (var error in _errors)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    }
+
+                    <div class="rgen-options">
+
+                        <div class="form-group">
+                            <label for="rgen-preset">Diseño</label>
+                            <select id="rgen-preset"
+                                    value="@_presetId"
+                                    @onchange="e => _presetId = e.Value?.ToString() ?? string.Empty">
+                                <option value="">Por asignación (el del ERP)</option>
+                                @foreach (var preset in _presets)
+                                {
+                                    <option value="@preset.Id">@preset.Configuration.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="rgen-culture">Idioma</label>
+                            <select id="rgen-culture"
+                                    value="@_culture"
+                                    @onchange="e => _culture = e.Value?.ToString() ?? string.Empty">
+                                @foreach (var culture in _cultures)
+                                {
+                                    <option value="@culture.Culture">
+                                        @CultureFlag.For(culture.Culture) @culture.DisplayName
+                                    </option>
+                                }
+                            </select>
+                        </div>
+
+                    </div>
+
+                    <label class="rgen-check">
+                        <input type="checkbox"
+                               checked="@_includeData"
+                               @onchange="e => _includeData = e.Value is true" />
+                        <span>
+                            <strong>Incluir los datos en el documento</strong>
+                            <small>
+                                Permite exportar sus tablas a CSV y copiar el JSON
+                                desde el visor. El documento pesa casi el doble.
+                            </small>
+                        </span>
+                    </label>
+
+                </div>
+
+                <footer class="rgen-actions">
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@(!CanGenerate)"
+                            @onclick="GenerateAsync">
+                        @if (_generating)
+                        {
+                            <i class="fa-solid fa-circle-notch fa-spin"></i>
+                            @($"Generando {_done} de {_groups.Count}…")
+                        }
+                        else
+                        {
+                            <i class="fa-solid fa-file-export"></i>
+                            @GenerateText
+                        }
+                    </button>
+                </footer>
+
+            </section>
+
+            @* ------------------------------------------------ resultado *@
+
+            <section class="editor-card">
+
+                <header class="editor-card-header">
+                    <h2>Documentos generados</h2>
+                </header>
+
+                @if (_results.Count == 0)
+                {
+                    <div class="rgen-empty is-small">
+                        <i class="fa-regular fa-file-lines"></i>
+                        Aquí aparecerán los documentos, con su enlace y su PDF.
+                    </div>
+                }
+                else
+                {
+                    <ul class="rgen-results">
+                        @foreach (var result in _results)
+                        {
+                            <li class="@(result.Document is null ? "is-error" : null)">
+
+                                <i class="@(result.Document is null ? "fa-solid fa-triangle-exclamation" : "fa-solid fa-file-circle-check")"></i>
+
+                                <div class="rgen-result-text">
+                                    <strong>@(result.Document?.FileName ?? result.Key)</strong>
+                                    @if (result.Error is not null)
+                                    {
+                                        <small>@result.Error</small>
+                                    }
+                                    else
+                                    {
+                                        <small class="rgen-result-meta">
+                                            @result.Key ·
+                                            <CultureFlagIcon Culture="@result.Document!.Culture"
+                                                             Size="CultureFlagIcon.CultureFlagSize.Small" />
+                                            @result.Document!.Culture
+                                        </small>
+                                    }
+                                </div>
+
+                                @if (result.Document is { } document)
+                                {
+                                    <a class="icon-button"
+                                       title="Abrir en el visor"
+                                       href="@ViewerUrl(document.DocumentId)"
+                                       target="_blank"
+                                       rel="noopener">
+                                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                    </a>
+
+                                    <a class="secondary-button"
+                                       href="@($"{FileUrl(document.DocumentId)}/pdf")"
+                                       target="_blank"
+                                       rel="noopener">
+                                        PDF
+                                    </a>
+                                }
+
+                            </li>
+                        }
+                    </ul>
+
+                    <p class="rgen-note">
+                        Quedan guardados como cualquier documento emitido: puedes
+                        compartirlos desde <a href="bundles">Documentos compartidos</a>.
+                    </p>
+                }
+
+            </section>
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    [Parameter]
+    public string ReportId { get; set; } = default!;
+
+    /// <summary>
+    /// Freno para pegados accidentales de un mes entero de salidas: cada
+    /// documento es una llamada.
+    /// </summary>
+    private const int MaxDocuments = 50;
+
+    private bool _loading = true;
+    private bool _generating;
+    private int _done;
+
+    private Report? _report;
+    private DataMapping? _mapping;
+    private IReadOnlyList<ReportPreset> _presets = [];
+    private IReadOnlyList<TenantCulture> _cultures = [];
+
+    private string _raw = string.Empty;
+    private string _presetId = string.Empty;
+    private string _culture = string.Empty;
+
+    /// <summary>
+    /// Igual que output.includeDocumentData en la API: con datos, el visor
+    /// ofrece Exportar CSV y Copiar JSON; sin ellos el documento pesa menos.
+    /// </summary>
+    private bool _includeData;
+
+    private TabularPayload? _payload;
+    private List<RowGroup> _groups = [];
+    private IReadOnlyList<string> _errors = [];
+
+    private readonly List<GeneratedDocument> _results = [];
+
+    private bool CanGenerate =>
+        !_generating &&
+        _payload is not null &&
+        _groups.Count > 0 &&
+        _errors.Count == 0;
+
+    private string GenerateText =>
+        _groups.Count > 1
+            ? $"Generar {_groups.Count} documentos"
+            : "Generar documento";
+
+    private string KeyText =>
+        $"un documento por {string.Join(", ", _mapping!.Root.KeyColumns)}";
+
+    private static string ViewerUrl(string documentId) =>
+        $"/documents/{Uri.EscapeDataString(documentId)}";
+
+    private static string FileUrl(string documentId) =>
+        $"/files/documents/{Uri.EscapeDataString(documentId)}";
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _report = await Toasts.RunAsync(
+                () => RenderSetApi.GetReportAsync(CurrentTenant.Id, ReportId),
+                errorTitle: "No se ha podido cargar el report");
+
+            if (_report is null)
+                return;
+
+            var mappings = await Toasts.RunAsync(
+                () => RenderSetApi.GetMappingsAsync(CurrentTenant.Id, ReportId),
+                errorTitle: "No se ha podido cargar el mapping");
+
+            _mapping = mappings?.FirstOrDefault();
+
+            var presets = await Toasts.RunAsync(
+                () => RenderSetApi.GetPresetsAsync(CurrentTenant.Id),
+                errorTitle: "No se han podido cargar los presets");
+
+            _presets =
+                (presets ?? [])
+                    .Where(x => string.Equals(x.Configuration.ReportId, ReportId, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(x => x.Configuration.Name)
+                    .ToList();
+
+            var cultures = await Toasts.RunAsync(
+                () => RenderSetApi.GetCulturesAsync(CurrentTenant.Id),
+                errorTitle: "No se han podido cargar los idiomas");
+
+            _cultures =
+                (cultures ?? [])
+                    .OrderByDescending(x => x.IsDefault)
+                    .ThenBy(x => x.DisplayName)
+                    .ToList();
+
+            _culture = _cultures.FirstOrDefault()?.Culture ?? string.Empty;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+    // ------------------------------------------------------------ filas
+
+    /// <summary>
+    /// Todo lo que se comprueba aquí es local (formato del pegado y columnas
+    /// frente al mapping), por eso va en línea y no en toast.
+    /// </summary>
+    private void RawChanged(
+        ChangeEventArgs e) =>
+        Analyze(e.Value?.ToString() ?? string.Empty);
+
+    /// <summary>
+    /// Un fichero no pasa por el textarea: llega por streaming y no depende
+    /// del tamaño máximo de mensaje del circuito.
+    /// </summary>
+    private async Task FileChangedAsync(
+        InputFileChangeEventArgs e)
+    {
+        try
+        {
+            await using var stream =
+                e.File.OpenReadStream(MaxFileBytes);
+
+            using var reader =
+                new StreamReader(stream, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+
+            Analyze(await reader.ReadToEndAsync());
+        }
+        catch (IOException)
+        {
+            _errors = [$"El fichero pasa de {MaxFileBytes / 1024 / 1024} MB."];
+        }
+    }
+
+    private const long MaxFileBytes = 20 * 1024 * 1024;
+
+    private void Analyze(
+        string raw)
+    {
+        _raw = raw;
+        _payload = null;
+        _groups = [];
+        _errors = [];
+
+        if (string.IsNullOrWhiteSpace(_raw) || _mapping is null)
+            return;
+
+        try
+        {
+            _payload = DelimitedTextParser.Parse(_raw);
+        }
+        catch (Exception exception)
+        {
+            _errors = [$"No se ha podido leer el pegado: {exception.Message}"];
+            return;
+        }
+
+        var errors =
+            TabularDocuments.Validate(_payload, _mapping).ToList();
+
+        if (errors.Count == 0)
+        {
+            _groups = SplitByDocument(_payload, _mapping);
+
+            if (_groups.Count > MaxDocuments)
+                errors.Add($"Salen {_groups.Count} documentos; desde aquí se generan como mucho {MaxDocuments} de una vez.");
+        }
+
+        _errors = errors;
+    }
+
+    /// <summary>
+    /// La API emite un documento por petición, así que el pegado se reparte
+    /// por la clave del documento del mapping (SalidaId) antes de enviarlo.
+    /// Se conserva el orden de primera aparición.
+    /// </summary>
+    private static List<RowGroup> SplitByDocument(
+        TabularPayload payload,
+        DataMapping mapping)
+    {
+        var schema = payload.ToSchema();
+
+        var keyOrdinals =
+            mapping.Root.KeyColumns
+                .Select(schema.IndexOf)
+                .Where(x => x >= 0)
+                .ToArray();
+
+        if (keyOrdinals.Length == 0)
+            return [new RowGroup("Documento", payload.Rows)];
+
+        var groups = new List<RowGroup>();
+        var index = new Dictionary<string, RowGroup>(StringComparer.Ordinal);
+
+        foreach (var row in payload.Rows)
+        {
+            var key =
+                string.Join(
+                    " · ",
+                    keyOrdinals.Select(o => Convert.ToString(row[o], System.Globalization.CultureInfo.InvariantCulture)?.Trim() ?? "—"));
+
+            if (!index.TryGetValue(key, out var group))
+            {
+                group = new RowGroup(key, []);
+                index[key] = group;
+                groups.Add(group);
+            }
+
+            group.Rows.Add(row);
+        }
+
+        return groups;
+    }
+
+
+    // ------------------------------------------------------------ generar
+
+    private async Task GenerateAsync()
+    {
+        if (!CanGenerate || _report is null || _payload is null)
+            return;
+
+        _generating = true;
+        _done = 0;
+        _results.Clear();
+
+        try
+        {
+            foreach (var group in _groups)
+            {
+                var request =
+                    new RenderRequest
+                    {
+                        ReportId = _report.Id,
+                        PresetId = string.IsNullOrWhiteSpace(_presetId) ? null : _presetId,
+                        MappingId = _mapping!.Id,
+                        Rows = new TabularPayload
+                        {
+                            Columns = _payload.Columns,
+                            Rows = group.Rows
+                        },
+                        Context = new RenderContext
+                        {
+                            Culture = string.IsNullOrWhiteSpace(_culture) ? null : _culture
+                        },
+                        Output = new RenderOutput
+                        {
+                            Format = RenderFormat.Html,
+                            IncludeDocumentData = _includeData
+                        }
+                    };
+
+                // Un documento que falla no para el resto: se apunta y se
+                // sigue, igual que haría un lote desde el ERP.
+                try
+                {
+                    var response =
+                        await RenderSetApi.RenderAsync(
+                            CurrentTenant.Id,
+                            request);
+
+                    _results.Add(
+                        response.IsSuccessStatusCode && response.Content is not null
+                            ? new GeneratedDocument(group.Key, response.Content, null)
+                            : new GeneratedDocument(group.Key, null, ToastServiceExtensions.Describe(response)));
+                }
+                catch (Exception exception)
+                {
+                    _results.Add(
+                        new GeneratedDocument(
+                            group.Key,
+                            null,
+                            ToastServiceExtensions.Describe(exception)));
+                }
+
+                _done++;
+                StateHasChanged();
+            }
+
+            var failed = _results.Count(x => x.Document is null);
+
+            if (failed == 0)
+            {
+                Toasts.Success(
+                    _results.Count == 1
+                        ? "Documento generado."
+                        : $"{_results.Count} documentos generados.");
+            }
+            else
+            {
+                Toasts.Error(
+                    $"{failed} de {_results.Count} no se han podido generar. El detalle está en la lista.",
+                    "Generación incompleta");
+            }
+        }
+        finally
+        {
+            _generating = false;
+        }
+    }
+
+    private sealed record RowGroup(
+        string Key,
+        List<List<object?>> Rows);
+
+    private sealed record GeneratedDocument(
+        string Key,
+        RenderDocumentResponse? Document,
+        string? Error);
+}

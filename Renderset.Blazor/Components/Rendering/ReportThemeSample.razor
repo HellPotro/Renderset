@@ -1,0 +1,170 @@
+@using System.Text.Json
+@using Renderset.Core.Definitions
+@using Renderset.Core.Resolved
+@using Renderset.Core.Themes
+
+@*
+    Documento de ejemplo pintado con el renderer real. La pantalla de temas lo
+    usa como vista previa: así lo que se ve al elegir colores es exactamente
+    lo que saldrá en los documentos, no una maqueta que se le parece.
+*@
+
+<div class="report-theme-sample">
+    <DynamicReportRenderer Report="SampleReport"
+                           Data="SampleData"
+                           Theme="Theme" />
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public ReportTheme Theme { get; set; } = default!;
+
+    private static readonly JsonElement SampleData =
+        JsonDocument.Parse(
+            """
+            {
+              "number": "F-2026-0412",
+              "date": "2026-10-02",
+              "customer": "Gestamp Esmar, S.A.",
+              "vat": "A48123456",
+              "paymentTerms": "Transferencia 60 días",
+              "total": 5640.40,
+              "notes": "Entrega en muelle 3, de 8:00 a 14:00.",
+              "lines": [
+                { "reference": "BR-1042", "description": "Disco de freno ventilado", "quantity": 120, "price": 18.40, "amount": 2208.00 },
+                { "reference": "BR-2210", "description": "Pastilla delantera cerámica", "quantity": 240, "price": 9.85, "amount": 2364.00 },
+                { "reference": "CL-0087", "description": "Kit de embrague", "quantity": 12, "price": 89.03, "amount": 1068.40 }
+              ]
+            }
+            """).RootElement.Clone();
+
+    private static readonly ResolvedReportDefinition SampleReport =
+        BuildSample();
+
+    private static ResolvedReportDefinition BuildSample()
+    {
+        static ResolvedReportField Field(
+            string id,
+            string label,
+            int order,
+            ReportFieldType type = ReportFieldType.Text) =>
+            new()
+            {
+                Id = id,
+                Label = label,
+                DataPath = id,
+                Order = order,
+                Visible = true,
+                Type = type
+            };
+
+        static ResolvedReportColumn Column(
+            string id,
+            string label,
+            int order,
+            decimal? width,
+            ReportFieldType type = ReportFieldType.Text) =>
+            new()
+            {
+                Id = id,
+                Label = label,
+                DataPath = id,
+                Order = order,
+                Visible = true,
+                Width = width,
+                Type = type
+            };
+
+        var document =
+            new ResolvedReportSection
+            {
+                Id = "document",
+                Name = "Datos del documento",
+                Order = 1,
+                Visible = true,
+                Layout = ReportSectionLayout.Grid,
+                Columns = 3,
+                Fields =
+                [
+                    Field("customer", "Cliente", 1),
+                    Field("vat", "CIF", 2),
+                    Field("date", "Fecha", 3)
+                ]
+            };
+
+        var conditions =
+            new ResolvedReportSection
+            {
+                Id = "conditions",
+                Name = "Condiciones",
+                Order = 2,
+                Visible = true,
+                Layout = ReportSectionLayout.List,
+                Fields =
+                [
+                    Field("paymentTerms", "Forma de pago", 1),
+                    Field("notes", "Observaciones", 2)
+                ]
+            };
+
+        var lines =
+            new ResolvedReportSection
+            {
+                Id = "lines",
+                Name = "Líneas",
+                Order = 3,
+                Visible = true,
+                Layout = ReportSectionLayout.List,
+                Table = new ResolvedReportTable
+                {
+                    Id = "lines",
+                    Name = "Líneas",
+                    DataPath = "lines",
+                    Columns =
+                    [
+                        Column("reference", "Referencia", 1, 16),
+                        Column("description", "Descripción", 2, null),
+                        Column("quantity", "Cantidad", 3, 13, ReportFieldType.Number),
+                        Column("price", "Precio", 4, 13, ReportFieldType.Currency),
+                        Column("amount", "Importe", 5, 15, ReportFieldType.Currency)
+                    ]
+                }
+            };
+
+        ResolvedReportBodyItem Item(ResolvedReportSection section, int row) =>
+            new()
+            {
+                Id = section.Id,
+                Type = ReportBodyItemType.Section,
+                Order = section.Order,
+                Row = row,
+                Section = section
+            };
+
+        return new ResolvedReportDefinition
+        {
+            Id = "theme-sample",
+            Name = "Factura",
+            Header = new ResolvedReportHeader
+            {
+                Visible = true,
+                Title = "Factura F-2026-0412",
+                Subtitle = "Pedido 4512 · Albarán A-88120",
+                ShowLogo = false
+            },
+            Sections = [document, conditions, lines],
+            Body =
+            [
+                Item(document, 1),
+                Item(conditions, 2),
+                Item(lines, 3)
+            ],
+            Footer = new ResolvedReportFooter
+            {
+                Visible = true,
+                Text = "Documento de ejemplo · RenderSet"
+            }
+        };
+    }
+}

@@ -21,6 +21,20 @@
     font-family: var(--report-font);
 }
 
+    /* Con pie, el documento es una columna que ocupa toda la hoja: el
+       espaciador se come el hueco que sobra y el pie queda abajo, como en
+       una hoja impresa, aunque el informe sea corto. Sin pie no cambia
+       nada respecto a antes. Los márgenes de los hijos sólo son inferiores,
+       así que el flex no altera las separaciones. */
+    .dynamic-report.has-page-footer {
+        display: flex;
+        flex-direction: column;
+    }
+
+.dynamic-report-page-spacer {
+    flex: 1 0 28px;
+}
+
 
 /* ---------- Header ---------- */
 
@@ -100,6 +114,7 @@
 
     .report-header-content h1 {
         margin: 0;
+        color: var(--report-title, inherit);
         font-size: 24px;
         font-weight: 700;
     }
@@ -107,6 +122,112 @@
 .report-header-subtitle {
     margin-top: 4px;
     color: var(--report-muted);
+}
+
+/* QR: al borde derecho en los tres diseños. Con el logo a la derecha la
+   cabecera va en row-reverse, así que ahí se le da order -1 para que no
+   salte al lado izquierdo. Fondo blanco propio: sobre una cabecera de color
+   un QR sin margen claro no lo lee ningún móvil. */
+.report-header-qr {
+    flex: none;
+    align-self: center;
+    padding: 4px;
+    border-radius: 4px;
+    background: #FFFFFF;
+    line-height: 0;
+}
+
+    .report-header-qr svg {
+        display: block;
+    }
+
+.report-header.is-logo-right .report-header-qr {
+    order: -1;
+}
+
+.report-header.is-stacked .report-header-qr {
+    align-self: center;
+}
+
+/* Título en banda propia. La cabecera pasa a ser una columna: la fila
+   membrete (.report-header-main) hereda el reparto de siempre —logo,
+   empresa, QR— y el título va a todo el ancho encima o debajo. Las reglas
+   de disposición se repiten sobre .report-header-main en vez de mover las
+   de .report-header para no tocar el DOM ni el aspecto del modo clásico. */
+.report-header.has-title-band,
+.report-header.has-title-band.is-logo-right,
+.report-header.has-title-band.is-stacked {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+}
+
+.report-header-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+}
+
+.report-header.is-logo-right .report-header-main {
+    flex-direction: row-reverse;
+}
+
+.report-header.is-stacked .report-header-main {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+/* En la fila membrete el QR se alinea arriba con el logo y los datos: en
+   el centro quedaba descolgado cuando los datos de empresa son altos. */
+.report-header-main .report-header-qr {
+    align-self: flex-start;
+}
+
+.report-header.is-stacked .report-header-main .report-header-qr {
+    align-self: center;
+}
+
+/* Sin el título encima, las columnas de empresa empiezan a la altura del
+   logo. */
+.report-header-main .report-header-columns,
+.report-header-main .report-header-lines {
+    margin-top: 0;
+}
+
+.report-header-titlebar h1 {
+    margin: 0;
+    color: var(--report-title, inherit);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.report-header.is-title-below .report-header-titlebar {
+    padding-top: 12px;
+    border-top: 1px solid var(--report-border);
+}
+
+.report-header.is-title-above .report-header-titlebar {
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--report-border);
+}
+
+/* Sin línea de separación no se pinta ninguna, tampoco la de la banda. */
+.report-header.has-title-band.is-borderless .report-header-titlebar {
+    padding: 0;
+    border: 0;
+}
+
+/* Sobre fondo de color la línea del tema no se ve: se usa el color del
+   texto atenuado. */
+.report-header.has-title-band.is-filled .report-header-titlebar {
+    border-color: currentColor;
+    border-color: color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.report-header.is-stacked .report-header-titlebar {
+    text-align: center;
 }
 
 
@@ -178,20 +299,9 @@
 
 .dynamic-report-grid {
     display: grid;
+    grid-template-columns: repeat(var(--report-grid-columns, 2), minmax(0, 1fr));
     border-top: 1px solid var(--report-border);
     border-left: 1px solid var(--report-border);
-}
-
-.dynamic-report-grid-2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.dynamic-report-grid-3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.dynamic-report-grid-4 {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .dynamic-report-metric {
@@ -222,6 +332,20 @@
     overflow-wrap: anywhere;
 }
 
+/* Con 6 columnas o más las celdas son estrechas. */
+.dynamic-report-grid.is-dense .dynamic-report-metric {
+    min-height: 48px;
+    padding: 7px 8px;
+}
+
+.dynamic-report-grid.is-dense .dynamic-report-metric-label {
+    font-size: 8px;
+}
+
+.dynamic-report-grid.is-dense .dynamic-report-metric-value {
+    font-size: 12px;
+}
+
 /* ---------- Fields ---------- */
 
 .dynamic-report-fields {
@@ -241,7 +365,7 @@
 
 .dynamic-report-field-label {
     padding: 7px 10px;
-    background: #f8fafb;
+    background: var(--report-field-label-bg, #f8fafb);
     color: var(--report-muted);
     font-size: 12px;
     font-weight: 600;
@@ -276,9 +400,81 @@
         border: 1px solid var(--report-border);
     }
 
+    /* Bandas opcionales del tema: sin la variable, transparentes. */
+    .dynamic-report-table tbody tr:nth-child(even) td {
+        background: var(--report-table-stripe, transparent);
+    }
+
     .dynamic-report-table .number {
         text-align: right;
     }
+
+    /* Fila de totales: separada del cuerpo y en negrita, con el fondo
+       secundario del tema. */
+    .dynamic-report-table tfoot td {
+        padding: 8px 10px;
+        border: 1px solid var(--report-border);
+        border-top: 2px solid var(--report-text);
+        background: var(--report-secondary, #E8EFF3);
+        font-weight: 700;
+    }
+
+    .dynamic-report-table tfoot .is-total-label {
+        color: var(--report-muted);
+        font-size: 10px;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+
+/* ---------- Content blocks ---------- */
+
+/* Estaban sólo en la hoja del editor (reporting.css): en el documento
+   emitido los bloques de texto salían sin borde ni fondo. */
+
+.dynamic-report-content-block {
+    margin-bottom: 18px;
+}
+
+.dynamic-report-text-block {
+    padding: 11px 13px;
+    border: 1px solid var(--report-border);
+    border-left-width: 3px;
+    background: #fafbfc;
+}
+
+.dynamic-report-text-block-title {
+    margin-bottom: 5px;
+    color: var(--report-text);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.dynamic-report-text-block-content {
+    color: var(--report-text);
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.dynamic-report-text-block-default {
+    border-left-color: var(--report-primary);
+}
+
+.dynamic-report-text-block-information {
+    border-left-color: #4f7f9a;
+    background: #f4f8fa;
+}
+
+.dynamic-report-text-block-warning {
+    border-left-color: #b58224;
+    background: #fffaf0;
+}
+
+.dynamic-report-text-block-success {
+    border-left-color: #4e8164;
+    background: #f4f9f6;
+}
 
 
 /* ---------- Footer ---------- */
@@ -295,12 +491,30 @@
     gap: 20px;
 }
 
+    /* Dentro de la hoja el hueco lo pone el espaciador. */
+    .dynamic-report.has-page-footer > .report-footer {
+        margin-top: 0;
+    }
+
 .report-footer-text {
     flex: 1;
+    white-space: pre-line;
+}
+
+.report-footer-meta {
+    margin-left: auto;
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .report-footer-generation-date {
     flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.report-footer-page {
     white-space: nowrap;
 }
 
@@ -322,130 +536,25 @@
     print-color-adjust: exact;
 }
 
+/* La hoja mide lo que un A4 como mínimo: así se ve dónde cae el pie. */
 .report-document-sheet {
     width: 100%;
     max-width: 210mm;
+    min-height: 297mm;
     margin: 0 auto;
     padding: 18mm 16mm;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
     background: #ffffff;
     box-shadow: 0 2px 14px rgba(15, 35, 50, .12);
 }
 
-/* =========================================================
-   BARRA DEL DOCUMENTO
-
-   Sólo aparece si quien pide el render la ha activado. No forma parte del
-   informe: no usa las variables del tema, para que un tema oscuro o una
-   tipografía de cliente no se la lleven por delante, y desaparece al
-   imprimir.
-   ========================================================= */
-
-.report-toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    padding: 10px 16px;
-    background: #0d2b45;
-    color: #ffffff;
-    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-    font-size: 13px;
-}
-
-.report-toolbar-inner {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    max-width: 820px;
-    margin: 0 auto;
-}
-
-.report-toolbar-button {
-    padding: 7px 13px;
-    border: 1px solid rgba(255, 255, 255, .25);
-    border-radius: 6px;
-    background: transparent;
-    color: #ffffff;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 12px;
-}
-
-    .report-toolbar-button:hover {
-        border-color: rgba(255, 255, 255, .55);
-        background: rgba(255, 255, 255, .08);
+    .report-document-sheet > .dynamic-report {
+        flex: 1 0 auto;
     }
-
-    .report-toolbar-button.is-primary {
-        border-color: #ffffff;
-        background: #ffffff;
-        color: #0d2b45;
-        font-weight: 600;
-    }
-
-.report-toolbar-menu {
-    position: relative;
-}
-
-.report-toolbar-panel {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 5;
-    display: none;
-    min-width: 220px;
-    padding: 5px;
-    border-radius: 8px;
-    background: #ffffff;
-    box-shadow: 0 10px 30px rgba(6, 22, 36, .28);
-}
-
-.report-toolbar-menu.is-open .report-toolbar-panel {
-    display: block;
-}
-
-.report-toolbar-panel button {
-    display: block;
-    width: 100%;
-    padding: 7px 10px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: #21323d;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 12px;
-    text-align: left;
-}
-
-    .report-toolbar-panel button:hover {
-        background: #eef3f6;
-    }
-
-    /* La acción que abarca todo se separa de las tablas sueltas: es fácil
-       pulsarla creyendo que se exporta sólo la última de la lista. */
-    .report-toolbar-panel button.is-all {
-        margin-top: 4px;
-        border-top: 1px solid #e4ebef;
-        border-radius: 0 0 6px 6px;
-        font-weight: 600;
-    }
-
-.report-toolbar-note {
-    max-width: 820px;
-    margin: 6px auto 0;
-    text-align: right;
-    font-size: 11px;
-    opacity: .8;
-}
 
 @media print {
-    /* La barra no existe en papel ni en el PDF: es un control de pantalla. */
-    .report-toolbar {
-        display: none;
-    }
-
     .report-document-page {
         padding: 0;
         background: #ffffff;
@@ -453,16 +562,36 @@
 
     .report-document-sheet {
         max-width: none;
+        min-height: 0;
         margin: 0;
         padding: 0;
+        display: block;
         box-shadow: none;
     }
+
+    /* Al imprimir, el pie del final de la hoja se cambia por el que el
+       motor de impresión repite en cada página (ReportPageFooter: plantilla
+       para el PDF y @page para el navegador). */
+    .dynamic-report.has-page-footer {
+        display: block;
+    }
+
+        .dynamic-report.has-page-footer > .report-footer,
+        .dynamic-report-page-spacer {
+            display: none;
+        }
 
     /* Un albarán partido entre dos páginas es la queja número uno de
        cualquier informe de ERP. */
     .dynamic-report-repeat-item,
     .dynamic-report-table tr {
         break-inside: avoid;
+    }
+
+    /* Por defecto el navegador repite el tfoot al pie de cada página, como
+       el thead arriba. Un total parcial en cada hoja confunde: sólo al final. */
+    .dynamic-report-table tfoot {
+        display: table-row-group;
     }
 
     /* Dos secciones en paralelo cortadas por el salto de página quedan

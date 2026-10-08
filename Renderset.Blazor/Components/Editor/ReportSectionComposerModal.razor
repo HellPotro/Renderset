@@ -48,28 +48,13 @@
             <div class="report-composer-field-group report-composer-layout-field">
 
                 <label>
-                    Layout
+                    Distribución
                 </label>
 
-                <select @bind="Request.Layout">
-
-                    <option value="@ReportSectionLayout.List">
-                        Lista
-                    </option>
-
-                    <option value="@ReportSectionLayout.Columns2">
-                        2 columnas
-                    </option>
-
-                    <option value="@ReportSectionLayout.Columns3">
-                        3 columnas
-                    </option>
-
-                    <option value="@ReportSectionLayout.Columns4">
-                        4 columnas
-                    </option>
-
-                </select>
+                <ReportSectionLayoutPicker Layout="Request.Layout"
+                                           Columns="Request.Columns"
+                                           Label="@null"
+                                           Changed="LayoutChanged" />
 
             </div>
 
@@ -216,7 +201,8 @@
                         }
                         else
                         {
-                            <div class="@GetPreviewGridClass()">
+                            <div class="report-composer-selected-grid"
+                                 style="@PreviewGridStyle">
 
                                 @foreach (var fieldId in Request.SelectedFieldIds)
                                 {
@@ -431,22 +417,30 @@
         return section?.Name ?? "";
     }
 
-    private string GetPreviewGridClass()
+    private void LayoutChanged(ReportSectionGridLayout layout)
     {
-        return Request.Layout switch
+        Request.Layout = layout.Layout;
+        Request.Columns = layout.Columns;
+    }
+
+    /// <summary>
+    /// La vista previa del compositor es más estrecha que el documento: más
+    /// de 4 columnas no se leerían, así que se limita aquí y sólo aquí.
+    /// </summary>
+    private string PreviewGridStyle
+    {
+        get
         {
-            ReportSectionLayout.Columns2 =>
-                "report-composer-selected-grid columns-2",
+            var grid =
+                ReportSectionGrid.Normalize(
+                    Request.Layout,
+                    Request.Columns);
 
-            ReportSectionLayout.Columns3 =>
-                "report-composer-selected-grid columns-3",
+            var columns =
+                grid.IsList ? 1 : Math.Min(grid.Columns, 4);
 
-            ReportSectionLayout.Columns4 =>
-                "report-composer-selected-grid columns-4",
-
-            _ =>
-                "report-composer-selected-grid list"
-        };
+            return $"grid-template-columns:repeat({columns},minmax(0,1fr));";
+        }
     }
 
     private static bool GetBool(ChangeEventArgs e) =>

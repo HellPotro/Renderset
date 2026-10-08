@@ -1,13 +1,64 @@
 @using System.Text
+@using System.Text.Json
+@using Renderset.Blazor.Rendering
 @using Renderset.Core.Definitions
+@using Renderset.Core.Rendering
 @using Renderset.Core.Resolved
 
 @if (Header is not null && Header.Visible)
 {
-    <div class="report-header @LayoutClass @StateClasses"
-         style="@HeaderStyle">
+    if (HasTitleBand)
+    {
+        @* Banda de título: arriba (o debajo) la fila membrete logo | empresa
+           | QR, y el título a todo el ancho. Así el título deja de competir
+           por el ancho con los datos de empresa y el QR. *@
+        <div class="report-header @LayoutClass @StateClasses has-title-band @PlacementClass"
+             style="@HeaderStyle">
 
-        @if (Header.ShowLogo &&
+            @if (Header.TitlePlacement == ReportHeaderTitlePlacement.Above)
+            {
+                @TitleBar
+            }
+
+            <div class="report-header-main">
+                @Logo
+
+                <div class="report-header-content">
+                    @Details
+                </div>
+
+                @Qr
+            </div>
+
+            @if (Header.TitlePlacement == ReportHeaderTitlePlacement.Below)
+            {
+                @TitleBar
+            }
+
+        </div>
+    }
+    else
+    {
+        <div class="report-header @LayoutClass @StateClasses"
+             style="@HeaderStyle">
+
+            @Logo
+
+            <div class="report-header-content">
+                @Titles
+                @Details
+            </div>
+
+            @Qr
+
+        </div>
+    }
+}
+
+@code {
+    private RenderFragment Logo => __builder =>
+    {
+        if (Header!.ShowLogo &&
              !string.IsNullOrWhiteSpace(Header.LogoUrl))
         {
             <div class="report-header-logo">
@@ -16,63 +67,139 @@
                      style="@LogoStyle" />
             </div>
         }
+    };
 
-        <div class="report-header-content">
+    private RenderFragment Titles => __builder =>
+    {
+        if (ShowsTitle)
+        {
+            <h1>@WithData(Header!.Title)</h1>
+        }
 
-            @if (!string.IsNullOrWhiteSpace(Header.Title))
-            {
-                <h1>@Header.Title</h1>
-            }
+        if (ShowsSubtitle)
+        {
+            <div class="report-header-subtitle">
+                @WithData(Header!.Subtitle)
+            </div>
+        }
+    };
 
-            @if (!string.IsNullOrWhiteSpace(Header.Subtitle))
-            {
-                <div class="report-header-subtitle">
-                    @Header.Subtitle
-                </div>
-            }
-
-            @if (Header.Columns.Count > 0)
-            {
-                <div class="report-header-columns">
-                    @foreach (var column in Header.Columns)
-                    {
-                        <div class="report-header-column @AlignmentClass(column.Align)"
-                             style="@ColumnStyle(column)">
-                            @foreach (var line in column.Lines)
-                            {
-                                <div class="report-header-line @LineClass(line.Style)">
-                                    @line.Text
-                                </div>
-                            }
-                        </div>
-                    }
-                </div>
-            }
-            else if (Header.Lines.Count > 0)
-            {
-                @* El camino legacy permanece separado a propósito: una cabecera
-                   guardada antes de existir Columns debe generar el mismo DOM y
-                   por tanto conservar exactamente el mismo aspecto. *@
-                <div class="report-header-lines">
-
-                    @foreach (var line in Header.Lines)
-                    {
-                        <div class="report-header-line @LineClass(line.Style)">
-                            @line.Text
-                        </div>
-                    }
-
-                </div>
-            }
-
+    private RenderFragment TitleBar => __builder =>
+    {
+        <div class="report-header-titlebar">
+            @Titles
         </div>
+    };
 
-    </div>
-}
+    private RenderFragment Details => __builder =>
+    {
+        if (Header!.Columns.Count > 0)
+        {
+            <div class="report-header-columns">
+                @foreach (var column in Header.Columns)
+                {
+                    <div class="report-header-column @AlignmentClass(column.Align)"
+                         style="@ColumnStyle(column)">
+                        @foreach (var line in column.Lines)
+                        {
+                            <div class="report-header-line @LineClass(line.Style)">
+                                @WithData(line.Text)
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else if (Header.Lines.Count > 0)
+        {
+            @* El camino legacy permanece separado a propósito: una cabecera
+               guardada antes de existir Columns debe generar el mismo DOM y
+               por tanto conservar exactamente el mismo aspecto. *@
+            <div class="report-header-lines">
 
-@code {
+                @foreach (var line in Header.Lines)
+                {
+                    <div class="report-header-line @LineClass(line.Style)">
+                        @WithData(line.Text)
+                    </div>
+                }
+
+            </div>
+        }
+    };
+
+    private RenderFragment Qr => __builder =>
+    {
+        if (QrSvg is { } qr)
+        {
+            @* Va el último: con el logo a la derecha (row-reverse) el CSS lo
+               devuelve al borde derecho con order. *@
+            <div class="report-header-qr"
+                 title="@QrText">
+                @((MarkupString)qr)
+            </div>
+        }
+    };
+
+    private bool ShowsTitle =>
+        Header is { ShowTitle: true } &&
+        !string.IsNullOrWhiteSpace(Header.Title);
+
+    private bool ShowsSubtitle =>
+        Header is { ShowSubtitle: true } &&
+        !string.IsNullOrWhiteSpace(Header.Subtitle);
+
+    /// <summary>
+    /// Sin título ni subtítulo que enseñar, una banda vacía sólo añadiría
+    /// hueco: se pinta como siempre.
+    /// </summary>
+    private bool HasTitleBand =>
+        Header is not null &&
+        Header.TitlePlacement != ReportHeaderTitlePlacement.Inline &&
+        (ShowsTitle || ShowsSubtitle);
+
+    private string PlacementClass =>
+        Header?.TitlePlacement == ReportHeaderTitlePlacement.Above
+            ? "is-title-above"
+            : "is-title-below";
+
     [Parameter]
     public ResolvedReportHeader? Header { get; set; }
+
+    /// <summary>
+    /// Datos del documento: el QR puede llevar marcadores de datos.
+    /// </summary>
+    [Parameter]
+    public JsonElement Data { get; set; }
+
+    [Parameter]
+    public ReportDocumentContext? Document { get; set; }
+
+    /// <summary>
+    /// Título, subtítulo y líneas pueden llevar datos del documento:
+    /// "Albarán {{data.numero}}". Las variables del tenant ya llegan
+    /// sustituidas desde el diccionario.
+    /// </summary>
+    private string WithData(
+        string? text) =>
+        ReportDataTemplate.Apply(text, Data, MissingData);
+
+    /// <summary>
+    /// Qué poner en un {{data.ruta}} sin valor. En el documento, nada; el
+    /// editor de bloques (sin datos) lo enseña marcado.
+    /// </summary>
+    [Parameter]
+    public Func<string, string>? MissingData { get; set; }
+
+    private string? QrText =>
+        Header?.ShowQr == true
+            ? ReportQrContent.Resolve(Header.QrContent, Data, Document)
+            : null;
+
+    private string? QrSvg =>
+        QrText is { } text
+            ? ReportQrSvg.Render(text, Header!.QrSize)
+            : null;
 
     private string LayoutClass =>
         Header?.Layout switch

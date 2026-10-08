@@ -1,3 +1,5 @@
+using Renderset.Api.Security;
+using Renderset.Core.Tenancy;
 using Renderset.Core.Sharing;
 
 namespace Renderset.Api.Endpoints;
@@ -24,7 +26,8 @@ public static class SharingSettingsEndpoints
 
         sharing.MapPut(
             "/{tenantId}/settings",
-            SaveAsync);
+            SaveAsync)
+            .RequireTenantRole(TenantRole.Admin);
 
         sharing.MapPost(
             "/{tenantId}/preview",
@@ -36,9 +39,17 @@ public static class SharingSettingsEndpoints
     private static async Task<IResult> GetAsync(
         string tenantId,
         IDocumentSharingSettingsRepository repository,
+        IDocumentBundleTextProvider bundleTexts,
         DocumentSharingOptions options,
         CancellationToken cancellationToken)
     {
+        // Al abrir la configuración se dejan creadas en el Diccionario las
+        // claves de la página pública para todos los idiomas del tenant, y
+        // así aparecen para traducirlas aunque nadie haya compartido aún.
+        await bundleTexts.SeedAsync(
+            tenantId,
+            cancellationToken);
+
         var settings =
             await repository.GetAsync(
                 tenantId,
@@ -90,6 +101,7 @@ public static class SharingSettingsEndpoints
         DocumentSharingPreviewRequest request,
         IDocumentSharingSettingsRepository repository,
         IDocumentBundlePageRenderer pages,
+        IDocumentBundleTextProvider bundleTexts,
         DocumentSharingOptions options,
         TimeProvider time,
         CancellationToken cancellationToken)
@@ -106,11 +118,16 @@ public static class SharingSettingsEndpoints
         var settings = request.Settings ?? new DocumentSharingSettings();
         settings.TenantName = stored.TenantName;
 
+        var texts =
+            await bundleTexts.GetAsync(
+                tenantId,
+                request.Culture,
+                cancellationToken);
+
         string html;
 
         if (request.Expired)
         {
-            var texts = DocumentBundleTexts.For(request.Culture);
 
             html =
                 await pages.RenderUnavailableAsync(
@@ -131,7 +148,7 @@ public static class SharingSettingsEndpoints
                     DocumentBundlePreview.Build(
                         tenantId,
                         settings,
-                        request.Culture,
+                        texts,
                         time.GetUtcNow().UtcDateTime,
                         options.DefaultExpirationDays),
                     cancellationToken);

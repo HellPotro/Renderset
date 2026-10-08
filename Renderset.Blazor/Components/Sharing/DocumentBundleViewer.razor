@@ -5,9 +5,12 @@
     circuito: la navegación entre documentos es un enlace con target al
     iframe, y el script del renderer sólo actualiza el estado visual. Si el
     script no carga, la página sigue funcionando.
+
+    La barra del documento es DocumentViewerToolbar, la misma del visor
+    interno de Web.
 *@
 
-<div class="rs-share">
+<div class="@(IsSingle ? "rs-share is-single" : "rs-share")">
 
     <header class="rs-share-header">
 
@@ -28,8 +31,11 @@
             <h1 class="rs-share-title">@View.Title</h1>
             <p class="rs-share-meta">
                 @View.Texts.FormatSharedBy(View.Branding.DisplayName)
-                <span aria-hidden="true"> · </span>
-                @View.Texts.FormatAvailableUntil(View.ExpiresAtUtc)
+                @if (View.ShowExpiry)
+                {
+                    <span aria-hidden="true"> · </span>
+                    @View.Texts.FormatAvailableUntil(View.ExpiresAtUtc)
+                }
             </p>
         </div>
 
@@ -72,6 +78,10 @@
 
     <div class="rs-share-body">
 
+        @* Con un solo documento (enlace del QR) no hay lista que elegir: el
+           documento ocupa todo el ancho. *@
+        @if (!IsSingle)
+        {
         <nav class="rs-share-list" aria-label="@View.Texts.Documents">
 
             <h2 class="rs-share-list-title">
@@ -102,43 +112,24 @@
             }
 
         </nav>
+        }
 
-        <section class="rs-share-viewer">
+        <section class="rs-share-viewer"
+                 data-rs-viewer
+                 data-culture="@View.Culture">
 
-            <div class="rs-share-toolbar">
-
-                <span class="rs-share-current" data-share-current>@First.Title</span>
-
-                <div class="rs-share-actions">
-
-                    <button type="button"
-                            class="rs-share-button"
-                            data-share-print>
-                        @View.Texts.Print
-                    </button>
-
-                    <a class="rs-share-button"
-                       href="@First.ViewUrl"
-                       target="_blank"
-                       rel="noopener"
-                       data-share-open>
-                        @View.Texts.OpenInNewTab
-                    </a>
-
-                    <a class="rs-share-button is-primary"
-                       href="@First.DownloadUrl"
-                       data-share-download>
-                        @(View.PdfAvailable ? View.Texts.DownloadPdf : View.Texts.Download)
-                    </a>
-
-                </div>
-
-            </div>
+            <DocumentViewerToolbar Texts="View.Texts"
+                                   Title="@First.Title"
+                                   OpenUrl="@First.ViewUrl"
+                                   DownloadUrl="@First.DownloadUrl"
+                                   DownloadIsPdf="View.PdfAvailable"
+                                   AllowData="View.AllowDataDownload" />
 
             <iframe class="rs-share-frame"
                     name="@FrameName"
                     title="@First.Title"
-                    src="@First.ViewUrl"></iframe>
+                    src="@First.ViewUrl"
+                    data-rs-viewer-frame></iframe>
 
         </section>
 
@@ -155,4 +146,11 @@
 
     private DocumentBundleViewItem First =>
         View.Documents[0];
+
+    /// <summary>
+    /// Enlace público de un solo documento (QR): sin lista lateral.
+    /// </summary>
+    private bool IsSingle =>
+        View.Documents.Count == 1 &&
+        !View.ShowExpiry;
 }

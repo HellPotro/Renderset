@@ -1,0 +1,316 @@
+@page "/settings/api-keys"
+@attribute [Authorize(Policy = TenantPolicies.Admin)]
+
+@using Renderset.Core.Security
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>API keys - RenderSet</PageTitle>
+
+<div class="page api-keys-page">
+
+    <header class="page-header">
+
+        <div>
+            <h1>API keys</h1>
+
+            <p>
+                Claves con las que tus sistemas (el ERP, un script) emiten
+                documentos. Cada clave sólo da acceso a este tenant.
+            </p>
+        </div>
+
+    </header>
+
+
+    @if (_created is not null)
+    {
+        <section class="api-key-created">
+
+            <div class="api-key-created-heading">
+
+                <i class="fa-solid fa-triangle-exclamation"></i>
+
+                <div>
+                    <strong>Copia la clave ahora: no se volverá a mostrar</strong>
+                    <small>
+                        RenderSet sólo guarda una huella de la clave. Si la
+                        pierdes, crea otra y revoca esta.
+                    </small>
+                </div>
+
+                <button type="button"
+                        class="icon-button"
+                        title="Ya la he copiado"
+                        @onclick="() => _created = null">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+
+            </div>
+
+            <div class="api-key-created-row">
+
+                <input readonly
+                       value="@_created.PlainText"
+                       onfocus="this.select()" />
+
+                <button type="button"
+                        class="primary-button"
+                        @onclick="CopyAsync">
+                    <i class="fa-regular fa-copy"></i>
+                    Copiar
+                </button>
+
+            </div>
+
+            <pre class="api-key-usage">X-Api-Key: @_created.PlainText</pre>
+
+        </section>
+    }
+
+
+    <section class="editor-card api-key-form">
+
+        <header class="editor-card-header">
+            <h2>Nueva clave</h2>
+        </header>
+
+        <div class="editor-card-body api-key-form-body">
+
+            <div class="form-group">
+                <label>Nombre</label>
+                <input @bind="_name"
+                       @bind:event="oninput"
+                       maxlength="@ApiKeyService.MaxNameLength"
+                       placeholder="ERP producción" />
+            </div>
+
+            <div class="form-group">
+                <label>Caducidad (días)</label>
+                <input type="number"
+                       min="1"
+                       @bind="_expiresInDays"
+                       placeholder="Sin caducidad" />
+            </div>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@(!CanCreate)"
+                    @onclick="CreateAsync">
+                <i class="fa-solid fa-key"></i>
+                Crear clave
+            </button>
+
+        </div>
+
+    </section>
+
+
+    <section class="editor-card">
+
+        <header class="editor-card-header">
+            <h2>Claves de @CurrentTenant.Id</h2>
+        </header>
+
+        @if (_loading)
+        {
+            <div class="page-state">Cargando claves...</div>
+        }
+        else if (_keys.Count == 0)
+        {
+            <div class="api-key-empty">
+                Todavía no hay claves. Crea una para el sistema que vaya a
+                emitir documentos.
+            </div>
+        }
+        else
+        {
+            <div class="api-key-table">
+
+                <div class="api-key-row is-header">
+                    <span>Nombre</span>
+                    <span>Clave</span>
+                    <span>Creada</span>
+                    <span>Último uso</span>
+                    <span>Estado</span>
+                    <span></span>
+                </div>
+
+                @foreach (var apiKey in _keys)
+                {
+                    <div class="api-key-row" @key="apiKey.Id">
+
+                        <strong>@apiKey.Name</strong>
+
+                        <code>@apiKey.Prefix…</code>
+
+                        <span class="api-key-muted">@FormatDate(apiKey.CreatedAtUtc)</span>
+
+                        <span class="api-key-muted">
+                            @(apiKey.LastUsedAtUtc is { } used ? FormatDate(used) : "Nunca")
+                        </span>
+
+                        <span class="@($"api-key-status {StatusClass(apiKey)}")">
+                            @StatusText(apiKey)
+                        </span>
+
+                        <button type="button"
+                                class="icon-button"
+                                title="Revocar"
+                                disabled="@(!apiKey.Active)"
+                                @onclick="() => RevokeAsync(apiKey)">
+                            <i class="fa-solid fa-ban"></i>
+                        </button>
+
+                    </div>
+                }
+
+            </div>
+        }
+
+    </section>
+
+</div>
+
+
+@code {
+
+    private IReadOnlyList<ApiKeyResponse> _keys = [];
+
+    private CreatedApiKeyResponse? _created;
+
+    private string _name = string.Empty;
+
+    private int? _expiresInDays;
+
+    private bool _loading = true;
+
+    private bool _creating;
+
+
+    private bool CanCreate =>
+        !_creating &&
+        !string.IsNullOrWhiteSpace(_name) &&
+        (_expiresInDays is null || _expiresInDays >= 1);
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            var keys = await Toasts.RunAsync(
+                () => RenderSetApi.GetApiKeysAsync(CurrentTenant.Id),
+                errorTitle: "No se han podido cargar las claves");
+
+            if (keys is not null)
+                _keys = keys;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        if (!CanCreate)
+            return;
+
+        _creating = true;
+
+        try
+        {
+            var created = await Toasts.RunApiAsync(
+                () => RenderSetApi.CreateApiKeyAsync(
+                    CurrentTenant.Id,
+                    new CreateApiKeyRequest
+                    {
+                        Name = _name.Trim(),
+                        ExpiresInDays = _expiresInDays
+                    }),
+                success: "Clave creada.",
+                errorTitle: "No se ha podido crear la clave");
+
+            if (created is null)
+                return;
+
+            _created = created;
+            _name = string.Empty;
+            _expiresInDays = null;
+
+            await LoadAsync();
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    private async Task RevokeAsync(
+        ApiKeyResponse key)
+    {
+        var confirmed =
+            await JS.InvokeAsync<bool>(
+                "confirm",
+                $"¿Revocar la clave \"{key.Name}\"? Lo que la use dejará de funcionar al momento.");
+
+        if (!confirmed)
+            return;
+
+        var revoked = await Toasts.RunApiAsync(
+            () => RenderSetApi.RevokeApiKeyAsync(
+                CurrentTenant.Id,
+                key.Id),
+            success: "Clave revocada.",
+            errorTitle: "No se ha podido revocar la clave");
+
+        if (revoked)
+            await LoadAsync();
+    }
+
+    private async Task CopyAsync()
+    {
+        if (_created is null)
+            return;
+
+        await Toasts.RunAsync(
+            async () => await JS.InvokeVoidAsync(
+                "navigator.clipboard.writeText",
+                _created.PlainText),
+            success: "Clave copiada.",
+            errorTitle: "No se ha podido copiar al portapapeles");
+    }
+
+    private static string StatusText(
+        ApiKeyResponse key) =>
+        key.RevokedAtUtc is not null
+            ? "Revocada"
+            : key.Active
+                ? "Activa"
+                : "Caducada";
+
+    private static string StatusClass(
+        ApiKeyResponse key) =>
+        key.RevokedAtUtc is not null
+            ? "is-revoked"
+            : key.Active
+                ? "is-active"
+                : "is-expired";
+
+    private static string FormatDate(
+        DateTime utc) =>
+        DateTime.SpecifyKind(utc, DateTimeKind.Utc)
+            .ToLocalTime()
+            .ToString("dd/MM/yyyy HH:mm");
+}

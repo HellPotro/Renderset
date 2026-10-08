@@ -2,10 +2,12 @@ using System.Text.Json;
 using Renderset.Core.Blocks;
 using Renderset.Core.Data;
 using Renderset.Core.Localization;
+using Renderset.Core.Mapping;
 using Renderset.Core.Persistence;
 using Renderset.Core.Presets;
 using Renderset.Core.Reports;
 using Renderset.Core.Services;
+using Renderset.Core.Themes;
 using Renderset.Core.Variables;
 
 namespace Renderset.Core.Rendering;
@@ -32,6 +34,9 @@ public sealed class ReportRenderService
     private readonly IReportDocumentRenderer _documentRenderer;
     private readonly IRenderedDocumentRepository _documents;
     private readonly IHtmlAssetInliner? _assetInliner;
+    private readonly IReportThemeRepository? _themes;
+    private readonly IDataMappingRepository? _mappings;
+    private readonly DocumentLinkOptions _links;
 
     private readonly ReportConfigurationResolver _resolver = new();
 
@@ -48,9 +53,15 @@ public sealed class ReportRenderService
         IReportConfigurationComposer composer,
         IReportDocumentRenderer documentRenderer,
         IRenderedDocumentRepository documents,
-        IHtmlAssetInliner? assetInliner = null)
+        IHtmlAssetInliner? assetInliner = null,
+        IReportThemeRepository? themes = null,
+        IDataMappingRepository? mappings = null,
+        DocumentLinkOptions? links = null)
     {
+        _links = links ?? new DocumentLinkOptions();
+        _mappings = mappings;
         _assetInliner = assetInliner;
+        _themes = themes;
         _reports = reports;
         _presets = presets;
         _presetProvider = presetProvider;
@@ -62,7 +73,13 @@ public sealed class ReportRenderService
         _documents = documents;
     }
 
-    public async Task<RenderResult> RenderAsync(
+    /// <summary>
+    /// Comprueba una petición de render sin emitir nada: el report existe,
+    /// los datos (o las filas con su mapping) se pueden construir y hay un
+    /// preset de ese report para el contexto. Es lo que hace
+    /// POST /api/render/{tenantId}/validate.
+    /// </summary>
+    public async Task<RenderValidationResponse> ValidateAsync(
         string tenantId,
         RenderRequest request,
         CancellationToken cancellationToken = default)
@@ -70,10 +87,41 @@ public sealed class ReportRenderService
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
         ArgumentNullException.ThrowIfNull(request);
 
+        var (prepared, failure) =
+            await PrepareAsync(
+                tenantId,
+                request,
+                cancellationToken);
+
+        return new RenderValidationResponse
+        {
+            Valid = failure is null,
+            ReportId = request.ReportId,
+            PresetId = prepared?.Preset.Id,
+            PresetVersion = prepared?.Preset.Version,
+            Errors = failure?.Errors ?? []
+        };
+    }
+
+    private sealed record PreparedRender(
+        Report Report,
+        JsonElement Data,
+        ReportPreset Preset);
+
+    /// <summary>
+    /// Lo que va antes de pintar: petición, report, datos y preset. Lo
+    /// comparten el render y la validación, para que validar diga
+    /// exactamente lo mismo que diría el render.
+    /// </summary>
+    private async Task<(PreparedRender? Prepared, RenderResult? Failure)> PrepareAsync(
+        string tenantId,
+        RenderRequest request,
+        CancellationToken cancellationToken)
+    {
         var validation = Validate(request);
 
         if (validation is not null)
-            return validation;
+            return (null, validation);
 
         var report =
             await _reports.GetByIdAsync(
@@ -83,21 +131,45 @@ public sealed class ReportRenderService
 
         if (report is null)
         {
-            return RenderResult.Failure(
+            return (null, RenderResult.Failure(
                 "report.not_found",
                 $"No existe el report '{request.ReportId}' en el tenant '{tenantId}'.",
-                path: "reportId");
+                path: "reportId"));
+        }
+
+        // Los datos se resuelven antes que el diseño: si las filas no encajan
+        // con el mapping, es lo primero que tiene que saber quien integra.
+        JsonElement data;
+
+        if (request.ResolveMode() == RenderRequestMode.Tabular)
+        {
+            var tabular =
+                await BuildTabularDataAsync(
+                    tenantId,
+                    report.Id,
+                    request,
+                    cancellationToken);
+
+            if (tabular.Failure is not null)
+                return (null, tabular.Failure);
+
+            data = tabular.Data;
+        }
+        else
+        {
+            data = request.Data!.Value;
         }
 
         var preset =
             await ResolvePresetAsync(
                 tenantId,
                 request,
+                data,
                 cancellationToken);
 
         if (preset is null)
         {
-            return RenderResult.Failure(
+            return (null, RenderResult.Failure(
                 "preset.not_found",
                 string.IsNullOrWhiteSpace(request.PresetId)
                     ? $"No hay preset asignado al report '{request.ReportId}' para ese contexto, " +
@@ -105,7 +177,7 @@ public sealed class ReportRenderService
                     : $"No existe el preset '{request.PresetId}'.",
                 path: string.IsNullOrWhiteSpace(request.PresetId)
                     ? "context"
-                    : "presetId");
+                    : "presetId"));
         }
 
         // El preset se pide por id o se resuelve por assignment, y en ninguno
@@ -115,14 +187,39 @@ public sealed class ReportRenderService
                 report.Id,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return RenderResult.Failure(
+            return (null, RenderResult.Failure(
                 "preset.report_mismatch",
                 $"El preset '{preset.Id}' pertenece al report " +
                 $"'{preset.Configuration.ReportId}'.",
                 path: "presetId",
                 expected: report.Id,
-                actual: preset.Configuration.ReportId);
+                actual: preset.Configuration.ReportId));
         }
+
+        return (new PreparedRender(report, data, preset), null);
+    }
+
+    public async Task<RenderResult> RenderAsync(
+        string tenantId,
+        RenderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var (prepared, failure) =
+            await PrepareAsync(
+                tenantId,
+                request,
+                cancellationToken);
+
+        if (failure is not null)
+            return failure;
+
+        var report = prepared!.Report;
+        var data = prepared.Data;
+        var preset = prepared.Preset;
+
 
         // Los valores llegan ya resueltos para el idioma del documento: una
         // variable marcada como traducible sale del diccionario común y no
@@ -174,16 +271,32 @@ public sealed class ReportRenderService
                 bodyBlocks,
                 catalog);
 
-        var data = request.Data!.Value;
+        var theme =
+            await ResolveThemeAsync(
+                tenantId,
+                preset,
+                cancellationToken);
+
+        // El id se decide antes de pintar: el QR de la cabecera puede llevar
+        // el enlace del propio documento.
+        var documentId = Guid.NewGuid().ToString("N");
 
         var html =
             await _documentRenderer.RenderHtmlAsync(
                 resolved,
                 data,
-                preset.Theme,
+                theme,
                 resolved.Name,
-                request.Output.IncludeToolbar,
                 request.Output.IncludeDocumentData,
+                new ReportDocumentContext
+                {
+                    DocumentId = documentId,
+
+                    // Público si está configurado (lo abre cualquiera que
+                    // lea el QR); si no, el visor de Web con sesión.
+                    DocumentUrl = _links.DocumentUrl(tenantId, documentId),
+                    ViewerUrl = _links.DocumentUrl(documentId)
+                },
                 cancellationToken);
 
         // Las imágenes se incrustan antes de guardar: el documento emitido
@@ -200,7 +313,7 @@ public sealed class ReportRenderService
         var document =
             new RenderedDocument
             {
-                Id = Guid.NewGuid().ToString("N"),
+                Id = documentId,
                 ReportId = report.Id,
                 PresetId = preset.Id,
                 PresetVersion = preset.Version,
@@ -263,7 +376,7 @@ public sealed class ReportRenderService
 
             RenderRequestMode.None => RenderResult.Failure(
                 "request.data_required",
-                "Hay que enviar 'data' con el documento ya jerárquico.",
+                "Hay que enviar 'data' (documento jerárquico) o 'rows' (filas planas con un mapping configurado).",
                 path: "data"),
 
             RenderRequestMode.Ambiguous => RenderResult.Failure(
@@ -271,19 +384,21 @@ public sealed class ReportRenderService
                 "Se han enviado 'data' y 'rows' a la vez. Sólo uno de los dos.",
                 path: "data"),
 
-            // El HierarchyBuilder está hecho, pero los mappings todavía no se
-            // guardan en ningún sitio, así que MappingId no se puede resolver.
-            _ => RenderResult.Failure(
-                "request.tabular_not_supported",
-                "Todavía no se admiten datos tabulares: falta la persistencia " +
-                "de mappings. Envía 'data' ya jerárquico.",
-                path: "rows")
+            // Las filas se validan contra el mapping más adelante, cuando ya
+            // se sabe qué mapping toca.
+            _ => null
         };
     }
 
+    /// <summary>
+    /// Por id, o por assignment. El assignment puede salir del contexto de
+    /// la petición o de los propios datos (un tipo de contexto que es la
+    /// ruta de un campo, como "cliente.codigo").
+    /// </summary>
     private async Task<ReportPreset?> ResolvePresetAsync(
         string tenantId,
         RenderRequest request,
+        JsonElement data,
         CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(request.PresetId))
@@ -299,6 +414,7 @@ public sealed class ReportRenderService
             request.ReportId,
             request.Context.ContextType,
             request.Context.ContextKey,
+            data,
             cancellationToken);
     }
 
@@ -344,6 +460,143 @@ public sealed class ReportRenderService
         return new ReportTextCatalog(
             entries,
             catalog.Culture);
+    }
+
+    /// <summary>
+    /// Un preset con ThemeId se pinta con el tema de empresa vivo. Si ese
+    /// tema ya no existe, con la copia que guarda el preset: un tema borrado
+    /// no puede dejar de emitir documentos.
+    /// </summary>
+    private async Task<ReportTheme> ResolveThemeAsync(
+        string tenantId,
+        ReportPreset preset,
+        CancellationToken cancellationToken)
+    {
+        var themeId = preset.Configuration.ThemeId;
+
+        if (_themes is null || string.IsNullOrWhiteSpace(themeId))
+            return preset.Theme;
+
+        var stored =
+            await _themes.GetByIdAsync(
+                tenantId,
+                themeId,
+                cancellationToken);
+
+        return stored?.Theme ?? preset.Theme;
+    }
+
+    /// <summary>
+    /// Filas planas → documento, con el mapping indicado en la petición o,
+    /// si no viene, con el asignado al report. Una petición emite un
+    /// documento: si las filas producen varios, casi siempre es que la
+    /// consulta trae más de un documento o que la clave raíz está mal.
+    /// </summary>
+    private async Task<(JsonElement Data, RenderResult? Failure)> BuildTabularDataAsync(
+        string tenantId,
+        string reportId,
+        RenderRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (_mappings is null)
+        {
+            return (default, RenderResult.Failure(
+                "request.tabular_not_supported",
+                "Este servidor no tiene configurado el almacén de mappings.",
+                path: "rows"));
+        }
+
+        var mapping =
+            string.IsNullOrWhiteSpace(request.MappingId)
+                ? await _mappings.GetForReportAsync(
+                    tenantId,
+                    reportId,
+                    cancellationToken)
+                : await _mappings.GetByIdAsync(
+                    tenantId,
+                    request.MappingId,
+                    cancellationToken);
+
+        if (mapping is null)
+        {
+            return (default, string.IsNullOrWhiteSpace(request.MappingId)
+                ? RenderResult.Failure(
+                    "mapping.not_configured",
+                    $"El report '{reportId}' no tiene mapping para filas planas. " +
+                    "Configúralo en Reports → Datos tabulares, o indica 'mappingId'.",
+                    path: "mappingId")
+                : RenderResult.Failure(
+                    "mapping.not_found",
+                    $"No existe el mapping '{request.MappingId}'.",
+                    path: "mappingId"));
+        }
+
+        var rows = request.Rows!;
+
+        var errors =
+            TabularDocuments.Validate(
+                rows,
+                mapping);
+
+        if (errors.Count > 0)
+        {
+            return (default, new RenderResult
+            {
+                Errors = errors
+                    .Select(message => new RenderValidationError
+                    {
+                        Code = "rows.invalid",
+                        Message = message,
+                        Path = "rows"
+                    })
+                    .ToList()
+            });
+        }
+
+        IReadOnlyList<JsonElement> documents;
+
+        try
+        {
+            documents =
+                await TabularDocuments.BuildAsync(
+                    rows,
+                    mapping,
+                    cancellationToken);
+        }
+        catch (DataMappingValueException exception)
+        {
+            return (default, RenderResult.Failure(
+                "rows.invalid_value",
+                exception.Message,
+                path: exception.SourceColumn,
+                expected: exception.ExpectedType.ToString(),
+                actual: exception.Value));
+        }
+
+        if (documents.Count == 0)
+        {
+            return (default, RenderResult.Failure(
+                "rows.no_documents",
+                "Las filas no han producido ningún documento.",
+                path: "rows"));
+        }
+
+        if (documents.Count > 1)
+        {
+            var keys = string.Join(", ", mapping.Root.KeyColumns);
+
+            return (default, RenderResult.Failure(
+                "rows.multiple_documents",
+                $"Las filas producen {documents.Count} documentos y cada petición emite uno. " +
+                (keys.Length == 0
+                    ? "Envía las filas de un solo documento."
+                    : $"Envía las filas de un solo valor de {keys}."),
+                path: "rows",
+                expected: "1",
+                actual: documents.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        return (documents[0], null);
     }
 
     private async Task<ReportBlock?> GetBlockAsync(

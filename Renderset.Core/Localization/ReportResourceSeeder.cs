@@ -40,23 +40,33 @@ public static class ReportResourceSeeder
                 Add(ReportTextKeys.Field(field.Id), field.Label);
         }
 
-        foreach (var section in definition.Sections)
+        // Recursivo: las subsecciones (albaranes → jaulas → líneas) tienen
+        // sus propios nombres, campos y columnas. Antes sólo se sembraba el
+        // primer nivel y los textos del detalle no aparecían en el
+        // Diccionario, aunque el informe sí los usara.
+        void AddSection(ReportSectionDefinition section)
         {
             Add(ReportTextKeys.Section(section.Id), section.Name);
 
             foreach (var field in section.Fields)
                 Add(ReportTextKeys.Field(field.Id), field.Label);
 
-            if (section.Table is null)
-                continue;
-
-            foreach (var column in section.Table.Columns)
+            if (section.Table is not null)
             {
-                Add(
-                    ReportTextKeys.Column(section.Table.Id, column.Id),
-                    column.Label);
+                foreach (var column in section.Table.Columns)
+                {
+                    Add(
+                        ReportTextKeys.Column(section.Table.Id, column.Id),
+                        column.Label);
+                }
             }
+
+            foreach (var child in section.Sections)
+                AddSection(child);
         }
+
+        foreach (var section in definition.Sections)
+            AddSection(section);
 
         if (definition.Footer is not null)
             Add(ReportTextKeys.FooterText, definition.Footer.Text);

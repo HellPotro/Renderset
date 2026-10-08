@@ -1,0 +1,400 @@
+@page "/settings/members"
+@attribute [Authorize(Policy = TenantPolicies.Admin)]
+
+@using Renderset.Web.Email
+
+@inject TenantSession Session
+@inject TenantDirectory Directory
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject IToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Miembros - RenderSet</PageTitle>
+
+<div class="page members-page">
+
+    <header class="page-header">
+
+        <div>
+            <h1>Miembros</h1>
+
+            <p>
+                Quién entra en @(Session.Current.Name ?? TenantId) y con qué rol. El acceso es
+                sólo por invitación: la persona recibe un correo con un enlace
+                que caduca en @TenantDirectory.InvitationLifetime.TotalDays días.
+            </p>
+        </div>
+
+    </header>
+
+
+    <section class="editor-card members-invite">
+
+        <header class="editor-card-header">
+            <h2>Invitar</h2>
+        </header>
+
+        <div class="editor-card-body members-invite-body">
+
+            <div class="form-group">
+                <label>Correo</label>
+                <input type="email"
+                       @bind="_email"
+                       @bind:event="oninput"
+                       maxlength="256"
+                       placeholder="nombre@empresa.com" />
+            </div>
+
+            <div class="form-group">
+                <label>Rol</label>
+                <select @bind="_inviteRole">
+                    @foreach (var role in AssignableRoles)
+                    {
+                        <option value="@role">@RoleLabel(role)</option>
+                    }
+                </select>
+            </div>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@(!CanInvite)"
+                    @onclick="InviteAsync">
+                <i class="fa-solid fa-paper-plane"></i>
+                Enviar invitación
+            </button>
+
+        </div>
+
+        <div class="members-roles-help">
+            <span><strong>Miembro</strong>: diseña reports, presets y temas, y emite y comparte documentos.</span>
+            <span><strong>Administrador</strong>: además, invita, gestiona API keys, idiomas y la página pública.</span>
+            <span><strong>Propietario</strong>: además, nombra o quita a otros propietarios.</span>
+        </div>
+
+    </section>
+
+
+    <section class="editor-card">
+
+        <header class="editor-card-header">
+            <h2>Miembros</h2>
+        </header>
+
+        @if (_loading)
+        {
+            <div class="page-state">Cargando miembros...</div>
+        }
+        else
+        {
+            <div class="members-table">
+
+                <div class="members-row is-header">
+                    <span>Persona</span>
+                    <span>Rol</span>
+                    <span>Desde</span>
+                    <span></span>
+                </div>
+
+                @foreach (var member in _members)
+                {
+                    var self = member.UserId == _actor?.UserId;
+
+                    <div class="members-row" @key="member.UserId">
+
+                        <div class="members-person">
+                            <strong>
+                                @(member.DisplayName ?? member.Email)
+                                @if (self)
+                                {
+                                    <em>tú</em>
+                                }
+                                @if (member.LockedOut)
+                                {
+                                    <span class="members-badge is-locked" title="Demasiados intentos fallidos: se desbloquea solo a los 15 minutos o al restablecer la contraseña.">Bloqueado</span>
+                                }
+                            </strong>
+                            <small>@member.Email</small>
+                        </div>
+
+                        <select value="@member.Role"
+                                disabled="@(self || !CanManage(member))"
+                                @onchange="e => ChangeRoleAsync(member, e)">
+                            @foreach (var role in RolesFor(member))
+                            {
+                                <option value="@role">@RoleLabel(role)</option>
+                            }
+                        </select>
+
+                        <span class="members-muted">@FormatDate(member.SinceUtc)</span>
+
+                        <button type="button"
+                                class="icon-button"
+                                title="Quitar del tenant"
+                                disabled="@(self || !CanManage(member))"
+                                @onclick="() => RemoveAsync(member)">
+                            <i class="fa-solid fa-user-minus"></i>
+                        </button>
+
+                    </div>
+                }
+
+            </div>
+        }
+
+    </section>
+
+
+    @if (_invitations.Count > 0)
+    {
+        <section class="editor-card">
+
+            <header class="editor-card-header">
+                <h2>Invitaciones pendientes</h2>
+            </header>
+
+            <div class="members-table">
+
+                <div class="members-row is-header">
+                    <span>Correo</span>
+                    <span>Rol</span>
+                    <span>Caduca</span>
+                    <span></span>
+                </div>
+
+                @foreach (var invitation in _invitations)
+                {
+                    <div class="members-row" @key="invitation.InvitationId">
+
+                        <div class="members-person">
+                            <strong>@invitation.Email</strong>
+                            <small>Enviada el @FormatDate(invitation.CreatedAtUtc)</small>
+                        </div>
+
+                        <span>@RoleLabel(invitation.Role)</span>
+
+                        <span class="members-muted">@FormatDate(invitation.ExpiresAtUtc)</span>
+
+                        <div class="members-actions">
+                            <button type="button"
+                                    class="icon-button"
+                                    title="Reenviar (el enlace anterior deja de valer)"
+                                    disabled="@(_busy || invitation.Role > _actor?.Role)"
+                                    @onclick="() => ResendAsync(invitation)">
+                                <i class="fa-solid fa-rotate-right"></i>
+                            </button>
+
+                            <button type="button"
+                                    class="icon-button"
+                                    title="Anular"
+                                    disabled="@_busy"
+                                    @onclick="() => RevokeAsync(invitation)">
+                                <i class="fa-solid fa-ban"></i>
+                            </button>
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+
+        </section>
+    }
+
+</div>
+
+
+@code {
+
+    private IReadOnlyList<TenantMemberInfo> _members = [];
+
+    private IReadOnlyList<TenantInvitationInfo> _invitations = [];
+
+    private TenantActor? _actor;
+
+    private string _email = string.Empty;
+
+    private TenantRole _inviteRole = TenantRole.Member;
+
+    private bool _loading = true;
+
+    private bool _busy;
+
+
+    private string TenantId => Session.Current.Id;
+
+    private bool CanInvite =>
+        !_busy &&
+        _actor is not null &&
+        !string.IsNullOrWhiteSpace(_email);
+
+    private IEnumerable<TenantRole> AssignableRoles =>
+        Enum.GetValues<TenantRole>().Where(x => _actor is not null && x <= _actor.Role);
+
+    /// <summary>
+    /// A un propietario sólo lo toca otro propietario (la regla de verdad
+    /// está en TenantDirectory; esto sólo desactiva lo que fallaría).
+    /// </summary>
+    private bool CanManage(
+        TenantMemberInfo member) =>
+        !_busy &&
+        _actor is not null &&
+        (member.Role != TenantRole.Owner || _actor.Role == TenantRole.Owner);
+
+    /// <summary>Las que puede asignar, más la actual para que se vea.</summary>
+    private IEnumerable<TenantRole> RolesFor(
+        TenantMemberInfo member) =>
+        AssignableRoles.Append(member.Role).Distinct().OrderBy(x => x);
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        _actor = await Session.GetActorAsync();
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _members = await Directory.ListMembersAsync(TenantId);
+            _invitations = await Directory.ListPendingInvitationsAsync(TenantId);
+        }
+        catch (Exception)
+        {
+            Toasts.Error("Vuelve a intentarlo en unos segundos.", "No se han podido cargar los miembros");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task InviteAsync()
+    {
+        if (!CanInvite)
+            return;
+
+        var email = _email.Trim();
+
+        if (await RunAsync(
+                () => Directory.InviteAsync(TenantId, _actor!, email, _inviteRole, BaseUrl),
+                $"Invitación enviada a {email}.",
+                "No se ha podido invitar"))
+        {
+            _email = string.Empty;
+            _inviteRole = TenantRole.Member;
+        }
+    }
+
+    private Task ResendAsync(
+        TenantInvitationInfo invitation) =>
+        RunAsync(
+            () => Directory.InviteAsync(TenantId, _actor!, invitation.Email, invitation.Role, BaseUrl),
+            $"Invitación reenviada a {invitation.Email}.",
+            "No se ha podido reenviar");
+
+    private async Task RevokeAsync(
+        TenantInvitationInfo invitation)
+    {
+        if (!await ConfirmAsync($"¿Anular la invitación de {invitation.Email}? El enlace dejará de funcionar."))
+            return;
+
+        await RunAsync(
+            () => Directory.RevokeInvitationAsync(TenantId, _actor!, invitation.InvitationId),
+            "Invitación anulada.",
+            "No se ha podido anular");
+    }
+
+    private async Task ChangeRoleAsync(
+        TenantMemberInfo member,
+        ChangeEventArgs args)
+    {
+        if (!Enum.TryParse<TenantRole>(args.Value?.ToString(), out var role) || role == member.Role)
+            return;
+
+        var changed = await RunAsync(
+            () => Directory.ChangeRoleAsync(TenantId, _actor!, member.UserId, role),
+            $"{member.DisplayName ?? member.Email} ahora es {EmailTemplates.RoleName(role)}.",
+            "No se ha podido cambiar el rol");
+
+        // Si falla, el select tiene que volver al rol de antes: se recarga.
+        if (!changed)
+            await LoadAsync();
+    }
+
+    private async Task RemoveAsync(
+        TenantMemberInfo member)
+    {
+        if (!await ConfirmAsync($"¿Quitar a {member.DisplayName ?? member.Email} de este tenant? Perderá el acceso en menos de un minuto."))
+            return;
+
+        await RunAsync(
+            () => Directory.RemoveMemberAsync(TenantId, _actor!, member.UserId),
+            "Miembro quitado.",
+            "No se ha podido quitar");
+    }
+
+    /// <summary>
+    /// Ejecuta, avisa con un toast y recarga. Devuelve si ha ido bien.
+    /// </summary>
+    private async Task<bool> RunAsync(
+        Func<Task<TenantOperationResult>> operation,
+        string success,
+        string errorTitle)
+    {
+        if (_actor is null)
+            return false;
+
+        _busy = true;
+
+        try
+        {
+            var result = await operation();
+
+            if (!result.Succeeded)
+            {
+                Toasts.Error(result.Error ?? "Vuelve a intentarlo.", errorTitle);
+                return false;
+            }
+
+            Toasts.Success(success);
+            await LoadAsync();
+            return true;
+        }
+        catch (Exception)
+        {
+            Toasts.Error("Vuelve a intentarlo en unos segundos.", errorTitle);
+            return false;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string BaseUrl =>
+        AccountLinks.PublicBaseUrl(Configuration, Navigation);
+
+    private async Task<bool> ConfirmAsync(
+        string message) =>
+        await JS.InvokeAsync<bool>("confirm", message);
+
+    private static string RoleLabel(
+        TenantRole role) =>
+        role switch
+        {
+            TenantRole.Owner => "Propietario",
+            TenantRole.Admin => "Administrador",
+            _ => "Miembro"
+        };
+
+    private static string FormatDate(
+        DateTime utc) =>
+        DateTime.SpecifyKind(utc, DateTimeKind.Utc)
+            .ToLocalTime()
+            .ToString("dd/MM/yyyy");
+}

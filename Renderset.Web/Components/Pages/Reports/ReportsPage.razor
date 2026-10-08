@@ -474,6 +474,22 @@
             </button>
 
             <button type="button"
+                    class="secondary-button"
+                    title="Mapping para enviar filas planas por API"
+                    @onclick="() => OpenData(report.Id)">
+                <i class="fa-solid fa-table"></i>
+                Datos
+            </button>
+
+            <button type="button"
+                    class="secondary-button"
+                    title="Generar documentos pegando filas de una consulta"
+                    @onclick="() => OpenGenerate(report.Id)">
+                <i class="fa-solid fa-file-export"></i>
+                Generar
+            </button>
+
+            <button type="button"
                     class="icon-button"
                     title="Renombrar report"
                     @onclick="() => AskRename(report)">
@@ -641,6 +657,18 @@
         string reportId) =>
         Navigation.NavigateTo(
             $"/presets?report={Uri.EscapeDataString(reportId)}");
+
+
+    private void OpenGenerate(
+        string reportId) =>
+        Navigation.NavigateTo(
+            $"/reports/{Uri.EscapeDataString(reportId)}/generate");
+
+
+    private void OpenData(
+        string reportId) =>
+        Navigation.NavigateTo(
+            $"/reports/{Uri.EscapeDataString(reportId)}/data");
 
 
     private void OpenDictionary(

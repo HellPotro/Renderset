@@ -2,6 +2,8 @@
 @using Renderset.Core.Configurations
 @using Renderset.Core.Definitions
 @using Renderset.Core.Resolved
+@using Renderset.Core.Rendering
+@using Renderset.Core.Reports
 
 <div class="report-editor-section">
 
@@ -50,7 +52,12 @@
             }
 
             <div class="report-editor-property">
-                <label>Texto</label>
+                <div class="report-editor-property-heading">
+                    <label>Texto</label>
+
+                    <DataFieldPicker Fields="DataFields"
+                                     Selected="InsertDataAsync" />
+                </div>
 
                 <textarea rows="3"
                           value="@FooterText"
@@ -72,6 +79,45 @@
                 <span>Mostrar fecha de generación</span>
 
             </label>
+
+            <label class="report-editor-toggle-row">
+
+                <input type="checkbox"
+                       class="report-editor-toggle-input"
+                       checked="@ShowPageNumber"
+                       @onchange="PageNumberChangedAsync" />
+
+                <span class="report-editor-toggle">
+                    <span></span>
+                </span>
+
+                <span>Numerar las páginas</span>
+
+            </label>
+
+            @if (ShowPageNumber)
+            {
+                <div class="report-editor-property">
+                    <label>Formato</label>
+
+                    <input type="text"
+                           value="@PageNumberFormat"
+                           @onchange="PageNumberFormatChangedAsync"
+                           placeholder="@ResolvedReportFooter.DefaultPageNumberFormat" />
+
+                    <small>
+                        {page} es la página y {pages} el total. Se traduce en el
+                        diccionario (footer.pageNumber).
+                    </small>
+                </div>
+            }
+
+            <p class="report-editor-hint">
+                <i class="fa-solid fa-file-lines"></i>
+                El pie va al final de la hoja y, al imprimir o en el PDF, se
+                repite en todas las páginas. El texto admite datos del
+                documento: &#123;&#123;data.numero&#125;&#125;.
+            </p>
 
         </div>
     }
@@ -102,6 +148,23 @@
     [Parameter]
     public EventCallback Changed { get; set; }
 
+    [Parameter]
+    public IReadOnlyList<ReportDataFieldOption> DataFields { get; set; } = [];
+
+    private async Task InsertDataAsync(string path)
+    {
+        var token = ReportDataTemplate.TokenFor(path);
+        var current = FooterText;
+
+        Texts.SetText(
+            ReportTextKeys.FooterText,
+            string.IsNullOrWhiteSpace(current)
+                ? token
+                : current.TrimEnd() + " " + token);
+
+        await Changed.InvokeAsync();
+    }
+
     private ReportFooterConfiguration Footer
     {
         get
@@ -120,6 +183,37 @@
         Resolved?.ShowGenerationDate
         ?? Footer.ShowGenerationDate
         ?? Definition.ShowGenerationDate;
+
+    private bool ShowPageNumber =>
+        Resolved?.ShowPageNumber
+        ?? Footer.ShowPageNumber
+        ?? false;
+
+    private string PageNumberFormat =>
+        Texts.GetText(
+            ReportTextKeys.FooterPageNumber,
+            ResolvedReportFooter.DefaultPageNumberFormat);
+
+    private async Task PageNumberChangedAsync(ChangeEventArgs e)
+    {
+        Footer.ShowPageNumber = GetBool(e);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task PageNumberFormatChangedAsync(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        // Sin {page} la numeración no dice nada: se vuelve al formato
+        // heredado en vez de guardar un texto fijo.
+        Texts.SetText(
+            ReportTextKeys.FooterPageNumber,
+            value?.Contains("{page}", StringComparison.OrdinalIgnoreCase) == true
+                ? value
+                : null);
+
+        await Changed.InvokeAsync();
+    }
 
     private string FooterText =>
         Texts.GetText(

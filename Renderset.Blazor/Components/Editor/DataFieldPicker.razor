@@ -1,0 +1,61 @@
+@using Renderset.Core.Reports
+
+@*
+    Desplegable "Insertar dato" para los textos que admiten datos del
+    documento ({{data.ruta}}): título y subtítulo de la cabecera, pie...
+    Sólo ofrece campos de valor único (ReportDataFields.SingleValued).
+*@
+
+@if (Fields.Count > 0)
+{
+    <select class="data-field-picker"
+            @key="_version"
+            title="Insertar un dato del documento"
+            disabled="@Disabled"
+            @onchange="SelectedAsync">
+
+        <option value="">+ Dato</option>
+
+        @foreach (var group in Fields.GroupBy(x => x.Section))
+        {
+            <optgroup label="@group.Key">
+                @foreach (var field in group)
+                {
+                    <option value="@field.Path">@field.Label (@field.Path)</option>
+                }
+            </optgroup>
+        }
+
+    </select>
+}
+
+@code {
+
+    [Parameter]
+    public IReadOnlyList<ReportDataFieldOption> Fields { get; set; } = [];
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// Ruta elegida (sin el prefijo data.).
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> Selected { get; set; }
+
+    /// <summary>
+    /// Cambia la clave del select para volver a "+ Dato" después de elegir:
+    /// con el mismo valor Blazor no toca el DOM y se quedaría el elegido.
+    /// </summary>
+    private int _version;
+
+    private async Task SelectedAsync(ChangeEventArgs e)
+    {
+        var path = e.Value?.ToString();
+
+        _version++;
+
+        if (!string.IsNullOrWhiteSpace(path))
+            await Selected.InvokeAsync(path);
+    }
+}

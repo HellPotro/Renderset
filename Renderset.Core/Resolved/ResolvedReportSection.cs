@@ -12,7 +12,16 @@ public sealed class ResolvedReportSection
 
     public bool Visible { get; init; }
 
+    /// <summary>
+    /// Ya normalizado: List o Grid. Los Columns2/3/4 de presets antiguos
+    /// llegan aquí como Grid con su número de columnas.
+    /// </summary>
     public ReportSectionLayout Layout { get; set; }
+
+    /// <summary>
+    /// Columnas de la cuadrícula. 1 en lista.
+    /// </summary>
+    public int Columns { get; set; } = 1;
 
     /// <summary>
     /// Colección sobre la que repite la sección. Nulo significa que se pinta

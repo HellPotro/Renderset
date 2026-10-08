@@ -1,0 +1,150 @@
+@page "/account/login"
+@inject SignInManager<RendersetUser> SignInManager
+@inject UserManager<RendersetUser> UserManager
+@inject TenantSignIn TenantSignIn
+@inject NavigationManager Navigation
+
+<PageTitle>Entrar - RenderSet</PageTitle>
+
+<h1>Entrar</h1>
+
+<p class="account-lead">
+    Con el correo y la contraseña de tu cuenta. El acceso es por invitación:
+    si no tienes cuenta, pídesela a un administrador de tu empresa.
+</p>
+
+<AccountAlert Message="@error" />
+
+@if (signedInAs is not null)
+{
+    @* No se redirige solo: si la sesión del navegador y la de la página
+       no coinciden (contraseña cambiada en otro sitio), se podría entrar en
+       un bucle entre esta página y la aplicación. *@
+    <p class="account-hint">
+        Ya has entrado como <strong>@signedInAs</strong>.
+        <a href="@AccountLinks.SafeReturnUrl(ReturnUrl)">Ir a RenderSet</a>
+    </p>
+}
+
+<EditForm Model="Input"
+          method="post"
+          FormName="login"
+          OnValidSubmit="LoginAsync"
+          class="account-form">
+
+    <DataAnnotationsValidator />
+
+    <div class="account-field">
+        <label for="login-email">Correo</label>
+        <InputText id="login-email"
+                   type="email"
+                   autocomplete="username"
+                   autofocus
+                   @bind-Value="Input.Email" />
+        <ValidationMessage For="() => Input.Email" />
+    </div>
+
+    <div class="account-field">
+        <label for="login-password">Contraseña</label>
+        <InputText id="login-password"
+                   type="password"
+                   autocomplete="current-password"
+                   @bind-Value="Input.Password" />
+        <ValidationMessage For="() => Input.Password" />
+    </div>
+
+    <label class="account-check">
+        <InputCheckbox @bind-Value="Input.RememberMe" />
+        Mantener la sesión en este equipo
+    </label>
+
+    <button type="submit" class="primary-button">
+        Entrar
+    </button>
+
+</EditForm>
+
+<div class="account-links">
+    <a href="account/forgot-password">¿Has olvidado la contraseña?</a>
+</div>
+
+@code {
+
+    // Mismo mensaje para correo inexistente, contraseña mal, cuenta
+    // bloqueada o sin confirmar: no se dice qué correos tienen cuenta.
+    private const string GenericError =
+        "Correo o contraseña incorrectos. Tras 5 intentos fallidos la cuenta se bloquea 15 minutos.";
+
+    private string? error;
+
+    private string? signedInAs;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private LoginInput? Input { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Input ??= new LoginInput();
+
+        if (HttpContext.User.Identity?.IsAuthenticated == true &&
+            HttpContext.User.FindFirst(RendersetClaimTypes.TenantId) is not null)
+        {
+            signedInAs =
+                HttpContext.User.FindFirst(RendersetClaimTypes.DisplayName)?.Value
+                ?? HttpContext.User.Identity.Name;
+        }
+    }
+
+    private async Task LoginAsync()
+    {
+        var user = await UserManager.FindByEmailAsync(Input!.Email.Trim());
+
+        if (user is null)
+        {
+            // Se calcula un hash igualmente: si no, la respuesta rápida
+            // delataría qué correos no tienen cuenta.
+            UserManager.PasswordHasher.HashPassword(new RendersetUser(), Input.Password);
+
+            error = GenericError;
+            return;
+        }
+
+        var result =
+            await SignInManager.CheckPasswordSignInAsync(
+                user,
+                Input.Password,
+                lockoutOnFailure: true);
+
+        if (!result.Succeeded)
+        {
+            error = GenericError;
+            return;
+        }
+
+        if (!await TenantSignIn.SignInAsync(user, Input.RememberMe))
+        {
+            error = "Tu usuario no pertenece a ningún tenant activo. Pide a un administrador que te invite.";
+            return;
+        }
+
+        Navigation.NavigateTo(AccountLinks.SafeReturnUrl(ReturnUrl));
+    }
+
+    private sealed class LoginInput
+    {
+        [Required(ErrorMessage = "Escribe tu correo.")]
+        [EmailAddress(ErrorMessage = "El correo no es válido.")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Escribe la contraseña.")]
+        public string Password { get; set; } = string.Empty;
+
+        public bool RememberMe { get; set; }
+    }
+}

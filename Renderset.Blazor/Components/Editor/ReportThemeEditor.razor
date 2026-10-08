@@ -1,30 +1,152 @@
 @using Renderset.Core.Themes
 
-<div class="report-editor-block">
+@*
+    Editor completo de un tema: colores agrupados por zona del documento,
+    colores opcionales (título, bandas de tabla, etiquetas) y tipografía.
 
-    <ColorEditor Label="Color principal"
-                 Value="@Theme.PrimaryColor"
-                 ValueChanged="value => SetThemeColor(nameof(Theme.PrimaryColor), value)" />
+    Lo usan la pantalla de Temas y la pestaña Tema del diseñador cuando el
+    preset tiene un tema personalizado. Modifica el objeto que recibe y avisa
+    con Changed; quien lo aloja decide cuándo guardar.
+*@
 
-    <ColorEditor Label="Fondo secciones"
-                 Value="@Theme.SectionBackgroundColor"
-                 ValueChanged="value => SetThemeColor(nameof(Theme.SectionBackgroundColor), value)" />
+<div class="report-theme-editor @(Disabled ? "is-disabled" : null)">
 
-    <ColorEditor Label="Texto secciones"
-                 Value="@Theme.SectionTextColor"
-                 ValueChanged="value => SetThemeColor(nameof(Theme.SectionTextColor), value)" />
+    <fieldset class="report-theme-group" disabled="@Disabled">
 
-    <ColorEditor Label="Cabecera tabla"
-                 Value="@Theme.TableHeaderBackgroundColor"
-                 ValueChanged="value => SetThemeColor(nameof(Theme.TableHeaderBackgroundColor), value)" />
+        <legend>Marca</legend>
 
-    <ColorEditor Label="Texto cabecera"
-                 Value="@Theme.TableHeaderTextColor"
-                 ValueChanged="value => SetThemeColor(nameof(Theme.TableHeaderTextColor), value)" />
+        <ColorEditor Label="Color principal (acentos)"
+                     Value="@Theme.PrimaryColor"
+                     ValueChanged="value => SetAsync(t => t.PrimaryColor = value)" />
 
-    <ColorEditor Label="Bordes"
-                 Value="@Theme.BorderColor"
-                 ValueChanged="value => SetThemeColor(nameof(Theme.BorderColor), value)" />
+        @(OptionalColor(
+            "Título del documento",
+            "Igual que el texto",
+            Theme.TitleColor,
+            Theme.PrimaryColor,
+            value => Theme.TitleColor = value))
+
+        <ColorEditor Label="Color secundario (subsecciones)"
+                     Value="@Theme.SecondaryColor"
+                     ValueChanged="value => SetAsync(t => t.SecondaryColor = value)" />
+
+    </fieldset>
+
+    <fieldset class="report-theme-group" disabled="@Disabled">
+
+        <legend>Texto y página</legend>
+
+        <div class="report-editor-property">
+            <label for="@FontInputId">Tipografía</label>
+
+            <select id="@FontInputId"
+                    value="@Theme.FontFamily"
+                    @onchange="FontChangedAsync">
+
+                @if (!IsKnownFont)
+                {
+                    <option value="@Theme.FontFamily">Personalizada</option>
+                }
+
+                <optgroup label="Del sistema">
+                    @foreach (var font in ReportThemeFonts.SystemFonts)
+                    {
+                        <option value="@font.Stack"
+                                style="@($"font-family:{font.Stack}")">
+                            @font.Name
+                        </option>
+                    }
+                </optgroup>
+
+                <optgroup label="Incluidas en RenderSet">
+                    @foreach (var font in ReportThemeFonts.WebFonts)
+                    {
+                        <option value="@font.Stack"
+                                style="@($"font-family:{font.Stack}")">
+                            @font.Family
+                        </option>
+                    }
+                </optgroup>
+
+            </select>
+
+            <small class="report-theme-font-hint">
+                @if (ReportThemeFonts.IsWebFont(Theme.FontFamily))
+                {
+                    <span>Se incrusta en el documento: se ve igual en pantalla, en el PDF y en el HTML enviado.</span>
+                }
+                else
+                {
+                    <span>Del sistema: si el equipo o el servidor de PDF no la tiene, se usa la siguiente de la lista. Para que el PDF salga idéntico, elige una incluida.</span>
+                }
+            </small>
+
+            <div class="report-theme-font-sample"
+                 style="@($"font-family:{Theme.FontFamily}")">
+                Albarán 3116 · Talleres Peláez S.L. · 1.234,56 €
+                <strong>Total factura</strong>
+            </div>
+        </div>
+
+        <ColorEditor Label="Texto"
+                     Value="@Theme.TextColor"
+                     ValueChanged="value => SetAsync(t => t.TextColor = value)" />
+
+        <ColorEditor Label="Texto secundario"
+                     Value="@Theme.MutedTextColor"
+                     ValueChanged="value => SetAsync(t => t.MutedTextColor = value)" />
+
+        <ColorEditor Label="Fondo del documento"
+                     Value="@Theme.BackgroundColor"
+                     ValueChanged="value => SetAsync(t => t.BackgroundColor = value)" />
+
+    </fieldset>
+
+    <fieldset class="report-theme-group" disabled="@Disabled">
+
+        <legend>Secciones</legend>
+
+        <ColorEditor Label="Fondo del título"
+                     Value="@Theme.SectionBackgroundColor"
+                     ValueChanged="value => SetAsync(t => t.SectionBackgroundColor = value)" />
+
+        <ColorEditor Label="Texto del título"
+                     Value="@Theme.SectionTextColor"
+                     ValueChanged="value => SetAsync(t => t.SectionTextColor = value)" />
+
+        @(OptionalColor(
+            "Fondo de etiquetas (lista)",
+            "Gris claro de siempre",
+            Theme.FieldLabelBackgroundColor,
+            "#F8FAFB",
+            value => Theme.FieldLabelBackgroundColor = value))
+
+    </fieldset>
+
+    <fieldset class="report-theme-group" disabled="@Disabled">
+
+        <legend>Tablas</legend>
+
+        <ColorEditor Label="Cabecera"
+                     Value="@Theme.TableHeaderBackgroundColor"
+                     ValueChanged="value => SetAsync(t => t.TableHeaderBackgroundColor = value)" />
+
+        <ColorEditor Label="Texto de cabecera"
+                     Value="@Theme.TableHeaderTextColor"
+                     ValueChanged="value => SetAsync(t => t.TableHeaderTextColor = value)" />
+
+        @(OptionalColor(
+            "Filas alternas",
+            "Sin bandas",
+            Theme.TableStripeColor,
+            "#F6F9FA",
+            value => Theme.TableStripeColor = value))
+
+        <ColorEditor Label="Bordes"
+                     Value="@Theme.BorderColor"
+                     ValueChanged="value => SetAsync(t => t.BorderColor = value)" />
+
+    </fieldset>
 
 </div>
 
@@ -36,43 +158,77 @@
     [Parameter]
     public EventCallback Changed { get; set; }
 
-    private async Task SetThemeColor(
-        string property,
-        string value)
+    /// <summary>
+    /// Sólo lectura: el diseñador lo usa para enseñar los colores de un tema
+    /// de empresa sin permitir cambiarlos desde el preset.
+    /// </summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    private readonly string FontInputId =
+        $"theme-font-{Guid.NewGuid():N}";
+
+    private bool IsKnownFont =>
+        ReportThemeFonts.All.Any(x =>
+            string.Equals(x.Stack, Theme.FontFamily, StringComparison.Ordinal));
+
+    private async Task SetAsync(
+        Action<ReportTheme> change)
     {
-        switch (property)
-        {
-            case nameof(Theme.PrimaryColor):
-                Theme.PrimaryColor = value;
-                break;
+        if (Disabled)
+            return;
 
-            case nameof(Theme.SectionBackgroundColor):
-                Theme.SectionBackgroundColor = value;
-                break;
-
-            case nameof(Theme.SectionTextColor):
-                Theme.SectionTextColor = value;
-                break;
-
-            case nameof(Theme.TableHeaderBackgroundColor):
-                Theme.TableHeaderBackgroundColor = value;
-                break;
-
-            case nameof(Theme.TableHeaderTextColor):
-                Theme.TableHeaderTextColor = value;
-                break;
-
-            case nameof(Theme.BorderColor):
-                Theme.BorderColor = value;
-                break;
-
-            default:
-                throw new ArgumentOutOfRangeException(
-                    nameof(property),
-                    property,
-                    null);
-        }
-
+        change(Theme);
         await Changed.InvokeAsync();
     }
+
+    private Task FontChangedAsync(
+        ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        return string.IsNullOrWhiteSpace(value)
+            ? Task.CompletedTask
+            : SetAsync(t => t.FontFamily = value);
+    }
+
+    /// <summary>
+    /// Color que puede no estar: un interruptor lo activa con un valor de
+    /// partida y, apagado, se guarda nulo para que el documento se pinte
+    /// como antes de existir la opción.
+    /// </summary>
+    private RenderFragment OptionalColor(
+        string label,
+        string offText,
+        string? value,
+        string initial,
+        Action<string?> set) =>
+        @<div class="report-theme-optional @(value is null ? null : "is-on")">
+
+            <label class="report-editor-toggle-row is-compact">
+
+                <input type="checkbox"
+                       class="report-editor-toggle-input"
+                       checked="@(value is not null)"
+                       disabled="@Disabled"
+                       @onchange="e => SetAsync(_ => set(e.Value is true ? initial : null))" />
+
+                <span class="report-editor-toggle"></span>
+
+                <span>@label</span>
+
+            </label>
+
+            @if (value is null)
+            {
+                <small>@offText</small>
+            }
+            else
+            {
+                <ColorEditor Label="@label"
+                             Value="@value"
+                             ValueChanged="color => SetAsync(_ => set(color))" />
+            }
+
+        </div>;
 }

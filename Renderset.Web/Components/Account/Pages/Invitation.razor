@@ -1,0 +1,234 @@
+@page "/account/invitation"
+@using Renderset.Web.Email
+@inject TenantDirectory Directory
+@inject UserManager<RendersetUser> UserManager
+@inject SignInManager<RendersetUser> SignInManager
+@inject TenantSignIn TenantSignIn
+@inject NavigationManager Navigation
+@inject TimeProvider Time
+
+<PageTitle>Invitación - RenderSet</PageTitle>
+
+<HeadContent>
+    @* El enlace lleva el token: que no salga en el Referer. *@
+    <meta name="referrer" content="no-referrer" />
+</HeadContent>
+
+@if (invitation is null)
+{
+    <h1>Invitación no válida</h1>
+
+    <AccountAlert Message="La invitación no existe, ha caducado o ya se ha usado. Pide a quien te invitó que te mande otra." />
+
+    <div class="account-links">
+        <a href="account/login">Entrar</a>
+    </div>
+}
+else
+{
+    <h1>Únete a @invitation.TenantName</h1>
+
+    <p class="account-lead">
+        Te han invitado como <strong>@EmailTemplates.RoleName(invitation.Role)</strong>.
+        @if (existingAccount)
+        {
+            <span>Ya tienes cuenta en RenderSet: confirma tu contraseña para añadir este tenant.</span>
+        }
+        else
+        {
+            <span>Elige tu nombre y una contraseña: al menos 10 caracteres, con mayúsculas, minúsculas y algún número.</span>
+        }
+    </p>
+
+    <AccountAlert Message="@error" />
+
+    <EditForm Model="Input"
+              method="post"
+              FormName="invitation"
+              OnSubmit="AcceptAsync"
+              class="account-form">
+
+        <div class="account-field">
+            <label for="invitation-email">Correo</label>
+            <input id="invitation-email"
+                   type="email"
+                   autocomplete="username"
+                   value="@invitation.Email"
+                   readonly />
+        </div>
+
+        @if (!existingAccount)
+        {
+            <div class="account-field">
+                <label for="invitation-name">Nombre</label>
+                <InputText id="invitation-name"
+                           autocomplete="name"
+                           maxlength="100"
+                           autofocus
+                           @bind-Value="Input.DisplayName" />
+            </div>
+        }
+
+        <div class="account-field">
+            <label for="invitation-password">Contraseña</label>
+            <InputText id="invitation-password"
+                       type="password"
+                       autocomplete="@(existingAccount ? "current-password" : "new-password")"
+                       @bind-Value="Input.Password" />
+        </div>
+
+        @if (!existingAccount)
+        {
+            <div class="account-field">
+                <label for="invitation-confirm">Repite la contraseña</label>
+                <InputText id="invitation-confirm"
+                           type="password"
+                           autocomplete="new-password"
+                           @bind-Value="Input.ConfirmPassword" />
+            </div>
+        }
+
+        <button type="submit" class="primary-button">
+            @(existingAccount ? "Aceptar y entrar" : "Crear la cuenta y entrar")
+        </button>
+
+    </EditForm>
+
+    <p class="account-hint">
+        La invitación caduca el @invitation.ExpiresAtUtc.ToString("dd/MM/yyyy").
+    </p>
+}
+
+@code {
+
+    private TenantInvitationInfo? invitation;
+    private bool existingAccount;
+    private string? error;
+
+    [SupplyParameterFromQuery]
+    private string? Token { get; set; }
+
+    [SupplyParameterFromForm]
+    private InvitationInput? Input { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new InvitationInput();
+
+        invitation = await Directory.FindInvitationAsync(Token);
+
+        if (invitation is not null)
+            existingAccount = await UserManager.FindByEmailAsync(invitation.Email) is not null;
+    }
+
+    /// <summary>
+    /// Las validaciones dependen de si la cuenta existe, así que se hacen a
+    /// mano y no con DataAnnotations.
+    /// </summary>
+    private async Task AcceptAsync()
+    {
+        if (invitation is null)
+            return;
+
+        var input = Input!;
+
+        if (string.IsNullOrEmpty(input.Password))
+        {
+            error = "Escribe la contraseña.";
+            return;
+        }
+
+        RendersetUser? user;
+        var created = false;
+
+        if (existingAccount)
+        {
+            user = await UserManager.FindByEmailAsync(invitation.Email);
+
+            if (user is null)
+            {
+                error = "La cuenta ya no existe. Vuelve a abrir el enlace.";
+                return;
+            }
+
+            var check =
+                await SignInManager.CheckPasswordSignInAsync(
+                    user,
+                    input.Password,
+                    lockoutOnFailure: true);
+
+            if (!check.Succeeded)
+            {
+                error = "La contraseña no es correcta. Tras 5 intentos fallidos la cuenta se bloquea 15 minutos.";
+                return;
+            }
+        }
+        else
+        {
+            var name = (input.DisplayName ?? string.Empty).Trim();
+
+            if (name.Length is 0 or > 100)
+            {
+                error = "Escribe tu nombre (hasta 100 caracteres).";
+                return;
+            }
+
+            if (input.Password != input.ConfirmPassword)
+            {
+                error = "Las contraseñas no coinciden.";
+                return;
+            }
+
+            user = new RendersetUser
+            {
+                UserName = invitation.Email,
+                Email = invitation.Email,
+
+                // El enlace ha llegado a ese correo: queda confirmado.
+                EmailConfirmed = true,
+
+                DisplayName = name,
+                CreatedAtUtc = Time.GetUtcNow().UtcDateTime
+            };
+
+            var result = await UserManager.CreateAsync(user, input.Password);
+
+            if (!result.Succeeded)
+            {
+                error = string.Join(" ", result.Errors.Select(x => x.Description));
+                return;
+            }
+
+            created = true;
+        }
+
+        var accepted = await Directory.AcceptInvitationAsync(Token!, user);
+
+        if (!accepted.Succeeded)
+        {
+            // Sin tenant la cuenta no sirve: se deshace para poder repetir.
+            if (created)
+                await UserManager.DeleteAsync(user);
+
+            error = accepted.Error;
+            return;
+        }
+
+        if (!await TenantSignIn.SignInAsync(user, persistent: false, accepted.TenantId))
+        {
+            error = "La invitación se ha aceptado, pero el tenant no está activo.";
+            return;
+        }
+
+        Navigation.NavigateTo("/");
+    }
+
+    private sealed class InvitationInput
+    {
+        public string? DisplayName { get; set; }
+
+        public string Password { get; set; } = string.Empty;
+
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

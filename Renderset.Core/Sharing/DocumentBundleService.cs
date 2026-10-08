@@ -190,6 +190,7 @@ public sealed class DocumentBundleService
                 TokenIssuedAtUtc = now,
                 ExpiresAtUtc = expiresAtUtc!.Value,
                 CreatedAtUtc = now,
+                AllowDataDownload = request.AllowDataDownload,
                 Items = items
             };
 

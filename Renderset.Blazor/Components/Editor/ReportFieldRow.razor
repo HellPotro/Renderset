@@ -1,0 +1,150 @@
+@using Renderset.Core.Definitions
+
+@*
+    Fila de un campo en el editor: arrastrar, mostrar/ocultar, título y, al
+    desplegar, etiqueta y tipo. La usan las secciones que salen de los datos
+    (ReportSectionEditor) y las personalizadas (ReportEditor), para que un
+    campo se edite igual esté donde esté.
+
+    Sólo pinta y avisa: quién guarda qué (configuración de la sección,
+    diccionario) lo decide quien la aloja.
+*@
+
+<div class="report-editor-item @(Visible ? null : "report-editor-item-disabled") @CssClass"
+     draggable="true"
+     @ondragstart="DragStart"
+     @ondragover:preventDefault
+     @ondrop="Drop"
+     @ondragend="DragEnd">
+
+    <div class="report-editor-item-header">
+
+        <div class="report-editor-item-main">
+
+            <span class="report-editor-drag-handle"
+                  title="Arrastrar para reordenar">
+                ⋮⋮
+            </span>
+
+            <label class="report-editor-toggle-row"
+                   @onclick:stopPropagation="true">
+
+                <input type="checkbox"
+                       class="report-editor-toggle-input"
+                       checked="@Visible"
+                       @onchange="e => VisibleChanged.InvokeAsync(e.Value is bool value && value)" />
+
+                <span class="report-editor-toggle"></span>
+
+                <span class="report-editor-toggle-label report-editor-item-title"
+                      @onclick="Toggle">
+                    @Title
+                </span>
+
+            </label>
+
+        </div>
+
+        @Actions
+
+        <button type="button"
+                class="report-editor-item-expand-button"
+                title="@(_expanded ? "Ocultar propiedades" : "Editar propiedades")"
+                @onclick="Toggle">
+
+            <span class="report-editor-chevron @(_expanded ? "expanded" : null)">
+            </span>
+
+        </button>
+
+    </div>
+
+    @if (Visible && _expanded)
+    {
+        <div class="report-editor-item-properties">
+
+            <div class="report-editor-property">
+
+                <label>Etiqueta</label>
+
+                <input type="text"
+                       value="@Label"
+                       @onchange="e => LabelChanged.InvokeAsync(e.Value?.ToString())"
+                       placeholder="@DefaultLabel" />
+
+                @if (!string.IsNullOrWhiteSpace(LabelHint))
+                {
+                    <small>@LabelHint</small>
+                }
+            </div>
+
+            <div class="report-editor-property">
+
+                <label>Tipo</label>
+
+                <ReportFieldTypeSelect Value="Type"
+                                       Inferred="InferredType"
+                                       Changed="TypeChanged" />
+            </div>
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    /// <summary>Lo que se ve en la fila (la etiqueta resuelta).</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Valor del campo Etiqueta (el texto del diccionario).</summary>
+    [Parameter]
+    public string? Label { get; set; }
+
+    /// <summary>Etiqueta de la definición, de placeholder.</summary>
+    [Parameter]
+    public string? DefaultLabel { get; set; }
+
+    [Parameter]
+    public string? LabelHint { get; set; }
+
+    [Parameter]
+    public bool Visible { get; set; } = true;
+
+    [Parameter]
+    public ReportFieldType Type { get; set; }
+
+    [Parameter]
+    public ReportFieldType InferredType { get; set; }
+
+    [Parameter]
+    public string? CssClass { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> VisibleChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> LabelChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<ReportFieldType?> TypeChanged { get; set; }
+
+    [Parameter]
+    public EventCallback DragStart { get; set; }
+
+    [Parameter]
+    public EventCallback Drop { get; set; }
+
+    [Parameter]
+    public EventCallback DragEnd { get; set; }
+
+    /// <summary>Botones extra a la derecha (p. ej. quitar de la sección).</summary>
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+
+    private bool _expanded;
+
+    private void Toggle() =>
+        _expanded = !_expanded;
+}

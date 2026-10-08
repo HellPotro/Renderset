@@ -110,7 +110,16 @@ public sealed class GotenbergPdfConverter
         // Gotenberg exige que el documento se llame index.html.
         AddFile(form, "index.html", html, "text/html");
 
-        if (page.ShowPageNumbers)
+        if (!string.IsNullOrWhiteSpace(page.FooterHtml))
+        {
+            // Pie del propio documento (texto, fecha y "Página 1 de 3").
+            AddFile(
+                form,
+                "footer.html",
+                page.FooterHtml,
+                "text/html");
+        }
+        else if (page.ShowPageNumbers)
         {
             AddFile(
                 form,

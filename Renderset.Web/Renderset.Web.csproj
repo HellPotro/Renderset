@@ -4,12 +4,17 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <UserSecretsId>e8f6a8e2-06de-4707-9f4f-f71b566c57ff</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Refit" Version="15.2.0" />
-    <PackageReference Include="Refit.HttpClientFactory" Version="15.2.0" />
-    <PackageReference Include="Refit.Reflection" Version="15.2.0" />
+    <PackageReference Include="Azure.Communication.Email" Version="1.1.0" />
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageReference Include="Refit" Version="16.3.0" />
+    <PackageReference Include="Refit.HttpClientFactory" Version="16.3.0" />
+    <PackageReference Include="Refit.Reflection" Version="16.3.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -123,6 +123,11 @@ public sealed class ReportConfigurationResolver
             reportConfiguration,
             sectionConfiguration: configuration);
 
+        var customGrid =
+            ReportSectionGrid.Normalize(
+                configuration.Layout,
+                configuration.Columns);
+
         return new ResolvedReportSection
         {
             Id = configuration.SectionId,
@@ -132,7 +137,8 @@ public sealed class ReportConfigurationResolver
                     ReportTextKeys.Section(configuration.SectionId),
                     configuration.SectionId)),
             Visible = configuration.Visible ?? true,
-            Layout = configuration.Layout ?? ReportSectionLayout.List,
+            Layout = customGrid.Layout,
+            Columns = customGrid.Columns,
             Order = configuration.Order ?? 0,
             Fields = fields,
             Table = null,
@@ -180,6 +186,14 @@ public sealed class ReportConfigurationResolver
                 .OrderBy(x => x.Order)
                 .ToList();
 
+        // Una sección con tabla se pinta siempre como lista: la cuadrícula
+        // sólo aplica a campos sueltos.
+        var grid = definition.Table is not null
+            ? ReportSectionGridLayout.List
+            : ReportSectionGrid.Normalize(
+                sectionConfiguration?.Layout,
+                sectionConfiguration?.Columns);
+
         return new ResolvedReportSection
         {
             Id = definition.Id,
@@ -189,9 +203,8 @@ public sealed class ReportConfigurationResolver
                     ReportTextKeys.Section(definition.Id),
                     definition.Name)),
             Visible = sectionConfiguration?.Visible ?? definition.VisibleByDefault,
-            Layout = definition.Table is not null
-                ? ReportSectionLayout.List
-                : sectionConfiguration?.Layout ?? ReportSectionLayout.List,
+            Layout = grid.Layout,
+            Columns = grid.Columns,
             Order = sectionConfiguration?.Order ?? definition.Order,
             DataPath = definition.DataPath,
             Fields = fields,
@@ -601,8 +614,75 @@ public sealed class ReportConfigurationResolver
                 ? LocalizeTextBlock(
                     texts,
                     DeserializeTextConfiguration(configurationJson))
+                : null,
+            Fields = type == ReportBlockType.Fields
+                ? ResolveFieldsBlock(
+                    texts,
+                    Deserialize<ReportFieldsBlockConfiguration>(configurationJson))
                 : null
         };
+    }
+
+    /// <summary>
+    /// Campos fijos de un bloque: etiqueta y valor salen del diccionario
+    /// común. Un campo sin etiqueta ni valor no se pinta; uno con etiqueta y
+    /// sin valor sí, porque el valor puede ser un {{data.ruta}} que sólo se
+    /// conoce al pintar.
+    /// </summary>
+    private static ResolvedFieldsBlock ResolveFieldsBlock(
+        ReportTextCatalog texts,
+        ReportFieldsBlockConfiguration configuration)
+    {
+        var grid =
+            ReportSectionGrid.Normalize(
+                configuration.Layout,
+                configuration.Columns);
+
+        return new ResolvedFieldsBlock
+        {
+            Title = texts.Resolve(
+                configuration.TitleKey,
+                string.Empty),
+            ShowTitle = configuration.ShowTitle ?? true,
+            Layout = grid.Layout,
+            Columns = grid.Columns,
+            Fields = configuration.Fields
+                .OrderBy(x => x.Order)
+                .Select(field => new ResolvedFixedField
+                {
+                    Id = field.Id,
+                    Label = texts.Resolve(
+                        field.LabelKey ?? ReportTextKeys.BlockFieldLabel(field.Id),
+                        string.Empty),
+                    Value = texts.Resolve(
+                        field.ValueKey ?? ReportTextKeys.BlockFieldValue(field.Id),
+                        string.Empty)
+                })
+                .Where(x =>
+                    !string.IsNullOrWhiteSpace(x.Label) ||
+                    !string.IsNullOrWhiteSpace(x.Value))
+                .ToList()
+        };
+    }
+
+    private static T Deserialize<T>(
+        string configurationJson)
+        where T : new()
+    {
+        if (string.IsNullOrWhiteSpace(configurationJson))
+            return new T();
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(
+                       configurationJson,
+                       JsonOptions)
+                   ?? new T();
+        }
+        catch (JsonException)
+        {
+            return new T();
+        }
     }
 
     private static ReportTextBlockConfiguration LocalizeTextBlock(
@@ -666,15 +746,27 @@ public sealed class ReportConfigurationResolver
                 texts.Resolve(
                     ReportTextKeys.HeaderSubtitle,
                     definition.Subtitle ?? string.Empty)),
+            ShowTitle = configuration?.ShowTitle ?? true,
+            ShowSubtitle = configuration?.ShowSubtitle ?? true,
             ShowLogo = configuration?.ShowLogo ?? definition.AllowLogo,
             LogoUrl = configuration?.LogoUrl,
             LogoMaxHeight = configuration?.LogoMaxHeight,
             Layout = configuration?.Layout ?? ReportHeaderLayout.LogoLeft,
+            TitlePlacement = configuration?.TitlePlacement ?? ReportHeaderTitlePlacement.Inline,
             BackgroundColor = configuration?.BackgroundColor,
             TextColor = configuration?.TextColor,
 
             // Sin configurar se comporta como siempre: línea de separación.
             ShowDivider = configuration?.ShowDivider ?? true,
+
+            ShowQr = configuration?.ShowQr ?? false,
+            QrContent = string.IsNullOrWhiteSpace(configuration?.QrContent)
+                ? Rendering.ReportQrContent.DocumentUrlTemplate
+                : configuration!.QrContent!.Trim(),
+            QrSize = Math.Clamp(
+                configuration?.QrSize ?? ResolvedReportHeader.DefaultQrSize,
+                ResolvedReportHeader.MinQrSize,
+                ResolvedReportHeader.MaxQrSize),
 
             Lines = ResolveHeaderLines(
                 texts,
@@ -776,7 +868,10 @@ public sealed class ReportConfigurationResolver
                     ReportTextKeys.FooterText,
                     definition.Text ?? string.Empty)),
             ShowGenerationDate = configuration?.ShowGenerationDate ?? definition.ShowGenerationDate,
-            ShowPageNumber = configuration?.ShowPageNumber ?? false
+            ShowPageNumber = configuration?.ShowPageNumber ?? false,
+            PageNumberFormat = texts.Resolve(
+                ReportTextKeys.FooterPageNumber,
+                ResolvedReportFooter.DefaultPageNumberFormat)
         };
     }
 
@@ -797,7 +892,7 @@ public sealed class ReportConfigurationResolver
             DataPath = definition.DataPath,
             Visible = configuration?.Visible ?? definition.VisibleByDefault,
             Order = orderOverride ?? configuration?.Order ?? definition.Order,
-            Type = definition.Type
+            Type = configuration?.Type ?? definition.Type
         };
     }
 
@@ -826,7 +921,10 @@ public sealed class ReportConfigurationResolver
             Id = definition.Id,
             Name = definition.Name,
             DataPath = definition.DataPath,
-            Columns = columns
+            Columns = columns,
+            TotalLabel = texts.Resolve(
+                ReportTextKeys.TableTotal,
+                "Total")
         };
     }
 
@@ -848,7 +946,8 @@ public sealed class ReportConfigurationResolver
             Visible = configuration?.Visible ?? definition.VisibleByDefault,
             Order = configuration?.Order ?? definition.Order,
             Width = configuration?.Width ?? definition.Width,
-            Type = definition.Type
+            Type = configuration?.Type ?? definition.Type,
+            Total = configuration?.Total ?? ReportColumnTotal.None
         };
     }
 }

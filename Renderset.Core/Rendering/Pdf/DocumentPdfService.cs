@@ -77,10 +77,26 @@ public sealed class DocumentPdfService
         if (document is null)
             return null;
 
+        // Un documento con pie propio lo lleva dentro: se le da al conversor
+        // para que lo repita en cada página con "Página 1 de 3". Los
+        // emitidos antes no lo traen y salen como siempre.
+        var html = document.Content;
+        var page = _options.Page;
+
+        var footer = ReportPageFooter.Extract(html);
+
+        if (footer is not null)
+        {
+            html = footer.Html;
+            page = _options.Page.With(
+                footer.FooterHtml,
+                footer.HeightMm);
+        }
+
         var pdf =
             await _converter.ConvertHtmlAsync(
-                document.Content,
-                _options.Page,
+                html,
+                page,
                 cancellationToken);
 
         await _documents.SavePdfAsync(

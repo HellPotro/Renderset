@@ -1,6 +1,8 @@
+@using System.Text.Json
 @using Renderset.Core.Blocks
 @using Renderset.Core.Configurations
 @using Renderset.Core.Definitions
+@using Renderset.Core.Rendering
 @using Renderset.Core.Resolved
 
 @if (Block.Type == ReportBlockType.Text && Block.Text is not null)
@@ -10,15 +12,78 @@
         @if (!string.IsNullOrWhiteSpace(Block.Text.Title))
         {
             <div class="dynamic-report-text-block-title">
-                @Block.Text.Title
+                @WithData(Block.Text.Title)
             </div>
         }
 
         @if (!string.IsNullOrWhiteSpace(Block.Text.Text))
         {
             <div class="dynamic-report-text-block-content">
-                @Block.Text.Text
+                @WithData(Block.Text.Text)
             </div>
+        }
+
+    </section>
+}
+else if (Block.Type == ReportBlockType.Fields && Block.Fields is { } fields)
+{
+    @* Mismo marcado que una sección de campos (DynamicReportSection +
+       DynamicReportFields): en el documento un bloque de datos de empresa no
+       se distingue de una sección que sale de los datos. *@
+    <section class="dynamic-report-section dynamic-report-fields-block is-depth-0">
+
+        @if (fields.ShowTitle && !string.IsNullOrWhiteSpace(fields.Title))
+        {
+            <div class="dynamic-report-section-title">
+                @WithData(fields.Title)
+            </div>
+        }
+
+        @if (fields.Fields.Count > 0)
+        {
+            @if (fields.Layout == ReportSectionLayout.List)
+            {
+                <div class="dynamic-report-fields">
+
+                    @foreach (var field in fields.Fields)
+                    {
+                        <div class="dynamic-report-field">
+
+                            <div class="dynamic-report-field-label">
+                                @WithData(field.Label)
+                            </div>
+
+                            <div class="dynamic-report-field-value">
+                                @WithData(field.Value)
+                            </div>
+
+                        </div>
+                    }
+
+                </div>
+            }
+            else
+            {
+                <div class="@GridClass(fields)"
+                     style="@GridStyle(fields)">
+
+                    @foreach (var field in fields.Fields)
+                    {
+                        <div class="dynamic-report-metric">
+
+                            <div class="dynamic-report-metric-label">
+                                @WithData(field.Label)
+                            </div>
+
+                            <div class="dynamic-report-metric-value">
+                                @WithData(field.Value)
+                            </div>
+
+                        </div>
+                    }
+
+                </div>
+            }
         }
 
     </section>
@@ -27,6 +92,40 @@
 @code {
     [Parameter, EditorRequired]
     public ResolvedReportBlock Block { get; set; } = default!;
+
+    /// <summary>
+    /// Datos del documento, para los {{data.ruta}} de los textos.
+    /// </summary>
+    [Parameter]
+    public JsonElement Data { get; set; }
+
+    /// <summary>
+    /// Qué hacer con un {{data.ruta}} sin valor. En el documento queda en
+    /// blanco; el editor de bloques, que no tiene datos, lo enseña marcado.
+    /// </summary>
+    [Parameter]
+    public Func<string, string>? MissingData { get; set; }
+
+    private string WithData(
+        string? text) =>
+        ReportDataTemplate.Apply(text, Data, MissingData);
+
+    private static int Columns(
+        ResolvedFieldsBlock fields) =>
+        Math.Clamp(
+            fields.Columns,
+            ReportSectionGrid.MinColumns,
+            ReportSectionGrid.MaxColumns);
+
+    private static string GridStyle(
+        ResolvedFieldsBlock fields) =>
+        $"--report-grid-columns:{Columns(fields)};";
+
+    private static string GridClass(
+        ResolvedFieldsBlock fields) =>
+        Columns(fields) >= ReportSectionGrid.DenseFromColumns
+            ? "dynamic-report-grid is-dense"
+            : "dynamic-report-grid";
 
     private static string GetTextStyleClass(ReportTextBlockStyle style) =>
         style switch

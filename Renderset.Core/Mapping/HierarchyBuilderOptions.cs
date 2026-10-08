@@ -25,4 +25,19 @@ public sealed class HierarchyBuilderOptions
     /// elementos legítimamente vacíos.
     /// </summary>
     public bool SkipEmptyChildRows { get; set; } = true;
+
+    /// <summary>
+    /// Quita los espacios del final de los textos. Las columnas CHAR de SQL
+    /// Server llegan rellenas ("Ingles    ") y en un documento eso descuadra
+    /// tablas y comparaciones.
+    /// </summary>
+    public bool TrimStrings { get; set; } = true;
+
+    /// <summary>
+    /// Qué hacer con un valor que no encaja en el tipo del campo (un texto
+    /// en una columna marcada como número). Por defecto se conserva como
+    /// texto: un dato raro en una referencia no puede impedir emitir un
+    /// albarán. Con true, lanza <see cref="DataMappingValueException"/>.
+    /// </summary>
+    public bool StrictTypes { get; set; }
 }

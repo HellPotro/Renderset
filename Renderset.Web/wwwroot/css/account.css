@@ -1,0 +1,325 @@
+/* =========================================================
+   Páginas de cuenta (entrar, contraseñas, invitaciones) y
+   menú de usuario de la barra lateral.
+   ========================================================= */
+
+.account-page {
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 24px 16px;
+    background: #eef2f4;
+}
+
+.account-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 28px;
+    border-top: 4px solid #00285a;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(15, 35, 50, .08);
+}
+
+.account-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 22px;
+    color: #173d4f;
+}
+
+.account-brand-mark {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: #00285a;
+    color: #fff;
+    font-weight: 800;
+}
+
+.account-card h1 {
+    margin: 0 0 6px;
+    color: #172b35;
+    font-size: 20px;
+}
+
+.account-lead {
+    margin: 0 0 18px;
+    color: #6d7b83;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.account-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.account-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+    .account-field label {
+        color: #3d5560;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .account-field input {
+        height: 38px;
+        padding: 0 11px;
+        border: 1px solid #d8e1e5;
+        border-radius: 8px;
+        font: inherit;
+        font-size: 14px;
+    }
+
+        .account-field input:focus {
+            border-color: #00285a;
+            outline: 2px solid rgba(0, 40, 90, .12);
+        }
+
+    .account-field input[readonly] {
+        background: #f5f8f9;
+        color: #5d6f78;
+    }
+
+    .account-field small,
+    .account-form .validation-message {
+        color: #9a3d3d;
+        font-size: 12px;
+    }
+
+.account-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #3d5560;
+    font-size: 13px;
+}
+
+.account-form .primary-button {
+    justify-content: center;
+    height: 40px;
+}
+
+.account-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 18px;
+    font-size: 13px;
+}
+
+    .account-links a {
+        color: #1d5f87;
+    }
+
+.account-alert {
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+    .account-alert.is-error {
+        background: #fdf0ef;
+        color: #9a3d3d;
+    }
+
+    .account-alert.is-ok {
+        background: #e8f3ef;
+        color: #2f7a5d;
+    }
+
+.account-hint {
+    color: #8a99a1;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.account-denied {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    max-width: 420px;
+    margin: 80px auto;
+    text-align: center;
+    color: #5d6f78;
+}
+
+    .account-denied i {
+        color: #9aa9b1;
+        font-size: 28px;
+    }
+
+    .account-denied h1 {
+        margin: 0;
+        color: #172b35;
+        font-size: 20px;
+    }
+
+
+/* ---------- Menú de usuario (barra lateral) ---------- */
+
+.user-menu {
+    position: relative;
+}
+
+.user-menu-toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 6px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+    .user-menu-toggle:hover {
+        background: #f3f6f7;
+    }
+
+    .user-menu-toggle > div {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .user-menu-toggle strong,
+    .user-menu-toggle span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .user-menu-toggle strong {
+        color: #172b35;
+        font-size: 11px;
+    }
+
+    .user-menu-toggle span {
+        color: #8c999f;
+        font-size: 10px;
+    }
+
+    .user-menu-toggle i {
+        color: #9aa9b1;
+        font-size: 10px;
+    }
+
+.user-menu-panel {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    border: 1px solid #e3eaee;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(15, 35, 50, .14);
+}
+
+.user-menu-title {
+    padding: 6px 8px 4px;
+    color: #a0abb0;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.user-menu-panel form {
+    margin: 0;
+}
+
+.user-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #26404b;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+    .user-menu-item:hover {
+        background: #f3f6f7;
+        color: #173d4f;
+    }
+
+    .user-menu-item.is-current {
+        font-weight: 700;
+    }
+
+        .user-menu-item.is-current::after {
+            content: "✓";
+            margin-left: auto;
+            color: #2f7a5d;
+        }
+
+    .user-menu-item i {
+        width: 14px;
+        color: #8a99a1;
+        font-size: 11px;
+        text-align: center;
+    }
+
+.user-menu-separator {
+    height: 1px;
+    margin: 5px 4px;
+    background: #edf1f3;
+}
+
+
+/* ---------- Enlaces que son formularios (salir) ---------- */
+
+.account-links form {
+    margin: 0;
+}
+
+.link-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #1d5f87;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+
+/* ---------- Menú de usuario: <details> para que abra sin JS ---------- */
+
+.user-menu > summary {
+    list-style: none;
+}
+
+    .user-menu > summary::-webkit-details-marker {
+        display: none;
+    }

@@ -147,3 +147,28 @@ window.renderSet.setPreference = function (key, value) {
         // localStorage puede estar bloqueado; se pierde la preferencia y ya.
     }
 };
+
+
+/* El visor de documentos (/documents/{id}) usa document-viewer.js de
+   Renderset.Blazor, el mismo script que la página pública de bundles. */
+
+
+/* Aviso del navegador al cerrar o recargar con cambios sin guardar. Lo
+   activa y desactiva el diseñador según su estado. */
+window.renderSet.setUnsavedChangesGuard = function (active) {
+
+    window.renderSet._unsavedChanges = !!active;
+
+    if (window.renderSet._unsavedGuardInstalled)
+        return;
+
+    window.renderSet._unsavedGuardInstalled = true;
+
+    window.addEventListener("beforeunload", function (e) {
+        if (!window.renderSet._unsavedChanges)
+            return;
+
+        e.preventDefault();
+        e.returnValue = "";
+    });
+};

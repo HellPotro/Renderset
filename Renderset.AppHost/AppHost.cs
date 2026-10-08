@@ -1,5 +1,18 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Clave de servicio con la que Web llama a la API. Secreta: se guarda en los
+// user-secrets de AppHost (Parameters:renderset-service-key) o el panel de
+// Aspire la pide al arrancar. Mínimo 32 caracteres.
+var serviceKey = builder.AddParameter("renderset-service-key", secret: true);
+
+// Par de claves ECDSA P-256 del token de usuario (ver SEGURIDAD.md, fase B):
+// Web firma con la privada qué usuario, tenant y rol hace cada llamada y la
+// API lo comprueba con la pública. Secretas, en los user-secrets de AppHost
+// (Parameters:renderset-user-token-private-key / -public-key), en Base64 de
+// una línea o PEM.
+var userTokenPrivateKey = builder.AddParameter("renderset-user-token-private-key", secret: true);
+var userTokenPublicKey = builder.AddParameter("renderset-user-token-public-key", secret: true);
+
 // Conversión a PDF: Chromium headless detrás de una API HTTP. En Azure va
 // como Container App aparte (ver BUNDLES.md); aquí, como contenedor local.
 var gotenberg = builder.AddContainer("gotenberg", "gotenberg/gotenberg", "8")
@@ -9,13 +22,28 @@ var gotenberg = builder.AddContainer("gotenberg", "gotenberg/gotenberg", "8")
 var apiService = builder.AddProject<Projects.Renderset_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
     .WithEnvironment("Pdf__GotenbergUrl", gotenberg.GetEndpoint("http"))
+    .WithEnvironment("Security__ServiceKeys__0__Name", "web")
+    .WithEnvironment("Security__ServiceKeys__0__Key", serviceKey)
+    .WithEnvironment("Security__UserTokenPublicKey", userTokenPublicKey)
     .WaitFor(gotenberg);
 
-builder.AddProject<Projects.Renderset_Web>("webfrontend")
+var web = builder.AddProject<Projects.Renderset_Web>("webfrontend")
     .WithExternalHttpEndpoints()
     .WithHttpHealthCheck("/health")
     .WithReference(apiService)
     .WithEnvironment("ReportingApi", apiService.GetEndpoint("https"))
+    .WithEnvironment("ReportingApiKey", serviceKey)
+    .WithEnvironment("Security__UserTokenPrivateKey", userTokenPrivateKey)
     .WaitFor(apiService);
+
+// El QR de la cabecera enlaza al visor de Web (/documents/{id}). Sólo es la
+// URL: no hay WaitFor, así que no se crea un ciclo entre los dos proyectos.
+// En Azure, DocumentLinks__BaseUrl con el dominio público de Web.
+// Con el perfil http de AppHost, Web no tiene endpoint https: se usa el http.
+var webHttps = web.GetEndpoint("https");
+
+apiService.WithEnvironment(
+    "DocumentLinks__BaseUrl",
+    webHttps.Exists ? webHttps : web.GetEndpoint("http"));
 
 builder.Build().Run();

@@ -16,6 +16,8 @@
 @inject ICurrentTenant CurrentTenant
 @inject IToastService Toasts
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Designer - RenderSet</PageTitle>
 
@@ -70,6 +72,13 @@ else if (_configuration is not null &&
                     Guardando
                 </span>
             }
+            else if (HasUnsavedChanges)
+            {
+                <span class="designer-saving is-dirty">
+                    <i class="fa-solid fa-circle"></i>
+                    Cambios sin guardar
+                </span>
+            }
 
         </header>
 
@@ -85,7 +94,9 @@ else if (_configuration is not null &&
                           BodyBlocks="_bodyBlocks"
                           Texts="_texts"
                           Cultures="_cultures"
+                          Themes="_themes"
                           CultureChanged="ChangeCultureAsync"
+                          HasUnsavedChanges="HasUnsavedChanges"
                           SaveRequested="SaveAsync" />
 
         </div>
@@ -117,6 +128,8 @@ else if (_configuration is not null &&
 
     private IReadOnlyCollection<TenantCulture> _cultures = [];
 
+    private IReadOnlyCollection<TenantReportTheme> _themes = [];
+
     /// <summary>
     /// Variables del tenant. El diccionario guarda plantillas
     /// ("CIF: {{company.cif}}") y es aquí donde se convierten en texto real
@@ -126,6 +139,33 @@ else if (_configuration is not null &&
 
     private ReportTextWorkspace _texts =
         ReportTextWorkspace.Detached();
+
+    /// <summary>
+    /// Foto de lo guardado (configuración, tema y datos de ejemplo). Se
+    /// compara con lo actual para saber si hay cambios sin guardar: el
+    /// editor modifica los objetos en sitio y no hay un evento fiable por
+    /// cada cambio.
+    /// </summary>
+    private string? _savedSnapshot;
+
+    private bool _unsavedGuardActive;
+
+    private bool HasUnsavedChanges =>
+        !_loading &&
+        _savedSnapshot is not null &&
+        (_texts.HasPendingChanges ||
+         !string.Equals(_savedSnapshot, Snapshot(), StringComparison.Ordinal));
+
+    private string Snapshot() =>
+        JsonSerializer.Serialize(
+            new
+            {
+                Configuration = _configuration,
+                Theme = _theme,
+                Data = _data.ValueKind == JsonValueKind.Undefined
+                    ? null
+                    : _data.GetRawText()
+            });
 
     protected override async Task OnParametersSetAsync()
     {
@@ -159,9 +199,12 @@ else if (_configuration is not null &&
             await LoadResolvedBlocksAsync(
                 ReportBlockType.Footer);
 
+        // Bloques que pueden ir en el cuerpo: textos y campos fijos (datos
+        // de empresa...).
         _bodyBlocks =
-            await LoadResolvedBlocksAsync(
-                ReportBlockType.Text);
+            (await LoadResolvedBlocksAsync(ReportBlockType.Text))
+                .Concat(await LoadResolvedBlocksAsync(ReportBlockType.Fields))
+                .ToList();
 
         var preset =
             string.IsNullOrWhiteSpace(PresetId)
@@ -196,6 +239,21 @@ else if (_configuration is not null &&
         _configuration = Clone(preset.Configuration);
         _theme = Clone(preset.Theme);
 
+        _themes = await LoadThemesAsync();
+
+        // Con tema de empresa, el preview tiene que enseñar el tema tal como
+        // está hoy, que es con el que la API emite el documento; la copia del
+        // preset puede ser de cuando se eligió.
+        var linked =
+            _themes.FirstOrDefault(x =>
+                string.Equals(
+                    x.Theme.Id,
+                    _configuration.ThemeId,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (linked is not null)
+            _theme = linked.Theme.Clone();
+
         _cultures =
             await RenderSetApi.GetCulturesAsync(
                 CurrentTenant.Id);
@@ -215,6 +273,28 @@ else if (_configuration is not null &&
         _data = _report.SampleData.HasValue
             ? _report.SampleData.Value.Clone()
             : default;
+
+        _savedSnapshot = Snapshot();
+    }
+
+    /// <summary>
+    /// Sin temas el diseñador funciona igual (todo personalizado), así que un
+    /// fallo aquí avisa pero no impide abrirlo.
+    /// </summary>
+    private async Task<IReadOnlyCollection<TenantReportTheme>> LoadThemesAsync()
+    {
+        try
+        {
+            return await RenderSetApi.GetThemesAsync(CurrentTenant.Id);
+        }
+        catch (Exception exception)
+        {
+            Toasts.Error(
+                ToastServiceExtensions.Describe(exception),
+                "No se han podido cargar los temas de empresa");
+
+            return [];
+        }
     }
 
     private async Task<ReportTextWorkspace> LoadTextsAsync(
@@ -339,7 +419,9 @@ else if (_configuration is not null &&
             if (!await SaveTextsAsync())
                 return;
 
-            Toasts.Success("Diseñador guardado.");
+            _savedSnapshot = Snapshot();
+
+            Toasts.Success("Cambios guardados.");
         }
         finally
         {
@@ -376,17 +458,61 @@ else if (_configuration is not null &&
         return Task.CompletedTask;
     }
 
-    private void GoBack()
+    /// <summary>
+    /// Siempre a Reports: desde ahí se llega al diseñador, y la ficha del
+    /// preset es un paso que la mayoría no busca al salir.
+    /// </summary>
+    private async Task GoBack()
     {
-        if (!string.IsNullOrWhiteSpace(_presetId))
+        if (HasUnsavedChanges)
         {
-            Navigation.NavigateTo(
-                $"/presets/{Uri.EscapeDataString(ReportId)}/{Uri.EscapeDataString(_presetId)}");
+            var leave =
+                await JS.InvokeAsync<bool>(
+                    "confirm",
+                    "Tienes cambios sin guardar en el diseño. Si sales, se pierden. ¿Salir igualmente?");
 
-            return;
+            if (!leave)
+                return;
         }
 
+        await SetUnsavedGuardAsync(false);
+
         Navigation.NavigateTo("/reports");
+    }
+
+    /// <summary>
+    /// Cerrar la pestaña o recargar con cambios pendientes pregunta también
+    /// (aviso nativo del navegador, que no deja personalizar el texto).
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(
+        bool firstRender)
+    {
+        var dirty = HasUnsavedChanges;
+
+        if (dirty != _unsavedGuardActive)
+            await SetUnsavedGuardAsync(dirty);
+    }
+
+    private async Task SetUnsavedGuardAsync(
+        bool active)
+    {
+        _unsavedGuardActive = active;
+
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "renderSet.setUnsavedChangesGuard",
+                active);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_unsavedGuardActive)
+            await SetUnsavedGuardAsync(false);
     }
 
     private static T Clone<T>(

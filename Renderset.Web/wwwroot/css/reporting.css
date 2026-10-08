@@ -12,9 +12,13 @@
    ========================================================= */
 
 /* ---------- Designer page ---------- */
+/* Ocupa la fila que le deja la barra superior de .designer-shell, no la
+   pantalla entera: con 100dvh la página medía 44px más que su hueco, el
+   shell lo recortaba y el final de los dos paneles (menú y vista previa)
+   quedaba fuera de alcance del scroll. */
 .report-designer-page {
     width: 100%;
-    height: 100dvh;
+    height: 100%;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
@@ -37,6 +41,9 @@
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, var(--report-editor-sidebar-width)) auto minmax(0, 1fr);
+    /* Una fila que mide exactamente el alto disponible: cada panel hace su
+       propio scroll en vez de estirar la rejilla con su contenido. */
+    grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
     background: #eef2f4;
 }
@@ -184,32 +191,74 @@
 
 .report-editor-tabs {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    padding: 10px 12px 0;
-    background: #ffffff;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+    margin: 12px 12px 0;
+    padding: 3px;
+    border-radius: 9px;
+    background: #eef3f6;
 }
 
 .report-editor-tab {
-    padding: 10px 5px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px 7px;
     border: 0;
-    border-bottom: 2px solid transparent;
+    border-radius: 7px;
     background: transparent;
-    color: #78868e;
+    color: #6b7c85;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 600;
-    white-space: nowrap;
-    transition: color .15s ease, border-color .15s ease;
+    line-height: 1.15;
+    transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
+
+    .report-editor-tab i {
+        font-size: 13px;
+    }
+
+    .report-editor-tab span {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 
     .report-editor-tab:hover {
         color: #25313a;
     }
 
     .report-editor-tab.active {
+        background: #fff;
         color: #00285a;
-        border-bottom-color: #00285a;
+        box-shadow: 0 1px 3px rgba(0, 40, 90, .14);
     }
+
+.report-editor-tab-hint {
+    margin: 0;
+    padding: 8px 16px 10px;
+    border-bottom: 1px solid #e7ecef;
+    color: #7a8991;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+/* ---------- Guardar ---------- */
+
+.report-editor-save {
+    position: relative;
+}
+
+.report-editor-save-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #f2b84b;
+}
 
 
 /* =========================================================
@@ -313,34 +362,173 @@
     }
 
 /* ---------- Section layout selector ---------- */
-.report-editor-section-layout {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 10px;
+.report-layout-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     margin-bottom: 10px;
-    padding: 8px 10px;
+    padding: 9px 10px;
     border: 1px solid #e3e9ec;
     border-radius: 6px;
     background: #fff;
 }
 
-    .report-editor-section-layout label {
-        color: #6e7e86;
-        font-size: 10px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .04em;
+/* En el compositor ya va dentro de su propio bloque con etiqueta. */
+.report-composer-field-group .report-layout-picker {
+    margin-bottom: 0;
+    padding: 0;
+    border: 0;
+}
+
+.report-layout-picker-label,
+.report-layout-picker-caption {
+    color: #6e7e86;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.report-layout-picker-modes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 2px;
+    border-radius: 6px;
+    background: #eef3f6;
+}
+
+    .report-layout-picker-modes button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 5px 8px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #5d6f78;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background .15s ease, color .15s ease, box-shadow .15s ease;
     }
 
-    .report-editor-section-layout select {
-        width: 100%;
-        padding: 6px 8px;
-        border: 1px solid #d8e1e7;
+        .report-layout-picker-modes button i {
+            font-size: 10px;
+        }
+
+        .report-layout-picker-modes button:hover {
+            color: #173d4f;
+        }
+
+        .report-layout-picker-modes button.is-active {
+            background: #fff;
+            color: #173d4f;
+            box-shadow: 0 1px 2px rgba(23, 61, 79, .14);
+        }
+
+.report-layout-picker-columns {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+}
+
+    .report-layout-picker-columns .report-layout-picker-caption {
+        margin-right: auto;
+    }
+
+.report-layout-picker-stepper {
+    display: inline-flex;
+    align-items: stretch;
+    overflow: hidden;
+    border: 1px solid #d8e1e7;
+    border-radius: 6px;
+    background: #f8fafb;
+}
+
+    .report-layout-picker-stepper button {
+        width: 24px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #5d6f78;
+        font-size: 9px;
+        cursor: pointer;
+    }
+
+        .report-layout-picker-stepper button:hover:not(:disabled) {
+            background: #edf2f4;
+            color: #173d4f;
+        }
+
+        .report-layout-picker-stepper button:disabled {
+            opacity: .35;
+            cursor: default;
+        }
+
+    .report-layout-picker .report-layout-picker-stepper input {
+        width: 34px;
+        min-width: 0;
+        padding: 4px 0;
+        border: 0;
+        border-left: 1px solid #e3e9ec;
+        border-right: 1px solid #e3e9ec;
+        border-radius: 0;
+        background: #fff;
+        color: #1f2d33;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: center;
+        box-shadow: none;
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+
+        .report-layout-picker .report-layout-picker-stepper input::-webkit-outer-spin-button,
+        .report-layout-picker .report-layout-picker-stepper input::-webkit-inner-spin-button {
+            margin: 0;
+            -webkit-appearance: none;
+        }
+
+.report-layout-picker-presets {
+    display: inline-flex;
+    gap: 3px;
+}
+
+    .report-layout-picker-presets button {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 5px;
+        border: 1px solid #e0e7eb;
         border-radius: 5px;
-        background: #f8fafb;
-        color: #34454d;
-        font-size: 11px;
+        background: #fff;
+        color: #5d6f78;
+        font-size: 10.5px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+        .report-layout-picker-presets button:hover {
+            border-color: #b9c8d0;
+            color: #173d4f;
+        }
+
+        .report-layout-picker-presets button.is-active {
+            border-color: #173d4f;
+            background: #173d4f;
+            color: #fff;
+        }
+
+.report-layout-picker-preview {
+    display: grid;
+    gap: 3px;
+}
+
+    .report-layout-picker-preview span {
+        height: 10px;
+        border-radius: 2px;
+        background: #dbe5ea;
     }
 
 .report-editor-section-option {
@@ -466,6 +654,11 @@
     .report-editor-section-chip.is-nested {
         background: #f3eef7;
         color: #63497c;
+    }
+
+    .report-editor-section-chip.is-custom {
+        background: #fbf1e6;
+        color: #8a5a1f;
     }
 
     .report-editor-section-chip.is-path {
@@ -754,50 +947,6 @@
         resize: vertical;
     }
 
-/* ---------- Text inputs ---------- */
-
-.report-editor-text-input {
-    width: 100%;
-    margin-top: 8px;
-    padding: 6px 8px;
-    box-sizing: border-box;
-    background: #f8fafb;
-    border: 1px solid #dce4e8;
-    border-radius: 5px;
-    color: #44535b;
-    font-size: 11px;
-}
-
-    .report-editor-text-input:focus {
-        outline: none;
-        background: #ffffff;
-        border-color: #7d9bb0;
-        box-shadow: 0 0 0 2px rgba(0, 40, 90, .06);
-    }
-
-/* ---------- Column width ---------- */
-
-.report-editor-width {
-    margin-top: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-    .report-editor-width label {
-        color: #74838b;
-        font-size: 11px;
-    }
-
-    .report-editor-width input {
-        width: 70px;
-        padding: 5px 7px;
-        border: 1px solid #d8e1e7;
-        border-radius: 5px;
-        background: #ffffff;
-        font-size: 12px;
-    }
-
 /* ---------- Theme editor ---------- */
 
 .report-editor-color {
@@ -893,16 +1042,24 @@
 
 /* ---------- Paper ---------- */
 
+/* Hoja A4 como mínimo; el documento la llena para que el pie quede abajo
+   igual que en el PDF. */
 .report-editor-paper {
     width: 210mm;
     min-height: 297mm;
     box-sizing: border-box;
     margin: 0 auto;
     padding: 10mm;
+    display: flex;
+    flex-direction: column;
     overflow-anchor: none;
     background: #ffffff;
     box-shadow: 0 12px 40px rgba(0, 0, 0, .25);
 }
+
+    .report-editor-paper > .dynamic-report {
+        flex: 1 0 auto;
+    }
 
 
 /* =========================================================
@@ -921,6 +1078,7 @@
         height: auto;
         min-height: 100dvh;
         grid-template-columns: 1fr;
+        grid-template-rows: auto;
         overflow: visible;
     }
 
@@ -1255,51 +1413,8 @@
     font-size: 9px;
 }
 
-/* ---------- Rendered body text blocks ---------- */
-
-.dynamic-report-content-block {
-    margin-bottom: 18px;
-}
-
-.dynamic-report-text-block {
-    padding: 11px 13px;
-    border: 1px solid var(--report-border);
-    border-left-width: 3px;
-    background: #fafbfc;
-}
-
-.dynamic-report-text-block-title {
-    margin-bottom: 5px;
-    color: var(--report-text);
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.dynamic-report-text-block-content {
-    color: var(--report-text);
-    font-size: 11px;
-    line-height: 1.5;
-    white-space: pre-wrap;
-}
-
-.dynamic-report-text-block-default {
-    border-left-color: var(--report-primary);
-}
-
-.dynamic-report-text-block-information {
-    border-left-color: #4f7f9a;
-    background: #f4f8fa;
-}
-
-.dynamic-report-text-block-warning {
-    border-left-color: #b58224;
-    background: #fffaf0;
-}
-
-.dynamic-report-text-block-success {
-    border-left-color: #4e8164;
-    background: #f4f9f6;
-}
+/* Los bloques de texto del documento están en report-document.css: el
+   documento emitido también los necesita. */
 
 /* ---------------------------------------------------------------
    Selector de idioma del diseñador
@@ -1551,4 +1666,742 @@
 .block-icon.text {
     background: #f3eef8;
     color: #72558a;
+}
+
+
+/* =========================================================
+   HEADER: título / subtítulo con interruptor
+   ========================================================= */
+
+.report-editor-property-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.report-editor-toggle-row.is-compact {
+    gap: 6px;
+    color: #74838b;
+    font-size: 10.5px;
+    font-weight: 600;
+}
+
+    .report-editor-toggle-row.is-compact .report-editor-toggle {
+        width: 28px;
+        height: 16px;
+    }
+
+        .report-editor-toggle-row.is-compact .report-editor-toggle::after {
+            top: 2px;
+            left: 2px;
+            width: 12px;
+            height: 12px;
+        }
+
+    .report-editor-toggle-row.is-compact .report-editor-toggle-input:checked + .report-editor-toggle::after {
+        transform: translateX(12px);
+    }
+
+.report-editor-property.is-hidden-text input[type="text"] {
+    color: #98a6ad;
+    text-decoration: line-through;
+    cursor: not-allowed;
+}
+
+
+/* =========================================================
+   TABLE COLUMNS
+   ========================================================= */
+
+.report-editor-columns-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 14px 0 7px;
+}
+
+    .report-editor-columns-heading .report-editor-subtitle {
+        margin: 0;
+    }
+
+.report-editor-columns-count {
+    color: #93a0a5;
+    font-size: 10.5px;
+}
+
+.report-editor-columns-bar {
+    display: flex;
+    gap: 2px;
+    height: 18px;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+    .report-editor-columns-bar span {
+        min-width: 0;
+        flex-grow: 0;
+        flex-shrink: 1;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: #3c4f86;
+        color: #fff;
+        font-size: 9.5px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+        .report-editor-columns-bar span.is-auto {
+            background: repeating-linear-gradient(135deg, #c9d3ea 0 4px, #dbe2f1 4px 8px);
+            color: #3c4f86;
+        }
+
+    .report-editor-columns-bar.is-overflowing span:not(.is-auto) {
+        background: #b4553c;
+    }
+
+.report-editor-columns-summary {
+    margin: 5px 0 8px;
+    color: #7a8991;
+    font-size: 10.5px;
+    line-height: 1.35;
+}
+
+    .report-editor-columns-summary.is-overflowing {
+        color: #9a3d3d;
+    }
+
+.report-editor-columns {
+    overflow: hidden;
+    border: 1px solid #e1e7eb;
+    border-radius: 7px;
+    background: #fff;
+}
+
+.report-editor-column {
+    display: grid;
+    grid-template-columns: 14px auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #edf1f3;
+}
+
+    .report-editor-column:last-child {
+        border-bottom: 0;
+    }
+
+    .report-editor-column:hover {
+        background: #fbfcfd;
+    }
+
+        .report-editor-column:hover .report-editor-drag-handle {
+            color: #667780;
+        }
+
+    .report-editor-column.report-editor-item-dragging {
+        border: 1px dashed #7d9bb0;
+    }
+
+    /* Sin botón de restablecer, el ancho ocupa su hueco. */
+    .report-editor-column > :last-child {
+        grid-column: -2;
+    }
+
+.report-editor-column-name {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+    .report-editor-column-name input {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 3px 6px;
+        margin-left: -6px;
+        border: 1px solid transparent;
+        border-radius: 5px;
+        background: transparent;
+        color: #1f2d33;
+        font-size: 12px;
+        font-weight: 600;
+        outline: none;
+        transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+    }
+
+        .report-editor-column-name input:hover:not(:disabled) {
+            border-color: #e1e7eb;
+            background: #f8fafb;
+        }
+
+        .report-editor-column-name input:focus {
+            border-color: #8ba4b3;
+            background: #fff;
+            box-shadow: 0 0 0 2px rgba(65, 105, 125, .10);
+        }
+
+    .report-editor-column-name small {
+        overflow: hidden;
+        color: #93a0a5;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 9.5px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+.report-editor-column-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    margin-top: 2px;
+}
+
+    .report-editor-column-meta small {
+        min-width: 0;
+        margin-left: 2px;
+    }
+
+/* Selector con aspecto de etiqueta: tipo y total de la columna sin abrir
+   un panel aparte. Resaltado cuando no es el valor de partida. */
+.report-editor-chip-select {
+    max-width: 92px;
+    padding: 1px 16px 1px 5px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: #eef1f6 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%236e7e86'/%3E%3C/svg%3E") no-repeat right 5px center;
+    color: #4d5f8c;
+    font-family: system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+    .report-editor-chip-select:hover:not(:disabled) {
+        border-color: #c9d3ea;
+    }
+
+    .report-editor-chip-select:focus {
+        border-color: #8ba4b3;
+        outline: none;
+    }
+
+    .report-editor-chip-select.is-overridden {
+        background-color: #3c4f86;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23ffffff'/%3E%3C/svg%3E");
+        color: #fff;
+    }
+
+    .report-editor-chip-select:disabled {
+        opacity: .5;
+        cursor: default;
+    }
+
+    .report-editor-property select.is-overridden {
+        border-color: #3c4f86;
+    }
+
+.report-editor-column-reset {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #93a0a5;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+    .report-editor-column-reset:hover {
+        background: #edf2f4;
+        color: #173d4f;
+    }
+
+.report-editor-column-width {
+    display: inline-flex;
+    align-items: center;
+    overflow: hidden;
+    border: 1px solid #d8e1e7;
+    border-radius: 5px;
+    background: #f8fafb;
+    cursor: text;
+}
+
+    .report-editor-column-width:focus-within {
+        border-color: #8ba4b3;
+        background: #fff;
+        box-shadow: 0 0 0 2px rgba(65, 105, 125, .10);
+    }
+
+    .report-editor-column-width input {
+        width: 38px;
+        padding: 4px 2px 4px 7px;
+        border: 0;
+        background: transparent;
+        color: #1f2d33;
+        font-size: 11.5px;
+        font-weight: 600;
+        text-align: right;
+        outline: none;
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+
+        .report-editor-column-width input::placeholder {
+            color: #a6b2b8;
+            font-weight: 500;
+        }
+
+        .report-editor-column-width input::-webkit-outer-spin-button,
+        .report-editor-column-width input::-webkit-inner-spin-button {
+            margin: 0;
+            -webkit-appearance: none;
+        }
+
+    .report-editor-column-width span {
+        padding-right: 7px;
+        color: #93a0a5;
+        font-size: 10.5px;
+    }
+
+.report-editor-column-hidden-tag {
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: #eef1f3;
+    color: #8a999f;
+    font-size: 9.5px;
+    font-weight: 700;
+}
+
+.report-editor-column.is-hidden {
+    background: #f8fafb;
+}
+
+    .report-editor-column.is-hidden .report-editor-column-name input {
+        color: #98a6ad;
+        font-weight: 500;
+        cursor: default;
+    }
+
+
+/* =========================================================
+   THEME EDITOR
+   ========================================================= */
+
+.report-theme-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.report-theme-group {
+    min-width: 0;
+    margin: 0;
+    padding: 10px 12px 12px;
+    border: 1px solid #e1e7eb;
+    border-radius: 8px;
+    background: #fff;
+}
+
+    .report-theme-group legend {
+        padding: 0 5px;
+        margin-left: -5px;
+        color: #6e7e86;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .report-theme-group .report-editor-color > label {
+        font-size: 11px;
+    }
+
+    .report-theme-group .report-editor-property select {
+        font-size: 12px;
+    }
+
+.report-theme-optional {
+    margin-bottom: 12px;
+}
+
+    .report-theme-optional > small {
+        display: block;
+        margin: 3px 0 0 34px;
+        color: #93a0a5;
+        font-size: 10.5px;
+    }
+
+    .report-theme-optional.is-on .report-editor-color {
+        margin-top: 6px;
+    }
+
+    /* El interruptor ya hace de etiqueta. */
+    .report-theme-optional .report-editor-color > label {
+        display: none;
+    }
+
+.report-theme-editor.is-disabled .report-theme-group {
+    background: #f8fafb;
+}
+
+.report-theme-editor.is-disabled input,
+.report-theme-editor.is-disabled select {
+    cursor: not-allowed;
+}
+
+
+/* ---------- Selector de tema en el diseñador ---------- */
+
+.report-theme-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.report-theme-option {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #e1e7eb;
+    border-radius: 8px;
+    background: #fff;
+    color: #25313a;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+    .report-theme-option:hover {
+        border-color: #b9c8d0;
+    }
+
+    .report-theme-option.is-active {
+        border-color: #173d4f;
+        box-shadow: 0 0 0 2px rgba(23, 61, 79, .12);
+    }
+
+    .report-theme-option strong {
+        display: block;
+        overflow: hidden;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .report-theme-option small {
+        color: #8a999f;
+        font-size: 10.5px;
+    }
+
+    .report-theme-option > i {
+        color: #173d4f;
+        font-size: 12px;
+    }
+
+.report-theme-swatches {
+    display: inline-flex;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, .08);
+    border-radius: 5px;
+}
+
+    .report-theme-swatches span {
+        width: 12px;
+        height: 22px;
+    }
+
+.report-theme-linked {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid #d6e3ea;
+    border-radius: 8px;
+    background: #f3f8fa;
+    color: #4d626d;
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+    .report-theme-linked > i {
+        margin-top: 2px;
+        color: #4f7384;
+    }
+
+    .report-theme-linked a,
+    .report-theme-linked button {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: #173d4f;
+        font: inherit;
+        font-weight: 600;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
+
+/* =========================================================
+   SUBSECCIONES: entrar a editar en vez de desplegar niveles
+   ========================================================= */
+
+.report-editor-child-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 6px;
+    padding: 8px 8px 8px 10px;
+    border: 1px solid #e1e7eb;
+    border-radius: 8px;
+    background: #fff;
+}
+
+    .report-editor-child-row:last-child {
+        margin-bottom: 0;
+    }
+
+    .report-editor-child-row:hover {
+        border-color: #c3d0d7;
+    }
+
+    .report-editor-child-row.is-hidden {
+        background: #f6f8f9;
+    }
+
+        .report-editor-child-row.is-hidden strong {
+            color: #89969d;
+        }
+
+.report-editor-child-icon {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: #f3eef7;
+    color: #63497c;
+    font-size: 11px;
+}
+
+.report-editor-child-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+    .report-editor-child-text strong {
+        overflow: hidden;
+        color: #25313a;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .report-editor-child-text small {
+        overflow: hidden;
+        color: #8a999f;
+        font-size: 10.5px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+.report-editor-child-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    border: 1px solid #d3dde3;
+    border-radius: 6px;
+    background: #fff;
+    color: #173d4f;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .report-editor-child-edit i {
+        font-size: 9px;
+    }
+
+    .report-editor-child-edit:hover {
+        border-color: #173d4f;
+        background: #173d4f;
+        color: #fff;
+    }
+
+/* ---------- Migas ---------- */
+
+.report-editor-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    border: 1px solid #dfe6ea;
+    border-radius: 8px;
+    background: #f4f7f9;
+    font-size: 11.5px;
+}
+
+    .report-editor-breadcrumb button {
+        padding: 2px 4px;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: #4f7384;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+        .report-editor-breadcrumb button:hover {
+            background: #e6edf1;
+            color: #173d4f;
+        }
+
+    .report-editor-breadcrumb strong {
+        color: #173d4f;
+    }
+
+.report-editor-breadcrumb-back i {
+    margin-right: 3px;
+    font-size: 10px;
+}
+
+.report-editor-breadcrumb-sep {
+    color: #a6b2b8;
+    font-size: 8px;
+}
+
+
+.report-editor-property > small {
+    display: block;
+    margin-top: 4px;
+    color: #74858d;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+/* Aviso dentro de una propiedad del editor (p. ej. marcadores del QR que
+   no están en los datos de ejemplo). */
+.report-editor-property small.report-editor-warning {
+    color: #9a5b12;
+}
+
+
+/* Quitar un campo de una sección personalizada: mismo tamaño que el botón
+   de desplegar, para que la fila sea igual que en las secciones de datos. */
+.report-editor-item-remove {
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #9aa9b1;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+    .report-editor-item-remove:hover {
+        background: #fbecec;
+        color: #b23b3b;
+    }
+
+
+/* =========================================================
+   DATOS DEL DOCUMENTO EN CABECERA Y PIE ({{data.ruta}})
+   ========================================================= */
+
+.report-editor-input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+    .report-editor-input-row > input {
+        flex: 1;
+        min-width: 0;
+    }
+
+.report-editor-property-heading .data-field-picker {
+    margin-left: auto;
+}
+
+.data-field-picker {
+    flex: none;
+    max-width: 120px;
+    padding: 6px 7px;
+    border: 1px solid #d8e1e7;
+    border-radius: 6px;
+    background: #fff;
+    color: #2f5c70;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .data-field-picker:disabled {
+        opacity: .5;
+        cursor: not-allowed;
+    }
+
+.report-editor-hint {
+    display: flex;
+    gap: 7px;
+    margin: 10px 0 0;
+    color: #7c8b93;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+    .report-editor-hint i {
+        margin-top: 2px;
+    }
+
+
+/* =========================================================
+   TEMAS: TIPOGRAFÍA
+   ========================================================= */
+
+.report-theme-font-hint {
+    display: block;
+    margin-top: 4px;
+    color: #8a99a1;
+    font-size: 10.5px;
+    line-height: 1.4;
+}
+
+.report-theme-font-sample {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 8px;
+    padding: 9px 11px;
+    border: 1px solid #e1e7eb;
+    border-radius: 7px;
+    background: #fafcfc;
+    color: #23333c;
+    font-size: 13px;
 }

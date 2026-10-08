@@ -1,3 +1,7 @@
 ﻿@inherits LayoutComponentBase
 
 @Body
+
+@* Las páginas a pantalla completa (diseñador, visor de documentos) también
+   avisan con toasts: sin el host, Toasts.Success no se veía en ningún sitio. *@
+<ToastHost />

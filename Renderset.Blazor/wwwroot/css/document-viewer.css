@@ -1,0 +1,260 @@
+/* =========================================================
+   RENDERSET - BARRA DEL VISOR DE DOCUMENTOS
+
+   La comparten el visor interno (Web) y la página pública de un bundle,
+   con el mismo marcado (DocumentViewerToolbar.razor) y el mismo script
+   (document-viewer.js). Web la enlaza como asset de la RCL; la API la
+   incrusta en la página pública.
+
+   El color de acento sale de --rs-share-primary cuando existe (la marca
+   del tenant en la página pública); si no, el azul de RenderSet.
+   ========================================================= */
+
+.rs-viewer-toolbar {
+    --rs-viewer-primary: var(--rs-share-primary, #00285A);
+    --rs-viewer-text: var(--rs-share-text, #25313A);
+    --rs-viewer-muted: var(--rs-share-muted, #6D7B83);
+    --rs-viewer-border: var(--rs-share-border, #D8E1E7);
+    --rs-viewer-canvas: var(--rs-share-canvas, #F3F5F7);
+    --rs-viewer-surface: var(--rs-share-surface, #FFFFFF);
+
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: var(--rs-viewer-surface);
+    border-bottom: 1px solid var(--rs-viewer-border);
+    color: var(--rs-viewer-text);
+    font: 14px/1.45 "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+}
+
+    /* Sin cabecera de página encima (visor interno), la barra lleva la
+       franja de color que en la página pública lleva la cabecera. */
+    .rs-viewer-toolbar.is-standalone {
+        border-top: 4px solid var(--rs-viewer-primary);
+    }
+
+.rs-viewer-back {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--rs-viewer-border);
+    border-radius: 6px;
+    color: var(--rs-viewer-muted);
+    text-decoration: none;
+}
+
+    .rs-viewer-back:hover {
+        border-color: var(--rs-viewer-primary);
+        color: var(--rs-viewer-primary);
+    }
+
+.rs-viewer-heading {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.rs-viewer-title {
+    overflow: hidden;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.rs-viewer-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    color: var(--rs-viewer-muted);
+    font-size: 12px;
+}
+
+.rs-viewer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+
+/* ---------- Botones ---------- */
+
+.rs-viewer-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--rs-viewer-border);
+    border-radius: 6px;
+    background: var(--rs-viewer-surface);
+    color: var(--rs-viewer-text);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+    .rs-viewer-button:hover {
+        border-color: var(--rs-viewer-primary);
+        color: var(--rs-viewer-primary);
+    }
+
+    .rs-viewer-button.is-primary {
+        border-color: var(--rs-viewer-primary);
+        background: var(--rs-viewer-primary);
+        color: #FFFFFF;
+    }
+
+        .rs-viewer-button.is-primary:hover {
+            filter: brightness(1.12);
+            color: #FFFFFF;
+        }
+
+    .rs-viewer-button:focus-visible,
+    .rs-viewer-back:focus-visible {
+        outline: 2px solid var(--rs-viewer-primary);
+        outline-offset: 2px;
+    }
+
+.rs-viewer-icon {
+    flex: none;
+    width: 15px;
+    height: 15px;
+}
+
+.rs-viewer-caret {
+    width: 11px;
+    height: 11px;
+    margin-left: -2px;
+    opacity: .7;
+}
+
+.rs-viewer-button[hidden],
+.rs-viewer-menu[hidden] {
+    display: none;
+}
+
+
+/* ---------- Menús (CSV y JSON) ---------- */
+
+.rs-viewer-menu {
+    position: relative;
+}
+
+.rs-viewer-panel {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 20;
+    display: none;
+    min-width: 220px;
+    padding: 4px;
+    border: 1px solid var(--rs-viewer-border);
+    border-radius: 6px;
+    background: var(--rs-viewer-surface);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .14);
+}
+
+.rs-viewer-menu.is-open .rs-viewer-panel {
+    display: grid;
+}
+
+.rs-viewer-panel button {
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--rs-viewer-text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+    .rs-viewer-panel button:hover {
+        background: var(--rs-viewer-canvas);
+        color: var(--rs-viewer-primary);
+    }
+
+    .rs-viewer-panel button.is-all {
+        margin-top: 4px;
+        border-top: 1px solid var(--rs-viewer-border);
+        border-radius: 0 0 4px 4px;
+        font-weight: 600;
+    }
+
+
+/* ---------- Aviso ("Copiado") ---------- */
+
+.rs-viewer-note {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 50%;
+    z-index: 30;
+    transform: translateX(-50%);
+    padding: 7px 14px;
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, .16);
+    background: #E5F4EC;
+    color: #2F7A52;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+    .rs-viewer-note[hidden] {
+        display: none;
+    }
+
+
+/* ---------- Estrecho ---------- */
+
+@media (max-width: 1000px) {
+
+    .rs-viewer-toolbar {
+        flex-wrap: wrap;
+    }
+
+    .rs-viewer-heading {
+        flex-basis: calc(100% - 50px);
+    }
+
+    .rs-viewer-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+}
+
+@media (max-width: 760px) {
+
+    .rs-viewer-actions > .rs-viewer-button,
+    .rs-viewer-actions > .rs-viewer-menu {
+        flex: 1 1 auto;
+    }
+
+        .rs-viewer-actions > .rs-viewer-menu > .rs-viewer-button {
+            width: 100%;
+        }
+
+    /* En móvil el texto de "Abrir en pestaña nueva" sobra: queda el icono. */
+    .rs-viewer-label-optional {
+        display: none;
+    }
+}
+
+@media print {
+
+    .rs-viewer-toolbar {
+        display: none;
+    }
+}

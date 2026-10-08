@@ -1,0 +1,195 @@
+@using Renderset.Core.Sharing
+
+@*
+    Barra del visor de documentos. La misma en el visor interno de Web y en
+    la página pública de un bundle: mismo marcado, mismo CSS
+    (document-viewer.css) y mismo script (document-viewer.js), así las dos
+    ofrecen las mismas opciones y se ven igual.
+
+    Sólo pinta: el comportamiento lo pone el script, que busca la raíz con
+    data-rs-viewer (la barra y el iframe) y lee los datos del documento
+    abierto. Por eso funciona igual pintada en estático (página pública) o
+    en un circuito (Web).
+
+    Orden de los botones: lo que depende de los datos primero (CSV, JSON),
+    luego abrir e imprimir, y la descarga como acción principal.
+*@
+
+<div class="rs-viewer-toolbar @(Standalone ? "is-standalone" : null)">
+
+    @if (!string.IsNullOrWhiteSpace(BackUrl))
+    {
+        <a class="rs-viewer-back"
+           href="@BackUrl"
+           title="@BackTitle"
+           aria-label="@BackTitle">
+            @Icon(IconBack)
+        </a>
+    }
+
+    <div class="rs-viewer-heading">
+
+        <span class="rs-viewer-title" data-rs-viewer-title>@Title</span>
+
+        @if (Details is not null)
+        {
+            <span class="rs-viewer-meta">@Details</span>
+        }
+
+    </div>
+
+    <div class="rs-viewer-actions">
+
+        @if (AllowData)
+        {
+            @* Escondidos hasta que el script sabe qué datos trae el documento
+               abierto: uno emitido sin datos no enseña ninguno de los dos. *@
+            <div class="rs-viewer-menu" data-rs-viewer-menu data-rs-viewer-csv hidden>
+                <button type="button"
+                        class="rs-viewer-button"
+                        aria-haspopup="true"
+                        data-rs-viewer-toggle>
+                    @Icon(IconTable)
+                    @Texts.ExportCsv
+                    @Icon(IconCaret, "rs-viewer-caret")
+                </button>
+                <div class="rs-viewer-panel"
+                     data-rs-viewer-csv-panel
+                     data-all-label="@Texts.AllTables"></div>
+            </div>
+
+            <div class="rs-viewer-menu" data-rs-viewer-menu data-rs-viewer-json hidden>
+                <button type="button"
+                        class="rs-viewer-button"
+                        aria-haspopup="true"
+                        data-rs-viewer-toggle>
+                    @Icon(IconBraces)
+                    JSON
+                    @Icon(IconCaret, "rs-viewer-caret")
+                </button>
+                <div class="rs-viewer-panel">
+                    <button type="button" data-rs-viewer-json-download>@Texts.DownloadJson</button>
+                    <button type="button" data-rs-viewer-json-copy>@Texts.CopyJson</button>
+                </div>
+            </div>
+        }
+
+        <a class="rs-viewer-button"
+           href="@OpenUrl"
+           target="_blank"
+           rel="noopener"
+           title="@Texts.OpenInNewTab"
+           data-rs-viewer-open>
+            @Icon(IconExternal)
+            <span class="rs-viewer-label-optional">@Texts.OpenInNewTab</span>
+        </a>
+
+        <button type="button"
+                class="rs-viewer-button"
+                data-rs-viewer-print>
+            @Icon(IconPrint)
+            @Texts.Print
+        </button>
+
+        @if (!string.IsNullOrWhiteSpace(DownloadUrl))
+        {
+            <a class="rs-viewer-button is-primary"
+               href="@DownloadUrl"
+               data-rs-viewer-download>
+                @Icon(IconDownload)
+                @(DownloadIsPdf ? Texts.DownloadPdf : Texts.Download)
+            </a>
+        }
+
+    </div>
+
+    <div class="rs-viewer-note"
+         role="status"
+         data-rs-viewer-note
+         data-copied-label="@Texts.Copied"
+         hidden></div>
+
+</div>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public DocumentBundleTexts Texts { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Línea pequeña bajo el título (report, idioma, fecha). Opcional.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Details { get; set; }
+
+    [Parameter, EditorRequired]
+    public string OpenUrl { get; set; } = default!;
+
+    /// <summary>
+    /// Botón principal. Nulo = sin botón de descarga.
+    /// </summary>
+    [Parameter]
+    public string? DownloadUrl { get; set; }
+
+    [Parameter]
+    public bool DownloadIsPdf { get; set; }
+
+    /// <summary>
+    /// Ofrece CSV y JSON. Aun así cada menú sólo aparece si el documento
+    /// abierto se emitió con sus datos.
+    /// </summary>
+    [Parameter]
+    public bool AllowData { get; set; }
+
+    [Parameter]
+    public string? BackUrl { get; set; }
+
+    [Parameter]
+    public string? BackTitle { get; set; }
+
+    /// <summary>
+    /// Sin cabecera de página encima: la barra lleva la franja de color.
+    /// </summary>
+    [Parameter]
+    public bool Standalone { get; set; }
+
+    // Iconos en SVG propio: la página pública no carga ninguna librería de
+    // iconos (CSP sin orígenes externos) y así las dos barras son idénticas.
+
+    private const string IconBack =
+        "M19 12H5M11 6l-6 6 6 6";
+
+    private const string IconTable =
+        "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14";
+
+    private const string IconBraces =
+        "M9 4H8a2 2 0 0 0-2 2v4l-2 2 2 2v4a2 2 0 0 0 2 2h1M15 4h1a2 2 0 0 1 2 2v4l2 2-2 2v4a2 2 0 0 1-2 2h-1";
+
+    private const string IconExternal =
+        "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5";
+
+    private const string IconPrint =
+        "M7 9V4h10v5M7 17H5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M7 14h10v6H7z";
+
+    private const string IconDownload =
+        "M12 4v11M7 10l5 5 5-5M5 20h14";
+
+    private const string IconCaret =
+        "M6 9l6 6 6-6";
+
+    private RenderFragment Icon(
+        string path,
+        string? extraClass = null) =>
+        @<svg class="rs-viewer-icon @extraClass"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"><path d="@path" /></svg>;
+}

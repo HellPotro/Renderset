@@ -1,6 +1,9 @@
-﻿@page "/api"
+@page "/api"
+
+@using Renderset.Core.Api
 
 @inject ICurrentTenant CurrentTenant
+@inject IConfiguration Configuration
 @inject IJSRuntime JS
 @inject IToastService Toasts
 
@@ -13,291 +16,313 @@
             <span class="page-eyebrow">Developer</span>
             <h1>API de RenderSet</h1>
             <p>
-                Guía rápida para crear reports, presets, recursos y generar
-                documentos desde aplicaciones externas o desde un ERP.
+                Cómo generar documentos desde un ERP o cualquier aplicación:
+                con la librería .NET o llamando a la API directamente.
             </p>
         </div>
 
         <div class="api-tenant-card">
             <span>Tenant actual</span>
-            <code>@CurrentTenant.Id</code>
+            <code>@Tenant</code>
         </div>
     </header>
 
-    <section class="api-hero-card">
-        <div>
-            <h2>Flujo recomendado</h2>
-            <p>
-                RenderSet funciona mejor cuando separas el origen de datos del
-                diseño. El cliente envía JSON o un dataset tabular; la API lo
-                transforma, resuelve el preset y renderiza el documento.
-            </p>
+    @* ---------------------------------------------------- en tres pasos *@
+
+    <section class="api-steps">
+
+        <div class="api-step">
+            <span class="api-step-number">1</span>
+            <div>
+                <strong>Crea una clave</strong>
+                <p>
+                    En <a href="settings/api-keys">Configuración → API keys</a>.
+                    Empieza por <code>rs_live_</code>, se enseña una sola vez y
+                    sólo da acceso a este tenant.
+                </p>
+            </div>
         </div>
 
-        <div class="api-flow">
-            <span>Dataset</span>
-            <i class="fa-solid fa-arrow-right-long"></i>
-            <span>Mapping</span>
-            <i class="fa-solid fa-arrow-right-long"></i>
-            <span>Report</span>
-            <i class="fa-solid fa-arrow-right-long"></i>
-            <span>Preset</span>
-            <i class="fa-solid fa-arrow-right-long"></i>
-            <span>PDF / HTML</span>
+        <div class="api-step">
+            <span class="api-step-number">2</span>
+            <div>
+                <strong>Llama con la clave</strong>
+                <p>
+                    Cabecera <code>X-Api-Key</code> y el tenant en la ruta:
+                    <code>/api/render/@Tenant</code>. Los errores vienen como
+                    lista de <code>code</code>, <code>message</code> y <code>path</code>.
+                </p>
+            </div>
         </div>
-    </section>
 
-
-
-    <section class="api-map-card">
-        <header>
-            <h2>Mapa de endpoints actuales</h2>
-            <p>Resumen rápido de lo que ya expone el backend.</p>
-        </header>
-
-        <div class="api-endpoint-list">
-            <div><span class="api-method get">GET</span><code>/api/reports/{tenantId}</code><strong>Listado de reports</strong></div>
-            <div><span class="api-method get">GET</span><code>/api/reports/{tenantId}/{reportId}</code><strong>Detalle de report</strong></div>
-            <div><span class="api-method put">PUT</span><code>/api/reports/{tenantId}/{reportId}</code><strong>Guardar report</strong></div>
-            <div><span class="api-method delete">DEL</span><code>/api/reports/{tenantId}/{reportId}</code><strong>Borrar report</strong></div>
-            <div><span class="api-method get">GET</span><code>/api/presets/{tenantId}</code><strong>Listado de presets</strong></div>
-            <div><span class="api-method get">GET</span><code>/api/presets/{tenantId}/{presetId}</code><strong>Detalle de preset</strong></div>
-            <div><span class="api-method put">PUT</span><code>/api/presets/{tenantId}/{presetId}</code><strong>Guardar preset</strong></div>
-            <div><span class="api-method get">GET</span><code>/api/presets/resolve/{tenantId}/{reportId}</code><strong>Resolver preset por contexto</strong></div>
-            <div><span class="api-method get">GET</span><code>/api/assignments/{tenantId}/{reportId}</code><strong>Assignments de un report</strong></div>
-            <div><span class="api-method put">PUT</span><code>/api/assignments/{tenantId}</code><strong>Guardar assignment</strong></div>
-            <div><span class="api-method get">GET</span><code>/api/blocks/{tenantId}</code><strong>Bloques reutilizables</strong></div>
-            <div><span class="api-method get">GET</span><code>/api/blocks/{tenantId}/type/{type}</code><strong>Bloques por tipo</strong></div>
-            <div><span class="api-method put">PUT</span><code>/api/blocks/{tenantId}/{blockId}</code><strong>Guardar bloque</strong></div>
-            <div><span class="api-method get">GET</span><code>/api/resources/{tenantId}/{scope}</code><strong>Recursos de diccionario</strong></div>
-            <div><span class="api-method put">PUT</span><code>/api/resources/{tenantId}</code><strong>Guardar recursos</strong></div>
-            <div><span class="api-method post">POST</span><code>/api/resources/{tenantId}/copy-missing</code><strong>Copiar claves pendientes</strong></div>
-            <div><span class="api-method post">POST</span><code>/api/resources/{tenantId}/translate-missing</code><strong>Traducir claves pendientes</strong></div>
-            <div><span class="api-method get">GET</span><code>/api/variables/{tenantId}</code><strong>Variables del tenant</strong></div>
-            <div><span class="api-method put">PUT</span><code>/api/variables/{tenantId}/{key}</code><strong>Guardar variable</strong></div>
-            <div><span class="api-method get">GET</span><code>/api/cultures/{tenantId}</code><strong>Idiomas del tenant</strong></div>
+        <div class="api-step">
+            <span class="api-step-number">3</span>
+            <div>
+                <strong>Desde .NET, usa la librería</strong>
+                <p>
+                    <code>Renderset.Client</code> envía tu <code>SqlDataReader</code>
+                    o <code>DataTable</code> tal cual y te devuelve el PDF.
+                    Funciona en .NET Framework 4.6.1+ y WinForms.
+                </p>
+            </div>
         </div>
+
     </section>
 
-    <div class="api-grid">
+    <nav class="api-tabs" role="tablist">
+        @foreach (var (tab, label, icon) in Tabs)
+        {
+            <button type="button"
+                    role="tab"
+                    aria-selected="@(_tab == tab ? "true" : "false")"
+                    class="@(_tab == tab ? "is-active" : null)"
+                    @onclick="() => _tab = tab">
+                <i class="@icon"></i>
+                @label
+            </button>
+        }
+    </nav>
 
-        <section class="api-card">
-            <header>
-                <span class="api-method get">GET</span>
-                <code>/api/reports/{tenantId}</code>
+    @if (_tab == ApiTab.Library)
+    {
+        @* ------------------------------------------------ librería .NET *@
+
+        <div class="api-library">
+
+            <aside class="api-library-index">
+                <span>En esta guía</span>
+                @foreach (var sample in LibrarySamples)
+                {
+                    <a href="@($"api#{sample.Anchor}")">@sample.Title</a>
+                }
+            </aside>
+
+            <div class="api-library-body">
+
+                @foreach (var sample in LibrarySamples)
+                {
+                    <section class="api-card api-sample" id="@sample.Anchor">
+
+                        <header>
+                            <div>
+                                <h2>@sample.Title</h2>
+                                <p>@sample.Intro</p>
+                            </div>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="() => CopyAsync(sample.Code)">
+                                <i class="fa-regular fa-copy"></i>
+                                Copiar
+                            </button>
+                        </header>
+
+                        <pre>@sample.Code</pre>
+
+                        @if (!string.IsNullOrWhiteSpace(sample.Note))
+                        {
+                            <p class="api-sample-note">
+                                <i class="fa-solid fa-circle-info"></i>
+                                @sample.Note
+                            </p>
+                        }
+
+                    </section>
+                }
+
+            </div>
+
+        </div>
+    }
+    else if (_tab == ApiTab.Endpoints)
+    {
+        @* ------------------------------------------------ endpoints *@
+
+        <section class="api-map-card">
+
+            <header class="api-endpoints-head">
+
+                <div>
+                    <h2>Endpoints</h2>
+                    <p>
+                        Lo mismo que describe el documento OpenAPI de la API
+                        (<code>/openapi/v1.json</code> en desarrollo).
+                    </p>
+                </div>
+
+                <div class="api-endpoints-tools">
+
+                    <div class="api-search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="search"
+                               placeholder="Buscar: pdf, bundle, mapping…"
+                               @bind="_search"
+                               @bind:event="oninput" />
+                    </div>
+
+                    <label class="api-toggle">
+                        <input type="checkbox"
+                               checked="@_onlyIntegration"
+                               @onchange="e => _onlyIntegration = e.Value is true" />
+                        <span>Sólo lo que usa un ERP</span>
+                    </label>
+
+                </div>
+
             </header>
 
-            <p>Devuelve los reports disponibles para un tenant.</p>
+            @foreach (var group in VisibleGroups)
+            {
+                <section class="api-group" @key="group.Name">
 
-            <pre>@ReportsExample</pre>
+                    <header>
+                        <h3>@group.Name</h3>
+                        <p>@group.Description</p>
+                    </header>
 
-            <button type="button"
-                    class="secondary-button"
-                    @onclick="() => CopyAsync(ReportsExample)">
-                <i class="fa-regular fa-copy"></i>
-                Copiar ejemplo
-            </button>
+                    <ul class="api-routes">
+                        @foreach (var endpoint in group.Endpoints)
+                        {
+                            <li @key="@($"{endpoint.Method} {endpoint.Route}")">
+
+                                <span class="api-method @endpoint.Method.ToLowerInvariant()">
+                                    @(endpoint.Method == "DELETE" ? "DEL" : endpoint.Method)
+                                </span>
+
+                                <div class="api-route-text">
+
+                                    <div class="api-route-head">
+                                        <code>@endpoint.Route</code>
+                                        <strong>@endpoint.Summary</strong>
+
+                                        @if (endpoint.Integration)
+                                        {
+                                            <span class="api-badge is-integration">ERP</span>
+                                        }
+
+                                        @if (endpoint.ServiceOnly)
+                                        {
+                                            <span class="api-badge is-service">Sólo servicio</span>
+                                        }
+
+                                        @if (endpoint.Public)
+                                        {
+                                            <span class="api-badge is-public">Sin clave</span>
+                                        }
+                                    </div>
+
+                                    <p>@endpoint.Description</p>
+
+                                </div>
+
+                            </li>
+                        }
+                    </ul>
+
+                </section>
+            }
+
+            @if (!VisibleGroups.Any())
+            {
+                <p class="api-empty">Nada coincide con "@_search".</p>
+            }
+
         </section>
+    }
+    else
+    {
+        @* ------------------------------------------------ HTTP *@
 
-        <section class="api-card">
-            <header>
-                <span class="api-method put">PUT</span>
-                <code>/api/reports/{tenantId}/{reportId}</code>
-            </header>
+        <div class="api-grid">
 
-            <p>
-                Crea o actualiza la definición del report, su schema y datos de
-                ejemplo. Es el endpoint que usa la pantalla “Nuevo report”.
-            </p>
+            @foreach (var sample in HttpSamples)
+            {
+                <section class="api-card @(sample.Wide ? "api-card-wide" : null)">
 
-            <pre>@SaveReportExample</pre>
+                    <header>
+                        <div>
+                            <h2>@sample.Title</h2>
+                            <p>@sample.Intro</p>
+                        </div>
 
-            <button type="button"
-                    class="secondary-button"
-                    @onclick="() => CopyAsync(SaveReportExample)">
-                <i class="fa-regular fa-copy"></i>
-                Copiar ejemplo
-            </button>
-        </section>
+                        <button type="button"
+                                class="secondary-button"
+                                @onclick="() => CopyAsync(sample.Code)">
+                            <i class="fa-regular fa-copy"></i>
+                            Copiar
+                        </button>
+                    </header>
 
-        <section class="api-card">
-            <header>
-                <span class="api-method put">PUT</span>
-                <code>/api/presets/{tenantId}/{presetId}</code>
-            </header>
+                    <pre>@sample.Code</pre>
 
-            <p>
-                Guarda el diseño visual: configuración sparse, bloques,
-                composición del body y theme.
-            </p>
+                </section>
+            }
 
-            <pre>@PresetExample</pre>
-
-            <button type="button"
-                    class="secondary-button"
-                    @onclick="() => CopyAsync(PresetExample)">
-                <i class="fa-regular fa-copy"></i>
-                Copiar ejemplo
-            </button>
-        </section>
-
-        <section class="api-card">
-            <header>
-                <span class="api-method post">POST</span>
-                <code>/api/resources/{tenantId}/translate-missing</code>
-            </header>
-
-            <p>
-                Traduce las claves pendientes de un ámbito sin sobrescribir los
-                textos escritos manualmente.
-            </p>
-
-            <pre>@TranslateExample</pre>
-
-            <button type="button"
-                    class="secondary-button"
-                    @onclick="() => CopyAsync(TranslateExample)">
-                <i class="fa-regular fa-copy"></i>
-                Copiar ejemplo
-            </button>
-        </section>
-
-        <section class="api-card api-card-wide">
-            <header>
-                <span class="api-method post">POST</span>
-                <code>/api/render</code>
-            </header>
-
-            <p>
-                Endpoint recomendado para la siguiente fase: recibir datos reales
-                y devolver PDF/HTML. Si el origen es SQL, lo ideal es enviar el
-                dataset tabular y que RenderSet aplique el mapping guardado.
-            </p>
-
-            <pre>@RenderExample</pre>
-
-            <button type="button"
-                    class="secondary-button"
-                    @onclick="() => CopyAsync(RenderExample)">
-                <i class="fa-regular fa-copy"></i>
-                Copiar ejemplo
-            </button>
-        </section>
-
-    </div>
-
-    <section class="api-card api-card-wide api-notes">
-        <h2>Contrato tabular recomendado</h2>
-        <p>
-            No envíes un <code>DataTable</code> .NET como tal. Es mejor enviar
-            columnas y filas: pesa menos, no ata la API a .NET y sirve igual
-            para SQL, CSV, Excel o cualquier cliente HTTP.
-        </p>
-
-        <pre>@TabularExample</pre>
-
-        <button type="button"
-                class="secondary-button"
-                @onclick="() => CopyAsync(TabularExample)">
-            <i class="fa-regular fa-copy"></i>
-            Copiar dataset
-        </button>
-    </section>
+        </div>
+    }
 
 </div>
 
 @code {
 
-    private string ReportsExample =>
-        $"GET /api/reports/{CurrentTenant.Id}";
+    private enum ApiTab
+    {
+        Library,
+        Endpoints,
+        Http
+    }
 
-    private string SaveReportExample =>
-        $$"""
-        PUT /api/reports/{{CurrentTenant.Id}}/invoice
-        Content-Type: application/json
+    private static readonly (ApiTab Tab, string Label, string Icon)[] Tabs =
+    [
+        (ApiTab.Library, "Librería .NET", "fa-brands fa-microsoft"),
+        (ApiTab.Endpoints, "Endpoints", "fa-solid fa-list"),
+        (ApiTab.Http, "Ejemplos HTTP", "fa-solid fa-code")
+    ];
 
+    private ApiTab _tab = ApiTab.Library;
+    private string _search = string.Empty;
+    private bool _onlyIntegration;
+
+    private string Tenant => CurrentTenant.Id;
+
+    /// <summary>
+    /// URL de la API para los ejemplos: la que usa esta Web, o un ejemplo.
+    /// </summary>
+    private string ApiUrl
+    {
+        get
         {
-          "id": "invoice",
-          "name": "Factura",
-          "version": 1,
-          "definition": { },
-          "dataSchema": { },
-          "sampleData": { }
+            var configured = Configuration["ReportingApi"];
+
+            return string.IsNullOrWhiteSpace(configured)
+                ? "https://api.renderset.miempresa.com"
+                : configured.TrimEnd('/');
         }
-        """;
+    }
 
-    private string PresetExample =>
-        $$"""
-        PUT /api/presets/{{CurrentTenant.Id}}/invoice-default
-        Content-Type: application/json
+    private IEnumerable<ApiEndpointGroup> VisibleGroups =>
+        ApiEndpointCatalog.Groups
+            .Select(group => group with
+            {
+                Endpoints = group.Endpoints
+                    .Where(x => !_onlyIntegration || x.Integration)
+                    .Where(Matches)
+                    .ToList()
+            })
+            .Where(group => group.Endpoints.Count > 0);
 
-        {
-          "id": "invoice-default",
-          "version": 1,
-          "configuration": {
-            "id": "invoice-default",
-            "reportId": "invoice",
-            "name": "Default",
-            "version": 1
-          },
-          "theme": {
-            "id": "default",
-            "name": "Default"
-          }
-        }
-        """;
+    private bool Matches(
+        ApiEndpointInfo endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+            return true;
 
-    private string TranslateExample =>
-        $$"""
-        POST /api/resources/{{CurrentTenant.Id}}/translate-missing
-        Content-Type: application/json
+        var term = _search.Trim();
 
-        {
-          "scope": "invoice",
-          "sourceCulture": "es-ES",
-          "targetCulture": "en-GB",
-          "includeEmptyValues": true,
-          "overwriteExistingValues": false
-        }
-        """;
-
-    private string RenderExample =>
-        $$"""
-        POST /api/render
-        Accept: application/pdf
-        Content-Type: application/json
-
-        {
-          "tenantId": "{{CurrentTenant.Id}}",
-          "reportId": "invoice",
-          "presetId": "invoice-default",
-          "output": {
-            "format": "pdf",
-            "language": "en-GB",
-            "fileName": "invoice-080041.pdf"
-          },
-          "data": { }
-        }
-        """;
-
-    private const string TabularExample =
-        """
-        {
-          "columns": [
-            { "name": "Factura", "type": "string" },
-            { "name": "Cliente", "type": "string" },
-            { "name": "Albaran_codigo", "type": "string" },
-            { "name": "Articulo", "type": "string" },
-            { "name": "Cantidad", "type": "number" },
-            { "name": "Precio", "type": "number" }
-          ],
-          "rows": [
-            ["080041", "000123", "ALB-1", "A001", 2, 20.50],
-            ["080041", "000123", "ALB-1", "A002", 5, 12.30],
-            ["080041", "000123", "ALB-2", "A003", 1, 40.00]
-          ]
-        }
-        """;
+        return endpoint.Route.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+               endpoint.Summary.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+               endpoint.Description.Contains(term, StringComparison.OrdinalIgnoreCase);
+    }
 
     private async Task CopyAsync(
         string text)

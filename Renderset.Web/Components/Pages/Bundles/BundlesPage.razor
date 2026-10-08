@@ -1,5 +1,6 @@
 @page "/bundles"
 
+@using Renderset.Core.Localization
 @using Renderset.Core.Paging
 @using Renderset.Core.Rendering
 @using Renderset.Core.Reports
@@ -9,7 +10,6 @@
 @inject ICurrentTenant CurrentTenant
 @inject IToastService Toasts
 @inject IJSRuntime JS
-@inject IConfiguration Configuration
 
 <PageTitle>Documentos compartidos - RenderSet</PageTitle>
 
@@ -199,14 +199,18 @@
 
                             <span class="bundles-muted">@ReportName(document.ReportId)</span>
 
-                            <span class="type-badge">@document.Culture</span>
+                            <span class="bundles-culture" title="@document.Culture">
+                                <CultureFlagIcon Culture="@document.Culture"
+                                                 Size="CultureFlagIcon.CultureFlagSize.Small" />
+                                <span>@document.Culture</span>
+                            </span>
 
                             <span class="bundles-muted">@FormatDate(document.CreatedAtUtc)</span>
 
                             <div class="bundles-row-actions">
 
                                 <a class="icon-button"
-                                   href="@DocumentUrl(document)"
+                                   href="@ViewerUrl(document)"
                                    target="_blank"
                                    rel="noopener"
                                    title="Abrir el documento">
@@ -331,6 +335,29 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="bundle-culture">Idioma de la página</label>
+                    <select id="bundle-culture"
+                            value="@_culture"
+                            @onchange="e => _culture = e.Value?.ToString() ?? string.Empty">
+
+                        <option value="">@AutomaticCultureLabel</option>
+
+                        @foreach (var culture in _cultures)
+                        {
+                            <option value="@culture.Culture">
+                                @CultureOptionLabel(culture)
+                            </option>
+                        }
+
+                    </select>
+                    <small>
+                        Botones y avisos que ve el cliente. Los textos se
+                        editan en el
+                        <a href="@SharingDictionaryUrl">Diccionario</a>.
+                    </small>
+                </div>
+
+                <div class="form-group">
                     <label>Caducidad (días)</label>
                     <input type="number"
                            min="1"
@@ -348,6 +375,21 @@
                         <small>Vacío: @DefaultExpirationDays días.</small>
                     }
                 </div>
+
+                <label class="bundles-check">
+                    <input type="checkbox"
+                           checked="@_allowDataDownload"
+                           @onchange="e => _allowDataDownload = e.Value is true" />
+                    <span>
+                        <strong>Permitir descargar los datos</strong>
+                        <small>
+                            El cliente podrá exportar las tablas a CSV y bajarse
+                            el JSON, como en el visor interno. Sólo en los
+                            documentos emitidos con sus datos; sin marcar, los
+                            datos se quitan de lo que se le sirve.
+                        </small>
+                    </span>
+                </label>
 
                 <button type="button"
                         class="primary-button bundles-create"
@@ -459,6 +501,17 @@
                         <div class="bundles-document">
                             <strong>@bundle.Title</strong>
                             <small>
+                                <span class="bundles-culture is-inline" title="Idioma de la página">
+                                    <CultureFlagIcon Culture="@bundle.Culture"
+                                                     Size="CultureFlagIcon.CultureFlagSize.Small" />
+                                    @bundle.Culture
+                                </span>
+                                @if (bundle.AllowDataDownload)
+                                {
+                                    <span class="bundles-data-badge" title="El cliente puede descargar los datos (CSV y JSON)">
+                                        <i class="fa-solid fa-table"></i> Datos
+                                    </span>
+                                }
                                 @FormatDate(bundle.CreatedAtUtc) ·
                                 @(string.Join(" · ", bundle.Documents.Select(x => x.DisplayName)))
                             </small>
@@ -577,6 +630,18 @@
     private int? _expiresInDays;
     private bool _creating;
 
+    /// <summary>
+    /// Vacío = automático: el servicio usa el idioma del primer documento.
+    /// </summary>
+    private string _culture = string.Empty;
+
+    /// <summary>
+    /// Igual que "Incluir los datos" al generar: por defecto no se comparten.
+    /// </summary>
+    private bool _allowDataDownload;
+
+    private IReadOnlyCollection<TenantCulture> _cultures = [];
+
     private CreatedLink? _lastLink;
 
 
@@ -592,6 +657,37 @@
         string.IsNullOrWhiteSpace(_sharing?.Settings.DefaultMessage)
             ? "Adjuntamos la documentación del envío."
             : _sharing!.Settings.DefaultMessage!;
+
+    private static string SharingDictionaryUrl =>
+        $"resources?scope={Uri.EscapeDataString(ReportResourceScope.Sharing)}";
+
+    private string AutomaticCultureLabel
+    {
+        get
+        {
+            var first =
+                _selection.Count > 0
+                    ? _selection[0].Document.Culture
+                    : null;
+
+            return string.IsNullOrWhiteSpace(first)
+                ? "Automático (idioma del primer documento)"
+                : $"Automático ({first}, el del primer documento)";
+        }
+    }
+
+    private static string CultureOptionLabel(
+        TenantCulture culture)
+    {
+        var flag = CultureFlag.For(culture.Culture);
+
+        var name =
+            $"{culture.DisplayName} · {culture.Culture}";
+
+        return string.IsNullOrEmpty(flag)
+            ? name
+            : $"{flag} {name}";
+    }
 
     private bool ExpirationIsValid =>
         _expiresInDays is null ||
@@ -610,6 +706,7 @@
         await Task.WhenAll(
             LoadReportsAsync(),
             LoadSharingAsync(),
+            LoadCulturesAsync(),
             ReloadDocumentsAsync(),
             ReloadBundlesAsync());
     }
@@ -625,6 +722,22 @@
 
         if (reports is not null)
             _reports = reports.OrderBy(x => x.Name).ToList();
+    }
+
+    private async Task LoadCulturesAsync()
+    {
+        var cultures = await Toasts.RunAsync(
+            () => RenderSetApi.GetCulturesAsync(CurrentTenant.Id),
+            errorTitle: "No se han podido cargar los idiomas");
+
+        if (cultures is not null)
+        {
+            _cultures =
+                cultures
+                    .OrderByDescending(x => x.IsDefault)
+                    .ThenBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
+        }
     }
 
     private async Task LoadSharingAsync()
@@ -820,6 +933,8 @@
                     Title = _title.Trim(),
                     Message = NullIfBlank(_message),
                     ExpiresInDays = _expiresInDays,
+                    Culture = NullIfBlank(_culture),
+                    AllowDataDownload = _allowDataDownload,
                     Items = _selection
                         .Select(x => new CreateDocumentBundleItem
                         {
@@ -845,6 +960,8 @@
             _title = string.Empty;
             _message = string.Empty;
             _expiresInDays = null;
+            _culture = string.Empty;
+            _allowDataDownload = false;
 
             await ReloadBundlesAsync();
         }
@@ -978,15 +1095,20 @@
         string reportId) =>
         _reports.FirstOrDefault(x => x.Id == reportId)?.Name ?? reportId;
 
-    private string DocumentUrl(
-        RenderedDocumentSummary document)
-    {
-        var api =
-            (Configuration["ReportingApi"] ?? string.Empty).TrimEnd('/');
+    /// <summary>
+    /// A través de Web (/files): la API exige clave y un enlace del
+    /// navegador no puede llevarla.
+    /// </summary>
+    private static string DocumentUrl(
+        RenderedDocumentSummary document) =>
+        $"/files/documents/{Uri.EscapeDataString(document.Id)}";
 
-        return $"{api}/api/documents/{Uri.EscapeDataString(CurrentTenant.Id)}" +
-               $"/{Uri.EscapeDataString(document.Id)}";
-    }
+    /// <summary>
+    /// Visor con el menú de imprimir, PDF, CSV y JSON.
+    /// </summary>
+    private static string ViewerUrl(
+        RenderedDocumentSummary document) =>
+        $"/documents/{Uri.EscapeDataString(document.Id)}";
 
     private static string DefaultDisplayName(
         RenderedDocumentSummary document) =>

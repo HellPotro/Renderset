@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Renderset.Core.Blocks;
 using Renderset.Core.Configurations;
+using Renderset.Core.Definitions;
 using Renderset.Core.Services;
 
 namespace Renderset.Tests.Core;
@@ -224,6 +225,51 @@ public sealed class ReportConfigurationComposerTests
 
         result.Header!.Columns.Should().ContainSingle();
         result.Header.Columns[0].Id.Should().Be("preset");
+    }
+
+    [Fact]
+    public void Compose_ShouldInheritTitlePlacementFromBlock()
+    {
+        var configuration = CreateConfiguration();
+        configuration.Header = new ReportHeaderConfiguration
+        {
+            BlockId = "oran-header"
+        };
+
+        var block = new ReportBlock
+        {
+            Id = "oran-header",
+            Name = "ORAN Header",
+            Type = ReportBlockType.Header,
+            ConfigurationJson = """{ "titlePlacement": "Below" }"""
+        };
+
+        var result = _sut.Compose(configuration, block);
+
+        result.Header!.TitlePlacement.Should().Be(ReportHeaderTitlePlacement.Below);
+    }
+
+    [Fact]
+    public void Compose_ShouldKeepPresetTitlePlacementOverBlock()
+    {
+        var configuration = CreateConfiguration();
+        configuration.Header = new ReportHeaderConfiguration
+        {
+            BlockId = "oran-header",
+            TitlePlacement = ReportHeaderTitlePlacement.Inline
+        };
+
+        var block = new ReportBlock
+        {
+            Id = "oran-header",
+            Name = "ORAN Header",
+            Type = ReportBlockType.Header,
+            ConfigurationJson = """{ "titlePlacement": "Below" }"""
+        };
+
+        var result = _sut.Compose(configuration, block);
+
+        result.Header!.TitlePlacement.Should().Be(ReportHeaderTitlePlacement.Inline);
     }
 
     private static ReportConfiguration CreateConfiguration() =>

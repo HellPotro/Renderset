@@ -10,5 +10,7 @@ public sealed class SectionCompositionRequest
 
     public ReportSectionLayout Layout { get; set; }
 
+    public int Columns { get; set; } = ReportSectionGrid.DefaultColumns;
+
     public List<string> SelectedFieldIds { get; set; } = [];
 }

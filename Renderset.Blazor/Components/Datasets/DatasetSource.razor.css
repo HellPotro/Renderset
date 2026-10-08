@@ -290,7 +290,9 @@
         letter-spacing: 0;
     }
 
-    .dsrc-field select {
+    /* Sólo el selector de clave (hijo directo): los de tipo van dentro de
+       las tarjetas y tienen su propio estilo. */
+    .dsrc-field > select {
         width: 100%;
         max-width: 420px;
         height: 34px;
@@ -361,8 +363,8 @@
 
 .dsrc-columns {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-    gap: 7px;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
+    gap: 6px 10px;
     max-height: 340px;
     padding-right: 4px;
     overflow-y: auto;
@@ -376,11 +378,14 @@
 }
 
 .dsrc-column {
-    display: flex;
+    /* Fila de lista: casilla | nombre y ejemplo | variación | tipo. Las dos
+       últimas con ancho fijo, para que queden alineadas de arriba abajo. */
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 104px 92px;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
     min-width: 0;
-    padding: 8px 10px;
+    padding: 7px 8px 7px 10px;
     border: 1px solid #e7eef1;
     border-radius: 7px;
     background: #fff;
@@ -435,12 +440,12 @@
 }
 
     .dsrc-column-top code {
-        overflow: hidden;
+        min-width: 0;
         color: #23333c;
         font-size: 11.5px;
         font-weight: 600;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
     }
 
 .dsrc-column-sample {
@@ -453,6 +458,7 @@
 
 .dsrc-badge {
     flex-shrink: 0;
+    justify-self: start;
     padding: 1px 6px;
     border-radius: 999px;
     background: #eef3f6;
@@ -526,7 +532,7 @@
 
 .dsrc-tree-fields {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 6px;
 }
 
@@ -696,4 +702,94 @@
     .dsrc-columns {
         grid-template-columns: 1fr;
     }
+}
+
+
+/* ---------- Orden de las columnas y tipo ---------- */
+
+.dsrc-sortbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+}
+
+.dsrc-sort {
+    display: inline-flex;
+    flex: none;
+    padding: 2px;
+    border-radius: 7px;
+    background: #eef3f5;
+}
+
+    .dsrc-sort button {
+        padding: 4px 9px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #5d6f78;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+        .dsrc-sort button.is-on {
+            background: #fff;
+            color: #173d4f;
+            box-shadow: 0 1px 2px rgba(23, 61, 79, .14);
+        }
+
+/* El tipo, en el sitio donde antes sólo se leía. Pequeño para que la
+   tarjeta siga siendo de un vistazo. */
+.dsrc-column .dsrc-type,
+.dsrc-tree-field .dsrc-type {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 96px;
+    height: auto;
+    padding: 2px 4px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: #6b7d86;
+    font-size: 10.5px;
+    cursor: pointer;
+}
+
+    .dsrc-column .dsrc-type:hover,
+    .dsrc-column .dsrc-type:focus,
+    .dsrc-tree-field .dsrc-type:hover,
+    .dsrc-tree-field .dsrc-type:focus {
+        border-color: #d5e0e5;
+        background: #fff;
+    }
+
+
+/* La variación, en la fila de la lista: sin mayúsculas y en dos líneas si
+   hace falta ("distinta en cada fila"), en vez de comerse el nombre. */
+.dsrc-column > .dsrc-badge {
+    max-width: 100%;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.25;
+    text-transform: none;
+    white-space: normal;
+}
+
+.dsrc-column-top .dsrc-badge.is-key {
+    font-size: 8.5px;
+}
+
+@media (max-width: 560px) {
+
+    .dsrc-column {
+        grid-template-columns: auto minmax(0, 1fr) 84px;
+    }
+
+        .dsrc-column > .dsrc-badge {
+            display: none;
+        }
 }

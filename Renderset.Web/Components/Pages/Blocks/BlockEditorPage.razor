@@ -1,14 +1,17 @@
 @page "/blocks/new"
 @page "/blocks/{BlockId}"
 
+@using System.Globalization
+@using System.Text
 @using System.Text.Json
 @using System.Text.Json.Serialization
 @using Renderset.Blazor.Components.Blocks
+@using Renderset.Blazor.Components.Editor
 @using Renderset.Core.Blocks
-@using Renderset.Core.Configurations 
+@using Renderset.Core.Configurations
 @using Renderset.Core.Definitions
 @using Renderset.Core.Localization
-@using Renderset.Core.Variables 
+@using Renderset.Core.Variables
 @using Renderset.Core.Themes
 
 @inject IRenderSetApi RenderSetApi
@@ -18,7 +21,23 @@
 
 <PageTitle>@PageTitleText - RenderSet</PageTitle>
 
-<div class="page">
+@*
+    Editor de bloques reutilizables.
+
+    Primero se elige qué se crea (cabecera, pie, texto o campos fijos), con
+    una tarjeta por tipo que explica dónde se usa. Después, formulario a la
+    izquierda y vista previa a la derecha, con los mismos componentes que el
+    documento.
+
+    El identificador ya no hay que escribirlo: se propone a partir del
+    nombre y queda en "Avanzado". Antes, sin identificador, los textos que
+    se escribían (título, subtítulo, texto del pie) se perdían en silencio,
+    porque su clave del diccionario colgaba de él. Ahora la clave se asigna
+    la primera vez que se escribe y se guarda en la configuración del
+    bloque, así que no depende de en qué orden se rellene el formulario.
+*@
+
+<div class="page blk-page">
 
     <header class="page-header">
 
@@ -27,64 +46,45 @@
                     class="back-button"
                     @onclick="GoBack">
                 <i class="fa-solid fa-arrow-left"></i>
-                Blocks
+                Bloques
             </button>
 
             <h1>@PageTitleText</h1>
 
             <p>
-                Configura un bloque reutilizable para usarlo en varios reports.
+                @if (_typeChosen)
+                {
+                    @CurrentType.Description
+                }
+                else
+                {
+                    <span>Elige qué quieres crear. Cada tipo se usa en un sitio distinto del documento.</span>
+                }
             </p>
         </div>
 
-        <div class="page-actions">
+        @if (_typeChosen)
+        {
+            <div class="page-actions">
 
-            <button type="button"
-                    class="secondary-button"
-                    @onclick="GoBack">
-                Cancelar
-            </button>
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="GoBack">
+                    Cancelar
+                </button>
 
-            <button type="button"
-                    class="primary-button"
-                    @onclick="SaveAsync"
-                    disabled="@_saving">
-                <i class="fa-solid fa-floppy-disk"></i>
-                Guardar
-            </button>
-
-        </div>
-
-    </header>
-
-
-    @if (!_loading && _cultures.Count > 0)
-    {
-        <section class="editor-card language-card">
-
-            <div class="editor-card-body language-card-body">
-
-                <div>
-                    <strong>Idioma de edición</strong>
-                    <span>Los textos del bloque se guardan como resources traducibles.</span>
-                </div>
-
-                <select value="@_selectedCulture"
-                        @onchange="ChangeCultureAsync">
-
-                    @foreach (var culture in _cultures)
-                    {
-                        <option value="@culture.Culture">
-                            @CultureFlag.For(culture.Culture) @culture.DisplayName (@culture.Culture)
-                        </option>
-                    }
-
-                </select>
+                <button type="button"
+                        class="primary-button"
+                        @onclick="SaveAsync"
+                        disabled="@(_saving || !CanSave)">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Guardar
+                </button>
 
             </div>
+        }
 
-        </section>
-    }
+    </header>
 
 
     @if (_loading)
@@ -93,286 +93,333 @@
             Cargando bloque...
         </div>
     }
+    else if (!_typeChosen)
+    {
+        <div class="blk-type-grid">
+
+            @foreach (var option in TypeOptions)
+            {
+                <button type="button"
+                        class="blk-type-card is-@option.Css"
+                        @onclick="() => ChooseType(option.Type)">
+
+                    <span class="blk-type-icon">
+                        <i class="fa-solid @option.Icon"></i>
+                    </span>
+
+                    <span class="blk-type-body">
+                        <strong>@option.Label</strong>
+                        <span>@option.Description</span>
+                        <small>
+                            <i class="fa-solid fa-location-dot"></i>
+                            @option.WhereUsed
+                        </small>
+                    </span>
+
+                    <span class="blk-type-sketch" aria-hidden="true">
+                        @switch (option.Type)
+                        {
+                            case ReportBlockType.Header:
+                                <span class="sk-row"><span class="sk-logo"></span><span class="sk-lines"><span></span><span class="is-short"></span></span></span>
+                                <span class="sk-page"></span>
+                                break;
+
+                            case ReportBlockType.Footer:
+                                <span class="sk-page"></span>
+                                <span class="sk-foot"><span></span><span class="is-short"></span></span>
+                                break;
+
+                            case ReportBlockType.Text:
+                                <span class="sk-page is-half"></span>
+                                <span class="sk-note"><span></span><span></span><span class="is-short"></span></span>
+                                break;
+
+                            default:
+                                <span class="sk-page is-half"></span>
+                                <span class="sk-grid"><span></span><span></span><span></span><span></span></span>
+                                break;
+                        }
+                    </span>
+
+                </button>
+            }
+
+        </div>
+    }
     else
     {
-        <div class="editor-layout">
+        <div class="blk-layout">
 
-            <section class="editor-card">
+            <div class="blk-form">
 
-                <div class="editor-card-header">
-                    <h2>General</h2>
-                </div>
+                @* ---------------------------------------------- general *@
 
-                <div class="editor-card-body">
-
-                    <div class="form-group">
-                        <label>Identificador</label>
-
-                        <input type="text"
-                               value="@_id"
-                               @oninput="e => _id = e.Value?.ToString() ?? string.Empty"
-                               disabled="@IsEditMode"
-                               placeholder="oran-default-header" />
-
-                        <small>
-                            Se usa internamente para referenciar el bloque.
-                        </small>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Nombre</label>
-
-                        <input type="text"
-                               value="@_name"
-                               @oninput="e => _name = e.Value?.ToString() ?? string.Empty"
-                               placeholder="Cabecera ORAN" />
-                    </div>
-
-                    <div class="form-group">
-                        <label>Tipo</label>
-
-                        <select value="@_type"
-                                @onchange="BlockTypeChanged"
-                                disabled="@IsEditMode">
-
-                            <option value="@ReportBlockType.Header">
-                                Cabecera
-                            </option>
-
-                            <option value="@ReportBlockType.Footer">
-                                Pie de página
-                            </option>
-
-                            <option value="@ReportBlockType.Text">
-                                Texto
-                            </option>
-
-                        </select>
-                    </div>
-
-                </div>
-
-            </section>
-
-
-            @if (_type == ReportBlockType.Header)
-            {
                 <section class="editor-card">
 
-                    <div class="editor-card-header">
-                        <h2>Cabecera</h2>
-                    </div>
+                    <div class="editor-card-body blk-general">
 
-                    <div class="editor-card-body">
+                        <div class="blk-type-chip is-@CurrentType.Css">
+                            <i class="fa-solid @CurrentType.Icon"></i>
+                            @CurrentType.Label
+
+                            @if (!IsEditMode)
+                            {
+                                <button type="button"
+                                        title="Elegir otro tipo"
+                                        @onclick="ChangeType">
+                                    Cambiar
+                                </button>
+                            }
+                        </div>
 
                         <div class="form-group">
-                            <label>Título</label>
+                            <label>Nombre</label>
 
                             <input type="text"
-                                   value="@BlockText(ReportTextKeys.BlockTitle(_id))"
-                                   @onchange="HeaderTitleChanged"
-                                   placeholder="Opcional" />
+                                   value="@_name"
+                                   @oninput="NameChanged"
+                                   placeholder="@CurrentType.NamePlaceholder" />
+
+                            <small>Es lo que se ve al elegir el bloque en el diseñador.</small>
                         </div>
 
-                        <div class="form-group">
+                        <details class="blk-advanced">
+                            <summary>Avanzado</summary>
 
-                            <label>Subtítulo</label>
-
-                            <div class="variable-input-row">
+                            <div class="form-group">
+                                <label>Identificador</label>
 
                                 <input type="text"
-                                       value="@BlockText(ReportTextKeys.BlockSubtitle(_id))"
-                                       @onchange="HeaderSubtitleChanged"
-                                       placeholder="Talleres ORAN S.L.U." />
+                                       value="@_id"
+                                       @oninput="IdChanged"
+                                       disabled="@IsEditMode" />
 
-                                <VariablePicker Variables="_variables"
-                                                Selected="InsertSubtitleVariableAsync" />
-
+                                <small>
+                                    @(IsEditMode
+                                        ? "No se puede cambiar: los presets que usan el bloque lo referencian."
+                                        : "Se propone a partir del nombre. Sólo minúsculas, números y guiones.")
+                                </small>
                             </div>
 
+                            <div class="form-group">
+                                <label>Configuración (JSON)</label>
+                                <pre class="json-preview">@ConfigurationJson</pre>
+                            </div>
+                        </details>
+
+                    </div>
+
+                </section>
+
+
+                @* --------------------------------------------- cabecera *@
+
+                @if (_type == ReportBlockType.Header)
+                {
+                    <section class="editor-card">
+
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">1</span>
+                            <div>
+                                <h2>Título y subtítulo</h2>
+                                <small>Lo que se lee en grande. Puede ir vacío si el report ya pone el suyo.</small>
+                            </div>
                         </div>
 
-                        <label class="toggle-row">
+                        <div class="editor-card-body">
 
-                            <input type="checkbox"
-                                   checked="@(_header.ShowLogo ?? false)"
-                                   @onchange="HeaderShowLogoChanged" />
-
-                            <span>Mostrar logo</span>
-
-                        </label>
-
-                        @if (_header.ShowLogo == true)
-                        {
                             <div class="form-group">
-
-                                <label>URL del logo</label>
+                                <label>Título</label>
 
                                 <div class="variable-input-row">
-
-                                    <input type="url"
-                                           value="@_header.LogoUrl"
-                                           @oninput="HeaderLogoUrlChanged"
-                                           placeholder="https://..." />
+                                    <input type="text"
+                                           value="@KeyText(_header.TitleKey)"
+                                           @onchange="HeaderTitleChanged"
+                                           placeholder="Albarán {{data.numero}}" />
 
                                     <VariablePicker Variables="_variables"
-                                                    Selected="InsertLogoVariableAsync" />
-
+                                                    Selected="InsertTitleVariableAsync" />
                                 </div>
-
                             </div>
 
                             <div class="form-group">
+                                <label>Subtítulo</label>
 
-                                <label>Alto máximo del logo (px)</label>
+                                <div class="variable-input-row">
+                                    <input type="text"
+                                           value="@KeyText(_header.SubtitleKey)"
+                                           @onchange="HeaderSubtitleChanged"
+                                           placeholder="Talleres ORAN S.L.U." />
 
-                                <input type="number"
-                                       min="20"
-                                       max="300"
-                                       step="1"
-                                       value="@_header.LogoMaxHeight"
-                                       @onchange="HeaderLogoHeightChanged"
-                                       placeholder="70" />
-
+                                    <VariablePicker Variables="_variables"
+                                                    Selected="InsertSubtitleVariableAsync" />
+                                </div>
                             </div>
-                        }
 
-                        <div class="form-group">
-
-                            <label>Disposición</label>
-
-                            <select value="@HeaderLayoutValue"
-                                    @onchange="HeaderLayoutChanged">
-
-                                <option value="@ReportHeaderLayout.LogoLeft">
-                                    Logo a la izquierda
-                                </option>
-
-                                <option value="@ReportHeaderLayout.LogoRight">
-                                    Logo a la derecha
-                                </option>
-
-                                <option value="@ReportHeaderLayout.Stacked">
-                                    Logo arriba, todo centrado
-                                </option>
-
-                            </select>
+                            <DataTokenHint />
 
                         </div>
 
-                        <div class="form-group">
+                    </section>
 
-                            <div class="form-label-row">
-                                <div>
-                                    <label>Contenido de cabecera</label>
-                                    <small>
-                                        Usa columnas cuando necesites repartir información
-                                        a izquierda y derecha. Las cabeceras antiguas siguen
-                                        usando una única lista de líneas.
-                                    </small>
-                                </div>
+                    <section class="editor-card">
 
-                                @if (_header.Columns.Count == 0)
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">2</span>
+                            <div>
+                                <h2>Logo y disposición</h2>
+                                <small>Dónde van el logo y el título respecto a los datos de empresa y el QR.</small>
+                            </div>
+                        </div>
+
+                        <div class="editor-card-body">
+
+                            <div class="blk-layout-options" role="radiogroup" aria-label="Disposición">
+                                @foreach (var (layout, label, icon) in HeaderLayouts)
                                 {
                                     <button type="button"
-                                            class="secondary-button"
-                                            @onclick="EnableHeaderColumns">
-                                        <i class="fa-solid fa-columns"></i>
-                                        Usar columnas
-                                    </button>
-                                }
-                                else
-                                {
-                                    <button type="button"
-                                            class="secondary-button"
-                                            @onclick="DisableHeaderColumns">
-                                        <i class="fa-solid fa-bars"></i>
-                                        Volver a una columna
+                                            role="radio"
+                                            aria-checked="@(HeaderLayoutValue == layout ? "true" : "false")"
+                                            class="@(HeaderLayoutValue == layout ? "is-active" : null)"
+                                            @onclick="() => _header.Layout = layout">
+                                        <i class="fa-solid @icon"></i>
+                                        @label
                                     </button>
                                 }
                             </div>
+
+                            <div class="form-group">
+                                <label>Título</label>
+
+                                <div class="blk-layout-options" role="radiogroup" aria-label="Posición del título">
+                                    @foreach (var (placement, label, icon) in TitlePlacements)
+                                    {
+                                        <button type="button"
+                                                role="radio"
+                                                aria-checked="@(TitlePlacementValue == placement ? "true" : "false")"
+                                                class="@(TitlePlacementValue == placement ? "is-active" : null)"
+                                                @onclick="() => TitlePlacementChanged(placement)">
+                                            <i class="fa-solid @icon"></i>
+                                            @label
+                                        </button>
+                                    }
+                                </div>
+
+                                <small class="blk-muted">
+                                    Con logo, datos de empresa y QR, el título en banda
+                                    propia evita que la cabecera se apelotone.
+                                </small>
+                            </div>
+
+                            <label class="toggle-row">
+                                <input type="checkbox"
+                                       checked="@(_header.ShowLogo ?? false)"
+                                       @onchange="HeaderShowLogoChanged" />
+                                <span>Mostrar logo</span>
+                            </label>
+
+                            @if (_header.ShowLogo == true)
+                            {
+                                <div class="blk-two">
+                                    <div class="form-group">
+                                        <label>URL del logo</label>
+
+                                        <div class="variable-input-row">
+                                            <input type="url"
+                                                   value="@_header.LogoUrl"
+                                                   @oninput="HeaderLogoUrlChanged"
+                                                   placeholder="https://..." />
+
+                                            <VariablePicker Variables="_variables"
+                                                            Selected="InsertLogoVariableAsync" />
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label>Alto máximo (px)</label>
+
+                                        <input type="number"
+                                               min="20"
+                                               max="300"
+                                               step="1"
+                                               value="@_header.LogoMaxHeight"
+                                               @onchange="HeaderLogoHeightChanged"
+                                               placeholder="70" />
+                                    </div>
+                                </div>
+                            }
+
+                        </div>
+
+                    </section>
+
+                    <section class="editor-card">
+
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">3</span>
+                            <div>
+                                <h2>Datos de empresa</h2>
+                                <small>Una línea por dato. Usa columnas para repartirlos a izquierda y derecha.</small>
+                            </div>
+
+                            @if (_header.Columns.Count == 0)
+                            {
+                                <button type="button"
+                                        class="secondary-button blk-card-action"
+                                        @onclick="EnableHeaderColumns">
+                                    <i class="fa-solid fa-table-columns"></i>
+                                    En columnas
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="secondary-button blk-card-action"
+                                        @onclick="DisableHeaderColumns">
+                                    <i class="fa-solid fa-bars"></i>
+                                    Una columna
+                                </button>
+                            }
+                        </div>
+
+                        <div class="editor-card-body">
 
                             @if (_header.Columns.Count == 0)
                             {
                                 <div class="header-line-presets">
 
-                                    @foreach (var preset in HeaderLinePresets)
+                                    @foreach (var preset in LinePresets)
                                     {
                                         <button type="button"
                                                 class="header-line-preset"
                                                 title="Añadir una línea de @preset.Label"
                                                 @onclick="() => AddPresetLine(preset)">
-
                                             <i class="fa-solid fa-plus"></i>
                                             @preset.Label
-
                                         </button>
                                     }
 
                                     <button type="button"
                                             class="header-line-preset"
                                             @onclick="() => AddHeaderLine()">
-
                                         <i class="fa-solid fa-plus"></i>
                                         Línea vacía
-
                                     </button>
 
                                 </div>
 
                                 @if (_header.Lines.Count == 0)
                                 {
-                                    <small>
-                                        Cada línea es un texto libre que puede llevar
-                                        variables del tenant, por ejemplo
-                                        CIF: &#123;&#123;company.cif&#125;&#125;.
-                                    </small>
+                                    <p class="blk-empty-hint">
+                                        Sin líneas. Pulsa un dato de arriba: la línea se crea
+                                        apuntando a la variable del tenant que encaje
+                                        (CIF: &#123;&#123;company.cif&#125;&#125;).
+                                    </p>
                                 }
 
                                 @foreach (var line in OrderedHeaderLines)
                                 {
-                                    <div class="header-line-row" @key="line.Id">
-
-                                        <input type="text"
-                                               value="@HeaderLineText(line)"
-                                               @onchange="e => HeaderLineTextChanged(line, e)"
-                                               placeholder="Texto de la línea" />
-
-                                        <VariablePicker Variables="_variables"
-                                                        Selected="variable => InsertHeaderLineVariableAsync(line, variable)" />
-
-                                        <select value="@line.Style"
-                                                @onchange="e => HeaderLineStyleChanged(line, e)">
-
-                                            <option value="@ReportHeaderLineStyle.Normal">Normal</option>
-                                            <option value="@ReportHeaderLineStyle.Strong">Destacado</option>
-                                            <option value="@ReportHeaderLineStyle.Muted">Secundario</option>
-                                            <option value="@ReportHeaderLineStyle.Small">Pequeño</option>
-
-                                        </select>
-
-                                        <div class="header-line-actions">
-                                            <button type="button"
-                                                    title="Subir"
-                                                    disabled="@(!CanMoveHeaderLine(line, -1))"
-                                                    @onclick="() => MoveHeaderLine(line, -1)">
-                                                <i class="fa-solid fa-arrow-up"></i>
-                                            </button>
-                                            <button type="button"
-                                                    title="Bajar"
-                                                    disabled="@(!CanMoveHeaderLine(line, 1))"
-                                                    @onclick="() => MoveHeaderLine(line, 1)">
-                                                <i class="fa-solid fa-arrow-down"></i>
-                                            </button>
-                                            <button type="button"
-                                                    class="is-danger"
-                                                    title="Quitar línea"
-                                                    @onclick="() => RemoveHeaderLine(line)">
-                                                <i class="fa-solid fa-trash"></i>
-                                            </button>
-                                        </div>
-
-                                    </div>
+                                    @HeaderLineRow(line, null)
                                 }
                             }
                             else
@@ -421,7 +468,7 @@
                                             </div>
 
                                             <div class="header-line-presets">
-                                                @foreach (var preset in HeaderLinePresets)
+                                                @foreach (var preset in LinePresets)
                                                 {
                                                     <button type="button"
                                                             class="header-line-preset"
@@ -439,46 +486,9 @@
                                                 </button>
                                             </div>
 
-                                            @foreach (var line in OrderedColumnHeaderLines(column))
+                                            @foreach (var line in column.Lines.OrderBy(x => x.Order))
                                             {
-                                                <div class="header-line-row" @key="line.Id">
-                                                    <input type="text"
-                                                           value="@HeaderLineText(line)"
-                                                           @onchange="e => HeaderLineTextChanged(line, e)"
-                                                           placeholder="Texto de la línea" />
-
-                                                    <VariablePicker Variables="_variables"
-                                                                    Selected="variable => InsertHeaderLineVariableAsync(line, variable)" />
-
-                                                    <select value="@line.Style"
-                                                            @onchange="e => HeaderLineStyleChanged(line, e)">
-                                                        <option value="@ReportHeaderLineStyle.Normal">Normal</option>
-                                                        <option value="@ReportHeaderLineStyle.Strong">Destacado</option>
-                                                        <option value="@ReportHeaderLineStyle.Muted">Secundario</option>
-                                                        <option value="@ReportHeaderLineStyle.Small">Pequeño</option>
-                                                    </select>
-
-                                                    <div class="header-line-actions">
-                                                        <button type="button"
-                                                                title="Subir"
-                                                                disabled="@(!CanMoveHeaderLine(column, line, -1))"
-                                                                @onclick="() => MoveHeaderLine(column, line, -1)">
-                                                            <i class="fa-solid fa-arrow-up"></i>
-                                                        </button>
-                                                        <button type="button"
-                                                                title="Bajar"
-                                                                disabled="@(!CanMoveHeaderLine(column, line, 1))"
-                                                                @onclick="() => MoveHeaderLine(column, line, 1)">
-                                                            <i class="fa-solid fa-arrow-down"></i>
-                                                        </button>
-                                                        <button type="button"
-                                                                class="is-danger"
-                                                                title="Quitar línea"
-                                                                @onclick="() => RemoveHeaderLine(column, line)">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                @HeaderLineRow(line, column)
                                             }
                                         </section>
                                     }
@@ -495,221 +505,466 @@
 
                         </div>
 
-                        <div class="form-group">
+                    </section>
 
-                            <label>Color de fondo</label>
+                    <section class="editor-card">
 
-                            <div class="color-input-row">
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">4</span>
+                            <div>
+                                <h2>Colores</h2>
+                                <small>Opcional: sin colores la cabecera usa los del tema.</small>
+                            </div>
+                        </div>
 
-                                <input type="color"
-                                       value="@(_header.BackgroundColor ?? "#ffffff")"
-                                       @onchange="HeaderBackgroundChanged" />
+                        <div class="editor-card-body">
 
-                                <span>@(_header.BackgroundColor ?? "Sin fondo")</span>
+                            <div class="blk-two">
+                                <div class="form-group">
+                                    <label>Fondo</label>
 
-                                <button type="button"
-                                        class="secondary-button"
-                                        @onclick="() => _header.BackgroundColor = null">
-                                    Quitar
-                                </button>
+                                    <div class="color-input-row">
+                                        <input type="color"
+                                               value="@(_header.BackgroundColor ?? "#ffffff")"
+                                               @onchange="e => _header.BackgroundColor = Normalize(e.Value?.ToString())" />
 
+                                        <span>@(_header.BackgroundColor ?? "Sin fondo")</span>
+
+                                        @if (_header.BackgroundColor is not null)
+                                        {
+                                            <button type="button"
+                                                    class="link-button"
+                                                    @onclick="() => _header.BackgroundColor = null">
+                                                Quitar
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Texto</label>
+
+                                    <div class="color-input-row">
+                                        <input type="color"
+                                               value="@(_header.TextColor ?? "#1f2933")"
+                                               @onchange="e => _header.TextColor = Normalize(e.Value?.ToString())" />
+
+                                        <span>@(_header.TextColor ?? "Del tema")</span>
+
+                                        @if (_header.TextColor is not null)
+                                        {
+                                            <button type="button"
+                                                    class="link-button"
+                                                    @onclick="() => _header.TextColor = null">
+                                                Quitar
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <label class="toggle-row">
+                                <input type="checkbox"
+                                       checked="@(_header.ShowDivider ?? true)"
+                                       @onchange="e => _header.ShowDivider = e.Value is bool v && v" />
+                                <span>Línea de separación bajo la cabecera</span>
+                            </label>
+
+                        </div>
+
+                    </section>
+                }
+
+
+                @* ------------------------------------------------- pie *@
+
+                @if (_type == ReportBlockType.Footer)
+                {
+                    <section class="editor-card">
+
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">1</span>
+                            <div>
+                                <h2>Texto del pie</h2>
+                                <small>Texto legal, registro mercantil, dirección... Admite varias líneas.</small>
+                            </div>
+                        </div>
+
+                        <div class="editor-card-body">
+
+                            <div class="form-group">
+                                <div class="form-label-row">
+                                    <label>Texto</label>
+
+                                    <VariablePicker Variables="_variables"
+                                                    Selected="InsertFooterVariableAsync" />
+                                </div>
+
+                                <textarea rows="4"
+                                          value="@KeyText(_footer.TextKey)"
+                                          @onchange="FooterTextChanged"
+                                          placeholder="Inscrita en el Registro Mercantil de Cantabria..."></textarea>
+
+                                <VariableOnlyHint Text="@KeyText(_footer.TextKey)" />
+                            </div>
+
+                            <DataTokenHint />
+
+                        </div>
+
+                    </section>
+
+                    <section class="editor-card">
+
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">2</span>
+                            <div>
+                                <h2>Fecha y numeración</h2>
+                                <small>Se repiten en cada hoja al imprimir y en el PDF.</small>
+                            </div>
+                        </div>
+
+                        <div class="editor-card-body">
+
+                            <label class="toggle-row">
+                                <input type="checkbox"
+                                       checked="@(_footer.ShowGenerationDate ?? false)"
+                                       @onchange="e => _footer.ShowGenerationDate = e.Value is bool v && v" />
+                                <span>Fecha de generación</span>
+                            </label>
+
+                            <label class="toggle-row">
+                                <input type="checkbox"
+                                       checked="@(_footer.ShowPageNumber ?? false)"
+                                       @onchange="e => _footer.ShowPageNumber = e.Value is bool v && v" />
+                                <span>Número de página (Página 1 de 3)</span>
+                            </label>
+
+                            <small class="blk-muted">
+                                El formato de la numeración se traduce en el diccionario
+                                común, clave footer.pageNumber.
+                            </small>
+
+                        </div>
+
+                    </section>
+                }
+
+
+                @* ----------------------------------------------- texto *@
+
+                @if (_type == ReportBlockType.Text)
+                {
+                    <section class="editor-card">
+
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">1</span>
+                            <div>
+                                <h2>Contenido</h2>
+                                <small>Un aviso, condiciones o nota. Se añade al cuerpo desde el diseñador: Añadir contenido → Bloque existente.</small>
+                            </div>
+                        </div>
+
+                        <div class="editor-card-body">
+
+                            <div class="form-group">
+                                <label>Título (opcional)</label>
+
+                                <div class="variable-input-row">
+                                    <input type="text"
+                                           value="@KeyText(_text.TitleKey, _text.Title ?? string.Empty)"
+                                           @onchange="TextTitleChanged"
+                                           placeholder="Condiciones de entrega" />
+
+                                    <VariablePicker Variables="_variables"
+                                                    Selected="InsertTextTitleVariableAsync" />
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-label-row">
+                                    <label>Texto</label>
+
+                                    <VariablePicker Variables="_variables"
+                                                    Selected="InsertTextVariableAsync" />
+                                </div>
+
+                                <textarea rows="7"
+                                          value="@KeyText(_text.TextKey, _text.Text)"
+                                          @onchange="TextContentChanged"
+                                          placeholder="Escribe el aviso, las condiciones o cualquier texto reutilizable..."></textarea>
+
+                                <VariableOnlyHint Text="@KeyText(_text.TextKey, _text.Text)" />
+                            </div>
+
+                            <DataTokenHint />
+
+                        </div>
+
+                    </section>
+
+                    <section class="editor-card">
+
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">2</span>
+                            <div>
+                                <h2>Aspecto</h2>
+                            </div>
+                        </div>
+
+                        <div class="editor-card-body">
+
+                            <div class="blk-style-options" role="radiogroup" aria-label="Estilo">
+                                @foreach (var (style, label) in TextStyles)
+                                {
+                                    <button type="button"
+                                            role="radio"
+                                            aria-checked="@(_text.Style == style ? "true" : "false")"
+                                            class="blk-style-option is-@style.ToString().ToLowerInvariant() @(_text.Style == style ? "is-active" : null)"
+                                            @onclick="() => _text.Style = style">
+                                        <span></span>
+                                        @label
+                                    </button>
+                                }
+                            </div>
+
+                            <div class="blk-layout-options" role="radiogroup" aria-label="Alineación">
+                                @foreach (var (alignment, label, icon) in Alignments)
+                                {
+                                    <button type="button"
+                                            role="radio"
+                                            aria-checked="@(TextAlignment == alignment ? "true" : "false")"
+                                            class="@(TextAlignment == alignment ? "is-active" : null)"
+                                            @onclick="() => _text.Alignment = alignment">
+                                        <i class="fa-solid @icon"></i>
+                                        @label
+                                    </button>
+                                }
                             </div>
 
                         </div>
 
-                        <div class="form-group">
+                    </section>
+                }
 
-                            <label>Color del texto</label>
 
-                            <div class="color-input-row">
+                @* -------------------------------------- campos fijos *@
 
-                                <input type="color"
-                                       value="@(_header.TextColor ?? "#1f2933")"
-                                       @onchange="HeaderTextColorChanged" />
+                @if (_type == ReportBlockType.Fields)
+                {
+                    <section class="editor-card">
 
-                                <span>@(_header.TextColor ?? "Del tema")</span>
-
-                                <button type="button"
-                                        class="secondary-button"
-                                        @onclick="() => _header.TextColor = null">
-                                    Quitar
-                                </button>
-
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">1</span>
+                            <div>
+                                <h2>Título</h2>
+                                <small>La banda de arriba, como el nombre de una sección. Opcional.</small>
                             </div>
-
                         </div>
 
-                        <label class="toggle-row">
-
-                            <input type="checkbox"
-                                   checked="@(_header.ShowDivider ?? true)"
-                                   @onchange="HeaderDividerChanged" />
-
-                            <span>Línea de separación bajo la cabecera</span>
-
-                        </label>
-
-                        <BlockPreview Type="ReportBlockType.Header"
-                                      Header="_header"
-                                      Texts="_texts"
-                                      Variables="_variables"
-                                      Theme="_theme" />
-
-                    </div>
-
-                </section>
-            }
-
-
-            @if (_type == ReportBlockType.Footer)
-            {
-                <section class="editor-card">
-
-                    <div class="editor-card-header">
-                        <h2>Pie de página</h2>
-                    </div>
-
-                    <div class="editor-card-body">
-
-                        <div class="form-group">
-                            <label>Texto</label>
-
-                            <textarea rows="4"
-                                      value="@BlockText(ReportTextKeys.BlockText(_id))"
-                                      @onchange="FooterTextChanged"
-                                      placeholder="Texto legal, dirección, contacto..."></textarea>
-
-                                      
-                            <VariablePicker Variables="_variables"
-                                            Selected="InsertFooterTextVariableAsync" />
-
-                            <VariableOnlyHint Text="@BlockText(ReportTextKeys.BlockText(_id))" />
-                        </div>
-
-                        <label class="toggle-row">
-
-                            <input type="checkbox"
-                                   checked="@(_footer.ShowGenerationDate ?? false)"
-                                   @onchange="FooterGenerationDateChanged" />
-
-                            <span>Mostrar fecha de generación</span>
-
-                        </label>
-
-                        <label class="toggle-row">
-
-                            <input type="checkbox"
-                                   checked="@(_footer.ShowPageNumber ?? false)"
-                                   @onchange="FooterPageNumberChanged" />
-
-                            <span>Mostrar número de página</span>
-
-                        </label>
-
-                        <BlockPreview Type="ReportBlockType.Footer"
-                                      Footer="_footer"
-                                      Texts="_texts"
-                                      Variables="_variables"
-                                      Theme="_theme" />
-
-                    </div>
-
-                </section>
-            }
-
-
-            @if (_type == ReportBlockType.Text)
-            {
-                <section class="editor-card">
-
-                    <div class="editor-card-header">
-                        <h2>Texto</h2>
-                    </div>
-
-                    <div class="editor-card-body">
-
-                        <div class="form-group">
-                            <label>Título opcional</label>
+                        <div class="editor-card-body">
 
                             <div class="variable-input-row">
                                 <input type="text"
-                                       value="@TextBlockTitleValue"
-                                       @oninput="TextTitleChanged"
-                                       placeholder="Directrices de seguridad" />
+                                       class="blk-input"
+                                       value="@KeyText(_fields.TitleKey)"
+                                       @onchange="FieldsTitleChanged"
+                                       placeholder="Datos de la empresa" />
 
                                 <VariablePicker Variables="_variables"
-                                                Selected="InsertTextTitleVariableAsync" />
+                                                Selected="InsertFieldsTitleVariableAsync" />
+                            </div>
+
+                        </div>
+
+                    </section>
+
+                    <section class="editor-card">
+
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">2</span>
+                            <div>
+                                <h2>Campos</h2>
+                                <small>Etiqueta y valor. El valor admite variables del tenant y datos del documento.</small>
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <div class="form-label-row">
-                                <label>Contenido</label>
+                        <div class="editor-card-body">
 
-                                <VariablePicker Variables="_variables"
-                                                Selected="InsertTextVariableAsync" />
+                            <div class="header-line-presets">
+
+                                @foreach (var preset in LinePresets)
+                                {
+                                    <button type="button"
+                                            class="header-line-preset"
+                                            title="Añadir @preset.Label"
+                                            @onclick="() => AddFixedField(preset)">
+                                        <i class="fa-solid fa-plus"></i>
+                                        @preset.Label
+                                    </button>
+                                }
+
+                                <button type="button"
+                                        class="header-line-preset"
+                                        @onclick="() => AddFixedField(null)">
+                                    <i class="fa-solid fa-plus"></i>
+                                    Campo vacío
+                                </button>
+
                             </div>
 
-                            <textarea rows="8"
-                                      value="@TextBlockTextValue"
-                                      @oninput="TextContentChanged"
-                                      placeholder="Escribe las directrices, avisos, condiciones o cualquier texto reutilizable..."></textarea>
+                            @if (_fields.Fields.Count == 0)
+                            {
+                                <p class="blk-empty-hint">
+                                    Sin campos. Pulsa un dato de arriba para añadirlo ya
+                                    apuntando a la variable del tenant que encaje.
+                                </p>
+                            }
+                            else
+                            {
+                                <div class="blk-field-head">
+                                    <span>Etiqueta</span>
+                                    <span>Valor</span>
+                                </div>
+                            }
 
-                            <small>
-                                Puedes insertar variables del tenant dentro del texto.
-                            </small>
+                            @foreach (var field in OrderedFixedFields)
+                            {
+                                <div class="blk-field-row" @key="field.Id">
 
-                            <VariableOnlyHint Text="@TextBlockTextValue" />
+                                    <input type="text"
+                                           value="@KeyText(field.LabelKey)"
+                                           @onchange="e => FixedFieldLabelChanged(field, e)"
+                                           placeholder="CIF" />
+
+                                    <div class="variable-input-row">
+                                        <input type="text"
+                                               value="@KeyText(field.ValueKey)"
+                                               @onchange="e => FixedFieldValueChanged(field, e)"
+                                               placeholder="{{company.cif}}" />
+
+                                        <VariablePicker Variables="_variables"
+                                                        Selected="variable => InsertFixedFieldVariableAsync(field, variable)" />
+                                    </div>
+
+                                    <div class="header-line-actions">
+                                        <button type="button"
+                                                title="Subir"
+                                                disabled="@(!CanMoveFixedField(field, -1))"
+                                                @onclick="() => MoveFixedField(field, -1)">
+                                            <i class="fa-solid fa-arrow-up"></i>
+                                        </button>
+                                        <button type="button"
+                                                title="Bajar"
+                                                disabled="@(!CanMoveFixedField(field, 1))"
+                                                @onclick="() => MoveFixedField(field, 1)">
+                                            <i class="fa-solid fa-arrow-down"></i>
+                                        </button>
+                                        <button type="button"
+                                                class="is-danger"
+                                                title="Quitar campo"
+                                                @onclick="() => RemoveFixedField(field)">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </div>
+
+                                </div>
+                            }
+
+                            <DataTokenHint />
+
                         </div>
 
-                        <div class="form-group">
-                            <label>Estilo</label>
+                    </section>
 
-                            <select value="@_text.Style"
-                                    @onchange="TextStyleChanged">
-                                <option value="@ReportTextBlockStyle.Default">Normal</option>
-                                <option value="@ReportTextBlockStyle.Information">Información</option>
-                                <option value="@ReportTextBlockStyle.Warning">Aviso</option>
-                                <option value="@ReportTextBlockStyle.Success">Correcto</option>
-                            </select>
+                    <section class="editor-card">
+
+                        <div class="editor-card-header blk-card-header">
+                            <span class="blk-step">3</span>
+                            <div>
+                                <h2>Distribución</h2>
+                                <small>Como en las secciones: lista de etiqueta y valor, o cuadrícula.</small>
+                            </div>
                         </div>
 
-                        <div class="form-group">
-                            <label>Alineación</label>
+                        <div class="editor-card-body">
 
-                            <select value="@TextAlignmentValue"
-                                    @onchange="TextAlignmentChanged">
-                                <option value="@ReportHorizontalAlignment.Left">Izquierda</option>
-                                <option value="@ReportHorizontalAlignment.Center">Centro</option>
-                                <option value="@ReportHorizontalAlignment.Right">Derecha</option>
-                            </select>
+                            <ReportSectionLayoutPicker Layout="_fields.Layout"
+                                                       Columns="_fields.Columns"
+                                                       Label="@null"
+                                                       Changed="FieldsLayoutChanged" />
+
                         </div>
 
-                        <BlockPreview Type="ReportBlockType.Text"
+                    </section>
+                }
+
+            </div>
+
+
+            @* ------------------------------------------------ preview *@
+
+            <aside class="blk-side">
+
+                <section class="editor-card blk-preview-card">
+
+                    <div class="blk-preview-head">
+
+                        <strong>Vista previa</strong>
+
+                        @if (_cultures.Count > 1)
+                        {
+                            <label class="blk-culture"
+                                   title="Idioma de los textos que estás editando">
+                                <i class="fa-solid fa-language"></i>
+
+                                <select value="@_selectedCulture"
+                                        @onchange="ChangeCultureAsync">
+                                    @foreach (var culture in _cultures)
+                                    {
+                                        <option value="@culture.Culture">
+                                            @CultureFlag.For(culture.Culture) @culture.DisplayName
+                                        </option>
+                                    }
+                                </select>
+                            </label>
+                        }
+
+                    </div>
+
+                    <div class="blk-preview-body">
+
+                        <BlockPreview Type="_type"
+                                      Header="_header"
+                                      Footer="_footer"
                                       Text="_text"
+                                      Fields="_fields"
                                       Texts="_texts"
                                       Variables="_variables"
                                       Theme="_theme" />
 
                     </div>
 
+                    <div class="blk-where">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <span>@CurrentType.WhereUsed</span>
+                    </div>
+
+                    @if (_cultures.Count > 1)
+                    {
+                        <div class="blk-where">
+                            <i class="fa-solid fa-language"></i>
+                            <span>
+                                Los textos se guardan en el diccionario común. Cambia el
+                                idioma de arriba para escribirlos en otro idioma, o
+                                tradúcelos todos juntos en Diccionario.
+                            </span>
+                        </div>
+                    }
+
                 </section>
-            }
 
-
-            <section class="editor-card">
-
-                <div class="editor-card-header">
-                    <h2>JSON resultante</h2>
-                </div>
-
-                <div class="editor-card-body">
-
-                    <pre class="json-preview">@ConfigurationJson</pre>
-
-                </div>
-
-            </section>
+            </aside>
 
         </div>
     }
@@ -733,21 +988,27 @@
     [Parameter]
     public string? BlockId { get; set; }
 
+    /// <summary>
+    /// /blocks/new?type=Fields abre directamente el editor de ese tipo.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? TypeFromQuery { get; set; }
+
     private string _id = string.Empty;
     private string _name = string.Empty;
+    private bool _idEdited;
 
-    private ReportBlockType _type =
-        ReportBlockType.Header;
+    private ReportBlockType _type = ReportBlockType.Header;
+    private bool _typeChosen;
 
     private ReportHeaderConfiguration _header = new();
-
     private ReportFooterConfiguration _footer = new();
-
     private ReportTextBlockConfiguration _text = new();
+    private ReportFieldsBlockConfiguration _fields = new();
 
     private IReadOnlyCollection<ReportVariable> _variables = [];
-
     private IReadOnlyCollection<TenantCulture> _cultures = [];
+    private IReadOnlyCollection<ReportBlock> _existingBlocks = [];
 
     private readonly ReportTheme _theme = new();
 
@@ -756,10 +1017,87 @@
     private ReportTextWorkspace _texts =
         ReportTextWorkspace.Detached();
 
-    private string? _activeVariableTarget;
-
     private bool _loading;
     private bool _saving;
+
+
+    // ------------------------------------------------------------- tipos
+
+    private sealed record TypeOption(
+        ReportBlockType Type,
+        string Label,
+        string Icon,
+        string Css,
+        string Description,
+        string WhereUsed,
+        string NamePlaceholder);
+
+    private static readonly TypeOption[] TypeOptions =
+    [
+        new(ReportBlockType.Header,
+            "Cabecera",
+            "fa-heading",
+            "header",
+            "Logo, título y datos de empresa en la parte de arriba del documento.",
+            "Diseñador → pestaña Cabecera → Bloque reutilizable.",
+            "Cabecera ORAN"),
+
+        new(ReportBlockType.Footer,
+            "Pie de página",
+            "fa-shoe-prints",
+            "footer",
+            "Texto legal, fecha y número de página al final de cada hoja.",
+            "Diseñador → pestaña Cabecera → Pie de página → Bloque reutilizable.",
+            "Pie legal ORAN"),
+
+        new(ReportBlockType.Text,
+            "Texto",
+            "fa-align-left",
+            "text",
+            "Un aviso, unas condiciones o una nota que se repite en varios documentos.",
+            "Diseñador → Estructura → Añadir contenido → Bloque existente.",
+            "Condiciones de entrega"),
+
+        new(ReportBlockType.Fields,
+            "Campos fijos",
+            "fa-table-list",
+            "fields",
+            "Etiqueta y valor en lista o cuadrícula, como una sección, pero con valores fijos: datos de empresa, bancarios, horario...",
+            "Diseñador → Estructura → Añadir contenido → Bloque existente.",
+            "Datos de empresa")
+    ];
+
+    private TypeOption CurrentType =>
+        TypeOptions.First(x => x.Type == _type);
+
+    private static readonly (ReportHeaderLayout Layout, string Label, string Icon)[] HeaderLayouts =
+    [
+        (ReportHeaderLayout.LogoLeft, "Logo a la izquierda", "fa-align-left"),
+        (ReportHeaderLayout.LogoRight, "Logo a la derecha", "fa-align-right"),
+        (ReportHeaderLayout.Stacked, "Centrado", "fa-align-center")
+    ];
+
+    private static readonly (ReportHeaderTitlePlacement Placement, string Label, string Icon)[] TitlePlacements =
+    [
+        (ReportHeaderTitlePlacement.Inline, "Junto al logo", "fa-grip-lines"),
+        (ReportHeaderTitlePlacement.Below, "Debajo, a todo el ancho", "fa-arrow-down-wide-short"),
+        (ReportHeaderTitlePlacement.Above, "Encima, a todo el ancho", "fa-arrow-up-wide-short")
+    ];
+
+    private static readonly (ReportTextBlockStyle Style, string Label)[] TextStyles =
+    [
+        (ReportTextBlockStyle.Default, "Normal"),
+        (ReportTextBlockStyle.Information, "Información"),
+        (ReportTextBlockStyle.Warning, "Aviso"),
+        (ReportTextBlockStyle.Success, "Correcto")
+    ];
+
+    private static readonly (ReportHorizontalAlignment Alignment, string Label, string Icon)[] Alignments =
+    [
+        (ReportHorizontalAlignment.Left, "Izquierda", "fa-align-left"),
+        (ReportHorizontalAlignment.Center, "Centro", "fa-align-center"),
+        (ReportHorizontalAlignment.Right, "Derecha", "fa-align-right")
+    ];
 
 
     private bool IsEditMode =>
@@ -767,45 +1105,51 @@
 
     private string PageTitleText =>
         IsEditMode
-            ? "Editar bloque"
-            : "Nuevo bloque";
+            ? string.IsNullOrWhiteSpace(_name) ? "Editar bloque" : _name
+            : _typeChosen
+                ? $"Nuevo bloque · {CurrentType.Label}"
+                : "Nuevo bloque";
+
+    private bool CanSave =>
+        !string.IsNullOrWhiteSpace(_name) &&
+        IsValidId(_id);
 
 
-    private string ConfigurationJson
-    {
-        get
+    private string ConfigurationJson =>
+        _type switch
         {
-            return _type switch
-            {
-                ReportBlockType.Header =>
-                    JsonSerializer.Serialize(
-                        _header,
-                        JsonOptions),
+            ReportBlockType.Header => JsonSerializer.Serialize(_header, JsonOptions),
+            ReportBlockType.Footer => JsonSerializer.Serialize(_footer, JsonOptions),
+            ReportBlockType.Text => JsonSerializer.Serialize(_text, JsonOptions),
+            ReportBlockType.Fields => JsonSerializer.Serialize(_fields, JsonOptions),
+            _ => "{}"
+        };
 
-                ReportBlockType.Footer =>
-                    JsonSerializer.Serialize(
-                        _footer,
-                        JsonOptions),
 
-                ReportBlockType.Text =>
-                    JsonSerializer.Serialize(
-                        _text,
-                        JsonOptions),
-
-                _ => "{}"
-            };
-        }
-    }
-
+    // ------------------------------------------------------------- carga
 
     protected override async Task OnParametersSetAsync()
     {
         if (!IsEditMode)
         {
             ResetNewBlock();
-            await Toasts.RunAsync(
-                LoadEditorContextAsync,
-                errorTitle: "No se han podido cargar los datos del editor");
+
+            if (Enum.TryParse<ReportBlockType>(TypeFromQuery, ignoreCase: true, out var type))
+                ChooseType(type);
+
+            _loading = true;
+
+            try
+            {
+                await Toasts.RunAsync(
+                    LoadEditorContextAsync,
+                    errorTitle: "No se han podido cargar los datos del editor");
+            }
+            finally
+            {
+                _loading = false;
+            }
+
             return;
         }
 
@@ -827,30 +1171,25 @@
             _id = block.Id;
             _name = block.Name;
             _type = block.Type;
+            _typeChosen = true;
 
-            if (_type == ReportBlockType.Header)
+            switch (_type)
             {
-                _header =
-                    JsonSerializer.Deserialize<ReportHeaderConfiguration>(
-                        block.ConfigurationJson,
-                        JsonOptions)
-                    ?? new ReportHeaderConfiguration();
-            }
-            else if (_type == ReportBlockType.Footer)
-            {
-                _footer =
-                    JsonSerializer.Deserialize<ReportFooterConfiguration>(
-                        block.ConfigurationJson,
-                        JsonOptions)
-                    ?? new ReportFooterConfiguration();
-            }
-            else if (_type == ReportBlockType.Text)
-            {
-                _text =
-                    JsonSerializer.Deserialize<ReportTextBlockConfiguration>(
-                        block.ConfigurationJson,
-                        JsonOptions)
-                    ?? new ReportTextBlockConfiguration();
+                case ReportBlockType.Header:
+                    _header = Deserialize<ReportHeaderConfiguration>(block.ConfigurationJson);
+                    break;
+
+                case ReportBlockType.Footer:
+                    _footer = Deserialize<ReportFooterConfiguration>(block.ConfigurationJson);
+                    break;
+
+                case ReportBlockType.Text:
+                    _text = Deserialize<ReportTextBlockConfiguration>(block.ConfigurationJson);
+                    break;
+
+                case ReportBlockType.Fields:
+                    _fields = Deserialize<ReportFieldsBlockConfiguration>(block.ConfigurationJson);
+                    break;
             }
 
             await LoadEditorContextAsync();
@@ -879,6 +1218,13 @@
         _cultures =
             await RenderSetApi.GetCulturesAsync(
                 CurrentTenant.Id);
+
+        if (!IsEditMode)
+        {
+            _existingBlocks =
+                await RenderSetApi.GetBlocksAsync(
+                    CurrentTenant.Id);
+        }
 
         _selectedCulture ??=
             _cultures.FirstOrDefault(x => x.IsDefault)?.Culture
@@ -934,226 +1280,197 @@
     {
         _id = string.Empty;
         _name = string.Empty;
+        _idEdited = false;
+        _typeChosen = false;
+        _type = ReportBlockType.Header;
 
-        _type =
-            ReportBlockType.Header;
-
-        _header =
-            new ReportHeaderConfiguration();
-
-        _footer =
-            new ReportFooterConfiguration();
-
-        _text =
-            new ReportTextBlockConfiguration();
+        _header = new ReportHeaderConfiguration();
+        _footer = new ReportFooterConfiguration();
+        _text = new ReportTextBlockConfiguration();
+        _fields = new ReportFieldsBlockConfiguration();
     }
 
 
-    private void BlockTypeChanged(
-        ChangeEventArgs e)
+    private void ChooseType(
+        ReportBlockType type)
     {
-        if (Enum.TryParse<ReportBlockType>(
-                e.Value?.ToString(),
-                out var type))
-        {
-            _type = type;
-        }
-    }
+        _type = type;
+        _typeChosen = true;
 
-
-    private async Task SaveAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_id))
-            return;
-
-        if (string.IsNullOrWhiteSpace(_name))
-            return;
-
-        _saving = true;
-
-        try
-        {
-            var blockId =
-                _id.Trim();
-
-            PrepareConfigurationForSave(blockId);
-
-            var block =
-                new ReportBlock
-                {
-                    Id = blockId,
-                    Name = _name.Trim(),
-                    Type = _type,
-                    ConfigurationJson =
-                        ConfigurationJson
-                };
-
-            var saved = await Toasts.RunApiAsync(
-                () => RenderSetApi.SaveBlockAsync(
-                    CurrentTenant.Id,
-                    block.Id,
-                    block),
-                errorTitle: "No se ha podido guardar el bloque");
-
-            if (!saved)
-                return;
-
-            if (!await SaveTextsAsync())
-                return;
-
-            Toasts.Success("Bloque guardado.");
-
-            Navigation.NavigateTo(
-                "/blocks");
-        }
-        catch (Exception exception)
-        {
-            Toasts.Error(
-                ToastServiceExtensions.Describe(exception),
-                "No se ha podido guardar el bloque");
-        }
-        finally
-        {
-            _saving = false;
-        }
-    }
-
-
-    private void GoBack()
-    {
-        Navigation.NavigateTo(
-            "/blocks");
+        if (!_idEdited)
+            _id = ProposeId();
     }
 
 
     /// <summary>
-    /// Los bloques son de tenant, así que sus textos van al ámbito global del
-    /// diccionario. La configuración del bloque sólo guarda la clave.
+    /// Sólo para bloques nuevos: lo escrito en el tipo anterior se queda en
+    /// su objeto por si se vuelve a él.
     /// </summary>
-    private string BlockText(
+    private void ChangeType() =>
+        _typeChosen = false;
+
+
+    // ------------------------------------------------------- nombre e id
+
+    private void NameChanged(
+        ChangeEventArgs e)
+    {
+        _name = e.Value?.ToString() ?? string.Empty;
+
+        if (!IsEditMode && !_idEdited)
+            _id = ProposeId();
+    }
+
+
+    private void IdChanged(
+        ChangeEventArgs e)
+    {
+        _id = Slug(e.Value?.ToString());
+        _idEdited = true;
+    }
+
+
+    /// <summary>
+    /// Del nombre, o del tipo si aún no hay nombre ("fields-1a2b3c"). Si
+    /// choca con un bloque que ya existe se le añade un número: guardar con
+    /// un id existente machacaría ese bloque.
+    /// </summary>
+    private string ProposeId()
+    {
+        var baseId =
+            string.IsNullOrWhiteSpace(_name)
+                ? $"{_type.ToString().ToLowerInvariant()}-{Guid.NewGuid():N}"[..(_type.ToString().Length + 7)]
+                : Slug(_name);
+
+        if (string.IsNullOrWhiteSpace(baseId))
+            baseId = _type.ToString().ToLowerInvariant();
+
+        var candidate = baseId;
+        var suffix = 2;
+
+        while (_existingBlocks.Any(x => string.Equals(x.Id, candidate, StringComparison.OrdinalIgnoreCase)))
+            candidate = $"{baseId}-{suffix++}";
+
+        return candidate;
+    }
+
+
+    private static bool IsValidId(
+        string? id) =>
+        !string.IsNullOrWhiteSpace(id) &&
+        id.Length <= 100 &&
+        id.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '-');
+
+
+    // ------------------------------------------------------------ textos
+
+    /// <summary>
+    /// Texto de una clave del diccionario en el idioma de edición.
+    /// </summary>
+    private string KeyText(
         string? key,
         string fallback = "") =>
         string.IsNullOrWhiteSpace(key)
             ? fallback
-            : _texts.GetText(
-                key,
-                fallback);
+            : _texts.GetText(key, fallback);
 
 
-    private void HeaderTitleChanged(
-        ChangeEventArgs e)
+    /// <summary>
+    /// Clave para un texto del bloque. Se decide la primera vez que se
+    /// escribe y se guarda en la configuración: cambiar después el id no la
+    /// mueve ni pierde traducciones.
+    /// </summary>
+    private string NewKey(
+        Func<string, string> convention) =>
+        convention(string.IsNullOrWhiteSpace(_id) ? ProposeId() : _id);
+
+
+    private void HeaderTitleChanged(ChangeEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_id))
-            return;
-
-        _header.TitleKey =
-            ReportTextKeys.BlockTitle(_id.Trim());
-
-        _texts.SetText(
-            _header.TitleKey,
-            e.Value?.ToString());
+        _header.TitleKey ??= NewKey(ReportTextKeys.BlockTitle);
+        _texts.SetText(_header.TitleKey, e.Value?.ToString());
     }
 
 
-    private void HeaderSubtitleChanged(
-        ChangeEventArgs e)
+    private void HeaderSubtitleChanged(ChangeEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_id))
-            return;
-
-        _header.SubtitleKey =
-            ReportTextKeys.BlockSubtitle(_id.Trim());
-
-        _texts.SetText(
-            _header.SubtitleKey,
-            e.Value?.ToString());
+        _header.SubtitleKey ??= NewKey(ReportTextKeys.BlockSubtitle);
+        _texts.SetText(_header.SubtitleKey, e.Value?.ToString());
     }
 
 
-    private void HeaderShowLogoChanged(
-        ChangeEventArgs e)
+    private Task InsertTitleVariableAsync(ReportVariable variable)
     {
-        _header.ShowLogo =
-            e.Value is bool value &&
-            value;
+        _header.TitleKey ??= NewKey(ReportTextKeys.BlockTitle);
+        _texts.SetText(_header.TitleKey, AppendToken(KeyText(_header.TitleKey), variable.Key));
+        return Task.CompletedTask;
     }
 
 
-    private void HeaderLogoUrlChanged(
-        ChangeEventArgs e)
+    private Task InsertSubtitleVariableAsync(ReportVariable variable)
     {
-        _header.LogoUrl =
-            Normalize(
-                e.Value?.ToString());
+        _header.SubtitleKey ??= NewKey(ReportTextKeys.BlockSubtitle);
+        _texts.SetText(_header.SubtitleKey, AppendToken(KeyText(_header.SubtitleKey), variable.Key));
+        return Task.CompletedTask;
     }
 
 
-    private void HeaderLogoHeightChanged(
-        ChangeEventArgs e)
-    {
-        if (!int.TryParse(e.Value?.ToString(), out var height))
-        {
-            _header.LogoMaxHeight = null;
-            return;
-        }
+    private void HeaderShowLogoChanged(ChangeEventArgs e) =>
+        _header.ShowLogo = e.Value is bool value && value;
 
-        _header.LogoMaxHeight = Math.Clamp(height, 20, 300);
+
+    private void HeaderLogoUrlChanged(ChangeEventArgs e) =>
+        _header.LogoUrl = Normalize(e.Value?.ToString());
+
+
+    private void HeaderLogoHeightChanged(ChangeEventArgs e)
+    {
+        _header.LogoMaxHeight =
+            int.TryParse(e.Value?.ToString(), out var height)
+                ? Math.Clamp(height, 20, 300)
+                : null;
     }
 
 
-    private string HeaderLayoutValue =>
-        (_header.Layout ?? ReportHeaderLayout.LogoLeft).ToString();
-
-
-    private void HeaderLayoutChanged(
-        ChangeEventArgs e)
+    private Task InsertLogoVariableAsync(ReportVariable variable)
     {
-        if (Enum.TryParse<ReportHeaderLayout>(
-                e.Value?.ToString(),
-                out var layout))
-        {
-            _header.Layout = layout;
-        }
+        _header.LogoUrl = $"{{{{{variable.Key}}}}}";
+        return Task.CompletedTask;
     }
 
 
-    private void HeaderBackgroundChanged(
-        ChangeEventArgs e)
-    {
-        _header.BackgroundColor =
-            Normalize(e.Value?.ToString());
-    }
+    private ReportHeaderLayout HeaderLayoutValue =>
+        _header.Layout ?? ReportHeaderLayout.LogoLeft;
+
+    private ReportHeaderTitlePlacement TitlePlacementValue =>
+        _header.TitlePlacement ?? ReportHeaderTitlePlacement.Inline;
+
+    /// <summary>
+    /// Junto al logo es lo de siempre: se guarda nulo para que el bloque
+    /// sólo lleve la propiedad cuando de verdad cambia algo.
+    /// </summary>
+    private void TitlePlacementChanged(
+        ReportHeaderTitlePlacement placement) =>
+        _header.TitlePlacement =
+            placement == ReportHeaderTitlePlacement.Inline
+                ? null
+                : placement;
 
 
-    private void HeaderTextColorChanged(
-        ChangeEventArgs e)
-    {
-        _header.TextColor =
-            Normalize(e.Value?.ToString());
-    }
-
-
-    private void HeaderDividerChanged(
-        ChangeEventArgs e)
-    {
-        _header.ShowDivider =
-            e.Value is bool value &&
-            value;
-    }
-
+    // -------------------------------------------------- líneas de cabecera
 
     /*
-     * Atajos para los datos que aparecen en casi todas las cabeceras. No
-     * inventan nada: crean la línea con el texto ya apuntando a la variable
-     * del tenant que mejor encaja, si existe alguna.
+     * Atajos para los datos que aparecen en casi todas las cabeceras y en
+     * los bloques de campos. No inventan nada: crean la línea con el texto
+     * ya apuntando a la variable del tenant que mejor encaja, si hay alguna.
      */
-    private sealed record HeaderLinePreset(
+    private sealed record LinePreset(
         string Label,
         string Prefix,
         string[] Hints,
         ReportHeaderLineStyle Style);
 
-    private static readonly HeaderLinePreset[] HeaderLinePresets =
+    private static readonly LinePreset[] LinePresets =
     [
         new("Razón social", "", ["company.name", "empresa", "razon", "company"], ReportHeaderLineStyle.Strong),
         new("CIF", "CIF: ", ["cif", "nif", "vat"], ReportHeaderLineStyle.Normal),
@@ -1174,9 +1491,7 @@
         {
             var variable =
                 _variables.FirstOrDefault(x =>
-                    x.Key.Contains(
-                        hint,
-                        StringComparison.OrdinalIgnoreCase));
+                    x.Key.Contains(hint, StringComparison.OrdinalIgnoreCase));
 
             if (variable is not null)
                 return $"{{{{{variable.Key}}}}}";
@@ -1186,133 +1501,199 @@
     }
 
 
-    private void AddPresetLine(
-        HeaderLinePreset preset)
-    {
-        var token =
-            SuggestVariableToken(preset.Hints);
+    private RenderFragment HeaderLineRow(
+        ReportHeaderLineConfiguration line,
+        ReportHeaderColumnConfiguration? column) =>
+        @<div class="header-line-row" @key="line.Id">
 
+            <input type="text"
+                   value="@KeyText(line.TextKey)"
+                   @onchange="e => HeaderLineTextChanged(line, e)"
+                   placeholder="Texto de la línea" />
+
+            <VariablePicker Variables="_variables"
+                            Selected="variable => InsertHeaderLineVariableAsync(line, variable)" />
+
+            <select value="@line.Style"
+                    @onchange="e => HeaderLineStyleChanged(line, e)">
+                <option value="@ReportHeaderLineStyle.Normal">Normal</option>
+                <option value="@ReportHeaderLineStyle.Strong">Destacado</option>
+                <option value="@ReportHeaderLineStyle.Muted">Secundario</option>
+                <option value="@ReportHeaderLineStyle.Small">Pequeño</option>
+            </select>
+
+            <div class="header-line-actions">
+                <button type="button"
+                        title="Subir"
+                        disabled="@(!CanMoveLine(Lines(column), line, -1))"
+                        @onclick="() => MoveLine(column, line, -1)">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
+                <button type="button"
+                        title="Bajar"
+                        disabled="@(!CanMoveLine(Lines(column), line, 1))"
+                        @onclick="() => MoveLine(column, line, 1)">
+                    <i class="fa-solid fa-arrow-down"></i>
+                </button>
+                <button type="button"
+                        class="is-danger"
+                        title="Quitar línea"
+                        @onclick="() => RemoveLine(column, line)">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+
+        </div>;
+
+
+    private List<ReportHeaderLineConfiguration> Lines(
+        ReportHeaderColumnConfiguration? column) =>
+        column?.Lines ?? _header.Lines;
+
+
+    private void AddPresetLine(
+        LinePreset preset) =>
         AddHeaderLine(
-            preset.Prefix + (token ?? string.Empty),
+            preset.Prefix + (SuggestVariableToken(preset.Hints) ?? string.Empty),
             preset.Style);
-    }
+
+
+    private void AddPresetLine(
+        ReportHeaderColumnConfiguration column,
+        LinePreset preset) =>
+        AddHeaderLine(
+            column,
+            preset.Prefix + (SuggestVariableToken(preset.Hints) ?? string.Empty),
+            preset.Style);
 
 
     private void AddHeaderLine(
         string? text = null,
-        ReportHeaderLineStyle style = ReportHeaderLineStyle.Normal)
+        ReportHeaderLineStyle style = ReportHeaderLineStyle.Normal) =>
+        AddLineTo(_header.Lines, text, style);
+
+
+    private void AddHeaderLine(
+        ReportHeaderColumnConfiguration column,
+        string? text = null,
+        ReportHeaderLineStyle style = ReportHeaderLineStyle.Normal) =>
+        AddLineTo(column.Lines, text, style);
+
+
+    private void AddLineTo(
+        List<ReportHeaderLineConfiguration> lines,
+        string? text,
+        ReportHeaderLineStyle style)
     {
         var line =
             new ReportHeaderLineConfiguration
             {
-                Id = Guid.NewGuid().ToString("N")[..8],
+                Id = ShortId(),
                 Style = style,
-                Order = NextHeaderLineOrder()
+                Order = lines.Count == 0 ? 10 : lines.Max(x => x.Order) + 10
             };
 
-        line.TextKey =
-            ReportTextKeys.HeaderLine(line.Id);
+        line.TextKey = ReportTextKeys.HeaderLine(line.Id);
 
-        _header.Lines.Add(line);
+        lines.Add(line);
 
         if (!string.IsNullOrWhiteSpace(text))
-        {
-            _texts.SetText(
-                line.TextKey,
-                text);
-        }
+            _texts.SetText(line.TextKey, text);
     }
 
 
-    private int NextHeaderLineOrder() =>
-        _header.Lines.Count == 0
-            ? 10
-            : _header.Lines.Max(x => x.Order) + 10;
-
-
-    private void RemoveHeaderLine(
-        ReportHeaderLineConfiguration line)
-    {
-        // El texto se queda en el diccionario a propósito: borrar recursos
-        // desde aquí dejaría huérfanas las traducciones de otros idiomas.
-        _header.Lines =
-            OrderedHeaderLines
-                .Where(x => !ReferenceEquals(x, line))
-                .ToList();
-
-        NormalizeHeaderLineOrders();
-    }
-
-
-    private bool CanMoveHeaderLine(
+    private static bool CanMoveLine(
+        List<ReportHeaderLineConfiguration> lines,
         ReportHeaderLineConfiguration line,
         int direction)
     {
-        var ordered =
-            OrderedHeaderLines.ToList();
+        var ordered = lines.OrderBy(x => x.Order).ToList();
+        var index = ordered.IndexOf(line);
+        var target = index + direction;
 
-        var index =
-            ordered.IndexOf(line);
-
-        var target =
-            index + direction;
-
-        return index >= 0 &&
-               target >= 0 &&
-               target < ordered.Count;
+        return index >= 0 && target >= 0 && target < ordered.Count;
     }
 
 
-    private void MoveHeaderLine(
+    private void MoveLine(
+        ReportHeaderColumnConfiguration? column,
         ReportHeaderLineConfiguration line,
         int direction)
     {
-        var ordered =
-            OrderedHeaderLines.ToList();
+        var ordered = Lines(column).OrderBy(x => x.Order).ToList();
+        var index = ordered.IndexOf(line);
+        var target = index + direction;
 
-        var index =
-            ordered.IndexOf(line);
-
-        var target =
-            index + direction;
-
-        if (index < 0 ||
-            target < 0 ||
-            target >= ordered.Count)
-        {
+        if (index < 0 || target < 0 || target >= ordered.Count)
             return;
-        }
 
-        (ordered[index], ordered[target]) =
-            (ordered[target], ordered[index]);
+        (ordered[index], ordered[target]) = (ordered[target], ordered[index]);
 
-        _header.Lines = ordered;
-
-        NormalizeHeaderLineOrders();
+        SetLines(column, ordered);
     }
 
 
     /// <summary>
-    /// Renumera siguiendo el orden actual de la lista, que es el que acaban
-    /// de dejar mover o quitar.
+    /// El texto se queda en el diccionario a propósito: borrarlo desde aquí
+    /// dejaría huérfanas las traducciones de otros idiomas.
     /// </summary>
-    private void NormalizeHeaderLineOrders()
+    private void RemoveLine(
+        ReportHeaderColumnConfiguration? column,
+        ReportHeaderLineConfiguration line) =>
+        SetLines(
+            column,
+            Lines(column)
+                .Where(x => !ReferenceEquals(x, line))
+                .OrderBy(x => x.Order)
+                .ToList());
+
+
+    private void SetLines(
+        ReportHeaderColumnConfiguration? column,
+        List<ReportHeaderLineConfiguration> lines)
     {
-        for (var i = 0; i < _header.Lines.Count; i++)
-            _header.Lines[i].Order = (i + 1) * 10;
+        for (var i = 0; i < lines.Count; i++)
+            lines[i].Order = (i + 1) * 10;
+
+        if (column is null)
+            _header.Lines = lines;
+        else
+            column.Lines = lines;
     }
 
 
-    private IEnumerable<ReportHeaderLineConfiguration> OrderedColumnHeaderLines(
-        ReportHeaderColumnConfiguration column) =>
-        column.Lines.OrderBy(x => x.Order);
+    private void HeaderLineTextChanged(
+        ReportHeaderLineConfiguration line,
+        ChangeEventArgs e)
+    {
+        line.TextKey ??= ReportTextKeys.HeaderLine(line.Id);
+        _texts.SetText(line.TextKey, e.Value?.ToString());
+    }
+
+
+    private void HeaderLineStyleChanged(
+        ReportHeaderLineConfiguration line,
+        ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ReportHeaderLineStyle>(e.Value?.ToString(), out var style))
+            line.Style = style;
+    }
+
+
+    private Task InsertHeaderLineVariableAsync(
+        ReportHeaderLineConfiguration line,
+        ReportVariable variable)
+    {
+        line.TextKey ??= ReportTextKeys.HeaderLine(line.Id);
+        _texts.SetText(line.TextKey, AppendToken(KeyText(line.TextKey), variable.Key));
+        return Task.CompletedTask;
+    }
 
 
     /// <summary>
-    /// Activar columnas es una migración explícita del bloque que se está
-    /// editando: las líneas actuales pasan a la primera columna y se crea una
-    /// segunda vacía. Mientras el usuario no pulse aquí, el JSON legacy no
-    /// cambia y el renderer sigue usando exactamente el camino anterior.
+    /// Activar columnas: las líneas actuales pasan a la primera columna y se
+    /// crea una segunda vacía. Mientras no se pulse, el JSON no cambia y el
+    /// documento sigue usando el camino de una sola lista.
     /// </summary>
     private void EnableHeaderColumns()
     {
@@ -1322,12 +1703,7 @@
         var first = CreateHeaderColumn(50);
         first.Lines = _header.Lines;
 
-        _header.Columns =
-        [
-            first,
-            CreateHeaderColumn(50)
-        ];
-
+        _header.Columns = [first, CreateHeaderColumn(50)];
         _header.Lines = [];
     }
 
@@ -1337,11 +1713,12 @@
         if (_header.Columns.Count == 0)
             return;
 
-        _header.Lines = _header.Columns
-            .SelectMany(x => x.Lines.OrderBy(line => line.Order))
-            .ToList();
+        SetLines(
+            null,
+            _header.Columns
+                .SelectMany(x => x.Lines.OrderBy(line => line.Order))
+                .ToList());
 
-        NormalizeHeaderLineOrders();
         _header.Columns = [];
     }
 
@@ -1360,7 +1737,7 @@
         int width) =>
         new()
         {
-            Id = Guid.NewGuid().ToString("N")[..8],
+            Id = ShortId(),
             Width = width,
             Align = ReportHorizontalAlignment.Left
         };
@@ -1372,8 +1749,6 @@
         if (_header.Columns.Count <= 1)
             return;
 
-        // Igual que al borrar una línea, los resources no se eliminan aquí:
-        // podrían existir traducciones en culturas que no están cargadas.
         _header.Columns.Remove(column);
         DistributeHeaderColumnWidths();
     }
@@ -1388,23 +1763,16 @@
         var remainder = 100 - (width * _header.Columns.Count);
 
         for (var i = 0; i < _header.Columns.Count; i++)
-        {
-            _header.Columns[i].Width =
-                width + (i == _header.Columns.Count - 1 ? remainder : 0);
-        }
+            _header.Columns[i].Width = width + (i == _header.Columns.Count - 1 ? remainder : 0);
     }
 
 
-    private void HeaderColumnAlignmentChanged(
+    private static void HeaderColumnAlignmentChanged(
         ReportHeaderColumnConfiguration column,
         ChangeEventArgs e)
     {
-        if (Enum.TryParse<ReportHorizontalAlignment>(
-                e.Value?.ToString(),
-                out var alignment))
-        {
+        if (Enum.TryParse<ReportHorizontalAlignment>(e.Value?.ToString(), out var alignment))
             column.Align = alignment;
-        }
     }
 
 
@@ -1412,401 +1780,275 @@
         ReportHeaderColumnConfiguration column,
         ChangeEventArgs e)
     {
-        if (!int.TryParse(e.Value?.ToString(), out var width))
-            return;
-
-        column.Width = Math.Clamp(width, 10, 100);
+        if (int.TryParse(e.Value?.ToString(), out var width))
+            column.Width = Math.Clamp(width, 10, 100);
     }
 
 
-    private void AddPresetLine(
-        ReportHeaderColumnConfiguration column,
-        HeaderLinePreset preset)
-    {
-        var token = SuggestVariableToken(preset.Hints);
+    // --------------------------------------------------------------- pie
 
-        AddHeaderLine(
-            column,
-            preset.Prefix + (token ?? string.Empty),
-            preset.Style);
+    private void FooterTextChanged(ChangeEventArgs e)
+    {
+        _footer.TextKey ??= NewKey(ReportTextKeys.BlockText);
+        _texts.SetText(_footer.TextKey, e.Value?.ToString());
     }
 
 
-    private void AddHeaderLine(
-        ReportHeaderColumnConfiguration column,
-        string? text = null,
-        ReportHeaderLineStyle style = ReportHeaderLineStyle.Normal)
+    private Task InsertFooterVariableAsync(ReportVariable variable)
     {
-        var line =
-            new ReportHeaderLineConfiguration
-            {
-                Id = Guid.NewGuid().ToString("N")[..8],
-                Style = style,
-                Order = column.Lines.Count == 0
-                    ? 10
-                    : column.Lines.Max(x => x.Order) + 10
-            };
-
-        line.TextKey =
-            ReportTextKeys.HeaderLine(line.Id);
-
-        column.Lines.Add(line);
-
-        if (!string.IsNullOrWhiteSpace(text))
-            _texts.SetText(line.TextKey, text);
-    }
-
-
-    private static bool CanMoveHeaderLine(
-        ReportHeaderColumnConfiguration column,
-        ReportHeaderLineConfiguration line,
-        int direction)
-    {
-        var ordered =
-            column.Lines
-                .OrderBy(x => x.Order)
-                .ToList();
-
-        var index = ordered.IndexOf(line);
-        var target = index + direction;
-
-        return index >= 0 &&
-               target >= 0 &&
-               target < ordered.Count;
-    }
-
-
-    private static void MoveHeaderLine(
-        ReportHeaderColumnConfiguration column,
-        ReportHeaderLineConfiguration line,
-        int direction)
-    {
-        var ordered =
-            column.Lines
-                .OrderBy(x => x.Order)
-                .ToList();
-
-        var index = ordered.IndexOf(line);
-        var target = index + direction;
-
-        if (index < 0 ||
-            target < 0 ||
-            target >= ordered.Count)
-        {
-            return;
-        }
-
-        (ordered[index], ordered[target]) =
-            (ordered[target], ordered[index]);
-
-        column.Lines = ordered;
-
-        for (var i = 0; i < column.Lines.Count; i++)
-            column.Lines[i].Order = (i + 1) * 10;
-    }
-
-
-    private static void RemoveHeaderLine(
-        ReportHeaderColumnConfiguration column,
-        ReportHeaderLineConfiguration line)
-    {
-        column.Lines = column.Lines
-            .Where(x => !ReferenceEquals(x, line))
-            .OrderBy(x => x.Order)
-            .ToList();
-
-        for (var i = 0; i < column.Lines.Count; i++)
-            column.Lines[i].Order = (i + 1) * 10;
-    }
-
-
-    private string HeaderLineText(
-        ReportHeaderLineConfiguration line) =>
-        BlockText(line.TextKey);
-
-
-    private void HeaderLineTextChanged(
-        ReportHeaderLineConfiguration line,
-        ChangeEventArgs e)
-    {
-        line.TextKey ??=
-            ReportTextKeys.HeaderLine(line.Id);
-
-        _texts.SetText(
-            line.TextKey,
-            e.Value?.ToString());
-    }
-
-
-    private void HeaderLineStyleChanged(
-        ReportHeaderLineConfiguration line,
-        ChangeEventArgs e)
-    {
-        if (Enum.TryParse<ReportHeaderLineStyle>(
-                e.Value?.ToString(),
-                out var style))
-        {
-            line.Style = style;
-        }
-    }
-
-
-    private Task InsertHeaderLineVariableAsync(
-        ReportHeaderLineConfiguration line,
-        ReportVariable variable)
-    {
-        line.TextKey ??=
-            ReportTextKeys.HeaderLine(line.Id);
-
-        _texts.SetText(
-            line.TextKey,
-            AppendVariable(
-                HeaderLineText(line),
-                variable.Key));
-
+        _footer.TextKey ??= NewKey(ReportTextKeys.BlockText);
+        _texts.SetText(_footer.TextKey, AppendToken(KeyText(_footer.TextKey), variable.Key));
         return Task.CompletedTask;
     }
 
 
-    private void FooterTextChanged(
-        ChangeEventArgs e)
-    {
-        if (string.IsNullOrWhiteSpace(_id))
-            return;
+    // ------------------------------------------------------------- texto
 
-        _footer.TextKey =
-            ReportTextKeys.BlockText(_id.Trim());
-
-        _texts.SetText(
-            _footer.TextKey,
-            e.Value?.ToString());
-    }
+    private ReportHorizontalAlignment TextAlignment =>
+        _text.Alignment ?? ReportHorizontalAlignment.Left;
 
 
-    private void FooterGenerationDateChanged(
-        ChangeEventArgs e)
-    {
-        _footer.ShowGenerationDate =
-            e.Value is bool value &&
-            value;
-    }
-
-
-    private void FooterPageNumberChanged(
-        ChangeEventArgs e)
-    {
-        _footer.ShowPageNumber =
-            e.Value is bool value &&
-            value;
-    }
-
-    private Task InsertSubtitleVariableAsync(
-        ReportVariable variable)
-    {
-        if (string.IsNullOrWhiteSpace(_id))
-            return Task.CompletedTask;
-
-        _header.SubtitleKey =
-            ReportTextKeys.BlockSubtitle(_id.Trim());
-
-        _texts.SetText(
-            _header.SubtitleKey,
-            $"{{{{{variable.Key}}}}}");
-
-        return Task.CompletedTask;
-    }
-
-    private Task InsertLogoVariableAsync(
-        ReportVariable variable)
-    {
-        _header.LogoUrl =
-            $"{{{{{variable.Key}}}}}";
-
-        return Task.CompletedTask;
-    }
-
-    private Task InsertFooterTextVariableAsync(
-        ReportVariable variable)
-    {
-        if (string.IsNullOrWhiteSpace(_id))
-            return Task.CompletedTask;
-
-        _footer.TextKey =
-            ReportTextKeys.BlockText(_id.Trim());
-
-        _texts.SetText(
-            _footer.TextKey,
-            $"{{{{{variable.Key}}}}}");
-
-        return Task.CompletedTask;
-    }
-
-    private string? TextBlockTitleKey =>
-        string.IsNullOrWhiteSpace(_id)
-            ? null
-            : ReportTextKeys.BlockTitle(_id.Trim());
-
-    private string? TextBlockTextKey =>
-        string.IsNullOrWhiteSpace(_id)
-            ? null
-            : ReportTextKeys.BlockText(_id.Trim());
-
-    private string TextBlockTitleValue =>
-        BlockText(
-            TextBlockTitleKey,
-            _text.Title ?? string.Empty);
-
-    private string TextBlockTextValue =>
-        BlockText(
-            TextBlockTextKey,
-            _text.Text);
-
-
+    /// <summary>
+    /// El bloque de texto guarda además el literal (Title / Text) como
+    /// semilla: es lo que se ve si la clave no tiene valor en un idioma.
+    /// </summary>
     private void TextTitleChanged(ChangeEventArgs e)
     {
         var value = Normalize(e.Value?.ToString());
 
+        _text.TitleKey ??= NewKey(ReportTextKeys.BlockTitle);
         _text.Title = value;
-
-        if (TextBlockTitleKey is null)
-            return;
-
-        _text.TitleKey = TextBlockTitleKey;
-
-        _texts.SetText(
-            _text.TitleKey,
-            value);
+        _texts.SetText(_text.TitleKey, value);
     }
+
 
     private void TextContentChanged(ChangeEventArgs e)
     {
         var value = e.Value?.ToString() ?? string.Empty;
 
+        _text.TextKey ??= NewKey(ReportTextKeys.BlockText);
         _text.Text = value;
-
-        if (TextBlockTextKey is null)
-            return;
-
-        _text.TextKey = TextBlockTextKey;
-
-        _texts.SetText(
-            _text.TextKey,
-            value);
-    }
-
-    private void TextStyleChanged(ChangeEventArgs e)
-    {
-        if (Enum.TryParse<ReportTextBlockStyle>(
-                e.Value?.ToString(),
-                out var style))
-        {
-            _text.Style = style;
-        }
-    }
-
-    private string TextAlignmentValue =>
-        (_text.Alignment ?? ReportHorizontalAlignment.Left).ToString();
-
-
-    private void TextAlignmentChanged(ChangeEventArgs e)
-    {
-        if (Enum.TryParse<ReportHorizontalAlignment>(
-                e.Value?.ToString(),
-                out var alignment))
-        {
-            _text.Alignment = alignment;
-        }
+        _texts.SetText(_text.TextKey, value);
     }
 
 
     private Task InsertTextTitleVariableAsync(ReportVariable variable)
     {
-        var value = AppendVariable(TextBlockTitleValue, variable.Key);
+        _text.TitleKey ??= NewKey(ReportTextKeys.BlockTitle);
+
+        var value = AppendToken(KeyText(_text.TitleKey, _text.Title ?? string.Empty), variable.Key);
 
         _text.Title = value;
-
-        if (TextBlockTitleKey is not null)
-        {
-            _text.TitleKey = TextBlockTitleKey;
-            _texts.SetText(_text.TitleKey, value);
-        }
+        _texts.SetText(_text.TitleKey, value);
 
         return Task.CompletedTask;
     }
+
 
     private Task InsertTextVariableAsync(ReportVariable variable)
     {
-        var value = AppendVariable(TextBlockTextValue, variable.Key);
+        _text.TextKey ??= NewKey(ReportTextKeys.BlockText);
+
+        var value = AppendToken(KeyText(_text.TextKey, _text.Text), variable.Key);
 
         _text.Text = value;
-
-        if (TextBlockTextKey is not null)
-        {
-            _text.TextKey = TextBlockTextKey;
-            _texts.SetText(_text.TextKey, value);
-        }
+        _texts.SetText(_text.TextKey, value);
 
         return Task.CompletedTask;
     }
 
-    private static string AppendVariable(string? current, string key)
+
+    // ------------------------------------------------------ campos fijos
+
+    private IEnumerable<ReportFixedFieldConfiguration> OrderedFixedFields =>
+        _fields.Fields.OrderBy(x => x.Order);
+
+
+    private void FieldsTitleChanged(ChangeEventArgs e)
     {
-        var token = $"{{{{{key}}}}}";
-
-        if (string.IsNullOrEmpty(current))
-            return token;
-
-        return current.EndsWith(' ')
-            ? current + token
-            : current + " " + token;
+        _fields.TitleKey ??= NewKey(ReportTextKeys.BlockTitle);
+        _texts.SetText(_fields.TitleKey, e.Value?.ToString());
     }
 
 
-    private void PrepareConfigurationForSave(
-        string blockId)
+    private Task InsertFieldsTitleVariableAsync(ReportVariable variable)
     {
-        if (_type == ReportBlockType.Header)
-        {
-            _header.TitleKey ??= ReportTextKeys.BlockTitle(blockId);
-            _header.SubtitleKey ??= ReportTextKeys.BlockSubtitle(blockId);
+        _fields.TitleKey ??= NewKey(ReportTextKeys.BlockTitle);
+        _texts.SetText(_fields.TitleKey, AppendToken(KeyText(_fields.TitleKey), variable.Key));
+        return Task.CompletedTask;
+    }
 
-            foreach (var line in _header.Lines)
-                line.TextKey ??= ReportTextKeys.HeaderLine(line.Id);
 
-            foreach (var column in _header.Columns)
+    private void AddFixedField(
+        LinePreset? preset)
+    {
+        var field =
+            new ReportFixedFieldConfiguration
             {
-                foreach (var line in column.Lines)
-                    line.TextKey ??= ReportTextKeys.HeaderLine(line.Id);
-            }
+                Id = ShortId(),
+                Order = _fields.Fields.Count == 0 ? 10 : _fields.Fields.Max(x => x.Order) + 10
+            };
 
+        field.LabelKey = ReportTextKeys.BlockFieldLabel(field.Id);
+        field.ValueKey = ReportTextKeys.BlockFieldValue(field.Id);
+
+        _fields.Fields.Add(field);
+
+        if (preset is null)
             return;
-        }
 
-        if (_type == ReportBlockType.Footer)
+        _texts.SetText(field.LabelKey, preset.Label);
+
+        var token = SuggestVariableToken(preset.Hints);
+
+        if (token is not null)
+            _texts.SetText(field.ValueKey, token);
+    }
+
+
+    private void FixedFieldLabelChanged(
+        ReportFixedFieldConfiguration field,
+        ChangeEventArgs e)
+    {
+        field.LabelKey ??= ReportTextKeys.BlockFieldLabel(field.Id);
+        _texts.SetText(field.LabelKey, e.Value?.ToString());
+    }
+
+
+    private void FixedFieldValueChanged(
+        ReportFixedFieldConfiguration field,
+        ChangeEventArgs e)
+    {
+        field.ValueKey ??= ReportTextKeys.BlockFieldValue(field.Id);
+        _texts.SetText(field.ValueKey, e.Value?.ToString());
+    }
+
+
+    private Task InsertFixedFieldVariableAsync(
+        ReportFixedFieldConfiguration field,
+        ReportVariable variable)
+    {
+        field.ValueKey ??= ReportTextKeys.BlockFieldValue(field.Id);
+        _texts.SetText(field.ValueKey, AppendToken(KeyText(field.ValueKey), variable.Key));
+        return Task.CompletedTask;
+    }
+
+
+    private bool CanMoveFixedField(
+        ReportFixedFieldConfiguration field,
+        int direction)
+    {
+        var ordered = OrderedFixedFields.ToList();
+        var index = ordered.IndexOf(field);
+        var target = index + direction;
+
+        return index >= 0 && target >= 0 && target < ordered.Count;
+    }
+
+
+    private void MoveFixedField(
+        ReportFixedFieldConfiguration field,
+        int direction)
+    {
+        var ordered = OrderedFixedFields.ToList();
+        var index = ordered.IndexOf(field);
+        var target = index + direction;
+
+        if (index < 0 || target < 0 || target >= ordered.Count)
+            return;
+
+        (ordered[index], ordered[target]) = (ordered[target], ordered[index]);
+
+        SetFixedFields(ordered);
+    }
+
+
+    private void RemoveFixedField(
+        ReportFixedFieldConfiguration field) =>
+        SetFixedFields(
+            OrderedFixedFields
+                .Where(x => !ReferenceEquals(x, field))
+                .ToList());
+
+
+    private void SetFixedFields(
+        List<ReportFixedFieldConfiguration> fields)
+    {
+        for (var i = 0; i < fields.Count; i++)
+            fields[i].Order = (i + 1) * 10;
+
+        _fields.Fields = fields;
+    }
+
+
+    private void FieldsLayoutChanged(
+        ReportSectionGridLayout layout)
+    {
+        // Lista es lo de por defecto: se guarda nulo.
+        _fields.Layout = layout.IsList ? null : layout.Layout;
+        _fields.Columns = layout.StoredColumns;
+    }
+
+
+    // ----------------------------------------------------------- guardar
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave)
         {
-            _footer.TextKey ??= ReportTextKeys.BlockText(blockId);
+            Toasts.Warning("Ponle un nombre al bloque antes de guardarlo.");
             return;
         }
 
-        if (_type != ReportBlockType.Text)
+        var blockId = _id.Trim();
+
+        if (!IsEditMode &&
+            _existingBlocks.Any(x => string.Equals(x.Id, blockId, StringComparison.OrdinalIgnoreCase)))
+        {
+            Toasts.Warning($"Ya existe un bloque con el identificador '{blockId}'. Cámbialo en Avanzado.");
             return;
+        }
 
-        var title = TextBlockTitleValue;
-        var text = TextBlockTextValue;
+        _saving = true;
 
-        _text.TitleKey = ReportTextKeys.BlockTitle(blockId);
-        _text.TextKey = ReportTextKeys.BlockText(blockId);
+        try
+        {
+            var block =
+                new ReportBlock
+                {
+                    Id = blockId,
+                    Name = _name.Trim(),
+                    Type = _type,
+                    ConfigurationJson = ConfigurationJson
+                };
 
-        _text.Title = title;
-        _text.Text = text;
+            var saved = await Toasts.RunApiAsync(
+                () => RenderSetApi.SaveBlockAsync(
+                    CurrentTenant.Id,
+                    block.Id,
+                    block),
+                errorTitle: "No se ha podido guardar el bloque");
 
-        _texts.SetText(
-            _text.TitleKey,
-            title);
+            if (!saved)
+                return;
 
-        _texts.SetText(
-            _text.TextKey,
-            text);
+            if (!await SaveTextsAsync())
+                return;
+
+            Toasts.Success("Bloque guardado.");
+
+            Navigation.NavigateTo("/blocks");
+        }
+        catch (Exception exception)
+        {
+            Toasts.Error(
+                ToastServiceExtensions.Describe(exception),
+                "No se ha podido guardar el bloque");
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
 
@@ -1828,12 +2070,97 @@
     }
 
 
-    private static string? Normalize(
-        string? value)
+    private void GoBack() =>
+        Navigation.NavigateTo("/blocks");
+
+
+    // ------------------------------------------------------------- utils
+
+    private static T Deserialize<T>(
+        string? json)
+        where T : new()
     {
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim();
+        if (string.IsNullOrWhiteSpace(json))
+            return new T();
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, JsonOptions) ?? new T();
+        }
+        catch (JsonException)
+        {
+            return new T();
+        }
     }
 
+
+    private static string AppendToken(
+        string? current,
+        string key)
+    {
+        var token = $"{{{{{key}}}}}";
+
+        if (string.IsNullOrEmpty(current))
+            return token;
+
+        return current.EndsWith(' ')
+            ? current + token
+            : current + " " + token;
+    }
+
+
+    private static string ShortId() =>
+        Guid.NewGuid().ToString("N")[..8];
+
+
+    private static string? Normalize(
+        string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+
+
+    /// <summary>
+    /// Id legible y estable: sin acentos, sin espacios y en minúsculas.
+    /// </summary>
+    private static string Slug(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized =
+            value
+                .Trim()
+                .ToLowerInvariant()
+                .Normalize(NormalizationForm.FormD);
+
+        var builder = new StringBuilder();
+        var lastWasSeparator = false;
+
+        foreach (var character in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+                continue;
+
+            if (char.IsAsciiLetterOrDigit(character))
+            {
+                builder.Append(character);
+                lastWasSeparator = false;
+                continue;
+            }
+
+            if (lastWasSeparator || builder.Length == 0)
+                continue;
+
+            builder.Append('-');
+            lastWasSeparator = true;
+        }
+
+        var slug = builder.ToString().Trim('-');
+
+        return slug.Length > 60
+            ? slug[..60].Trim('-')
+            : slug;
+    }
 }

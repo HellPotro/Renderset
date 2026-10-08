@@ -1,0 +1,9 @@
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using Renderset.Web.Components.Account.Shared
+
+@* Páginas estáticas: escriben la cookie de sesión, cosa que un circuito de
+   Blazor no puede hacer. *@
+@attribute [ExcludeFromInteractiveRouting]
+@attribute [AllowAnonymous]
+@layout Renderset.Web.Components.Account.Shared.AccountLayout

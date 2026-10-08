@@ -1,6 +1,8 @@
 ﻿@using System.Text.Json
 @using Renderset.Core.Configurations
 @using Renderset.Core.Data
+@using Renderset.Core.Definitions
+@using Renderset.Core.Rendering
 @using Renderset.Core.Resolved
 
 @if (Section.Visible)
@@ -35,7 +37,8 @@
         }
         else
         {
-            <div class="@GetGridClass()">
+            <div class="@GridClass"
+                 style="@GridStyle">
 
                 @foreach (var field in visibleFields)
                 {
@@ -68,18 +71,23 @@
     private readonly IReportDataAccessor _dataAccessor =
         new JsonReportDataAccessor();
 
-    private string GetGridClass()
-    {
-        var columns = Section.Layout switch
-        {
-            ReportSectionLayout.Columns2 => 2,
-            ReportSectionLayout.Columns3 => 3,
-            ReportSectionLayout.Columns4 => 4,
-            _ => 1
-        };
+    private int Columns =>
+        Math.Clamp(
+            Section.Columns,
+            ReportSectionGrid.MinColumns,
+            ReportSectionGrid.MaxColumns);
 
-        return $"dynamic-report-grid dynamic-report-grid-{columns}";
-    }
+    /// <summary>
+    /// El número de columnas va en una variable CSS y no en una clase por
+    /// valor: así sirve cualquier N sin repetir reglas en la hoja.
+    /// </summary>
+    private string GridStyle =>
+        $"--report-grid-columns:{Columns};";
+
+    private string GridClass =>
+        Columns >= ReportSectionGrid.DenseFromColumns
+            ? "dynamic-report-grid is-dense"
+            : "dynamic-report-grid";
 
     private string FormatValue(
         ResolvedReportField field)
@@ -93,25 +101,6 @@
             return string.Empty;
         }
 
-        return field.Type switch
-        {
-            ReportFieldType.Date when value is DateTime date
-                => date.ToString("dd/MM/yyyy"),
-
-            ReportFieldType.Currency when value is decimal number
-                => number.ToString("N2"),
-
-            ReportFieldType.Number when value is decimal number
-                => number.ToString("N2"),
-
-            ReportFieldType.Percentage when value is decimal number
-                => $"{number:N2} %",
-
-            ReportFieldType.Boolean when value is bool boolean
-                => boolean ? "Sí" : "No",
-
-            _ =>
-                value.ToString() ?? string.Empty
-        };
+        return ReportValueFormatter.Format(value, field.Type);
     }
 }

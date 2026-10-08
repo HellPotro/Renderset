@@ -178,6 +178,138 @@ public sealed class EfReportPresetAssignmentRepository
             cancellationToken);
     }
 
+    public async Task<int> SaveManyAsync(
+        string tenantId,
+        IReadOnlyCollection<ReportPresetAssignment> assignments,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(assignments);
+
+        if (assignments.Count == 0)
+            return 0;
+
+        await using var context =
+            await _contextFactory.CreateDbContextAsync(
+                cancellationToken);
+
+        // Una consulta por report, no una por fila: un CSV de quinientos
+        // clientes son quinientas filas del mismo report.
+        var reportIds =
+            assignments
+                .Select(x => x.ReportId)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+        var existing =
+            await context.ReportPresetAssignments
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    reportIds.Contains(x.ReportId))
+                .ToListAsync(cancellationToken);
+
+        var now = DateTime.UtcNow;
+        var saved = 0;
+
+        foreach (var assignment in assignments)
+        {
+            var entity =
+                existing.FirstOrDefault(x =>
+                    string.Equals(x.ReportId, assignment.ReportId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(x.ContextType, assignment.ContextType, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(x.ContextKey, assignment.ContextKey, StringComparison.OrdinalIgnoreCase));
+
+            if (entity is null)
+            {
+                entity =
+                    new ReportPresetAssignmentEntity
+                    {
+                        TenantId = tenantId,
+                        ReportId = assignment.ReportId,
+                        ContextType = assignment.ContextType,
+                        ContextKey = assignment.ContextKey,
+                        PresetId = assignment.PresetId,
+                        Active = true,
+                        CreatedAtUtc = now
+                    };
+
+                context.ReportPresetAssignments.Add(entity);
+                existing.Add(entity);
+            }
+            else
+            {
+                entity.PresetId = assignment.PresetId;
+                entity.Active = true;
+                entity.UpdatedAtUtc = now;
+            }
+
+            saved++;
+        }
+
+        await context.SaveChangesAsync(
+            cancellationToken);
+
+        return saved;
+    }
+
+    public async Task<bool> DeleteAsync(
+        string tenantId,
+        long assignmentId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context =
+            await _contextFactory.CreateDbContextAsync(
+                cancellationToken);
+
+        var entity =
+            await context.ReportPresetAssignments
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.TenantId == tenantId &&
+                        x.AssignmentId == assignmentId &&
+                        x.Active,
+                    cancellationToken);
+
+        if (entity is null)
+            return false;
+
+        // Se borra de verdad: el índice único por contexto no deja crear
+        // otra asignación igual mientras la fila exista, y SaveAsync ya
+        // reactiva las inactivas, así que una baja lógica no aporta nada.
+        context.ReportPresetAssignments.Remove(entity);
+
+        await context.SaveChangesAsync(
+            cancellationToken);
+
+        return true;
+    }
+
+    public async Task<int> DeleteByPresetAsync(
+        string tenantId,
+        string presetId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context =
+            await _contextFactory.CreateDbContextAsync(
+                cancellationToken);
+
+        var entities =
+            await context.ReportPresetAssignments
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.PresetId == presetId)
+                .ToListAsync(cancellationToken);
+
+        if (entities.Count == 0)
+            return 0;
+
+        context.ReportPresetAssignments.RemoveRange(entities);
+
+        await context.SaveChangesAsync(
+            cancellationToken);
+
+        return entities.Count;
+    }
+
     #region Mapping
 
     private static ReportPresetAssignment ToModel(

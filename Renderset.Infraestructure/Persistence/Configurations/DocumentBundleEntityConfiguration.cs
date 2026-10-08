@@ -49,6 +49,9 @@ public sealed class DocumentBundleEntityConfiguration
         builder.Property(x => x.AccessCount)
             .HasDefaultValue(0);
 
+        builder.Property(x => x.AllowDataDownload)
+            .HasDefaultValue(false);
+
         builder.HasOne(x => x.Tenant)
             .WithMany()
             .HasForeignKey(x => x.TenantId)

@@ -33,18 +33,6 @@
     gap: 10px;
 }
 
-.dict-scope {
-    min-width: 260px;
-    height: 36px;
-    padding: 0 11px;
-    border: 1px solid #d8e1e5;
-    border-radius: 7px;
-    background: #fff;
-    color: #23333c;
-    font-size: 12.5px;
-    font-weight: 600;
-}
-
 /* --------------------------------------------------------- mensajeria */
 
 .dict-error,
@@ -71,7 +59,7 @@
 
 .dict-newkey {
     display: grid;
-    grid-template-columns: minmax(220px, 1fr) minmax(220px, 2fr) auto;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) auto;
     align-items: end;
     gap: 14px;
     margin-bottom: 16px;
@@ -90,8 +78,9 @@
 
 .dict-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 16px;
+    gap: 12px 16px;
     margin-bottom: 12px;
 }
 
@@ -137,117 +126,6 @@
     margin-left: auto;
     color: #8a99a1;
     font-size: 12px;
-}
-
-/* --------------------------------------------------- chips de idioma */
-
-.dict-langs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 14px;
-}
-
-.dict-chip {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 190px;
-    padding: 7px 12px 7px 9px;
-    border: 1px solid #dfe7ea;
-    border-radius: 999px;
-    background: #f7fafb;
-    color: #8a99a1;
-    cursor: pointer;
-    transition: border-color .15s ease, background-color .15s ease, color .15s ease;
-}
-
-    .dict-chip:hover:not(:disabled) {
-        border-color: #c3d2d8;
-        background: #fff;
-    }
-
-    .dict-chip.is-on {
-        border-color: #173d4f;
-        background: #fff;
-        color: #23333c;
-    }
-
-    .dict-chip.is-base {
-        border-color: #b9d4c4;
-        background: #f2f8f4;
-        color: #23333c;
-        cursor: default;
-    }
-
-.dict-chip-check {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    border: 1px solid #cfdae0;
-    border-radius: 50%;
-    background: #fff;
-    font-size: 8px;
-    color: #fff;
-}
-
-.dict-chip.is-on .dict-chip-check {
-    border-color: #173d4f;
-    background: #173d4f;
-}
-
-.dict-chip.is-base .dict-chip-check {
-    border-color: #3f7a5a;
-    background: #3f7a5a;
-}
-
-.dict-chip-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    text-align: left;
-}
-
-.dict-chip-name {
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.2;
-}
-
-    .dict-chip-name code {
-        margin-left: 5px;
-        color: #9aa9b1;
-        font-size: 10px;
-        font-weight: 500;
-    }
-
-.dict-chip-bar {
-    display: block;
-    height: 3px;
-    border-radius: 999px;
-    background: #dde6e9;
-    overflow: hidden;
-}
-
-    .dict-chip-bar span {
-        display: block;
-        height: 100%;
-        border-radius: 999px;
-        background: #3f7a5a;
-        transition: width .2s ease;
-    }
-
-.dict-chip:not(.is-on):not(.is-base) .dict-chip-bar span {
-    background: #b9c5ca;
-}
-
-.dict-chip-pct {
-    font-size: 11px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------- matriz */
@@ -347,116 +225,123 @@ thead .dict-col-key {
     font-size: 10.5px;
 }
 
-.dict-lang-base {
-    margin-top: 6px;
-    color: #3f7a5a;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: .4px;
-    text-transform: uppercase;
-}
+/* Todo lo de un idioma en su columna: nombre, cobertura, rellenar huecos
+   y ocultar. Antes había además una fila de chips encima de la tabla con
+   lo mismo repartido. */
 
-/* ------------------------------------------------ menu de relleno por idioma */
-
-.dict-lang-menu-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: #7c8b93;
-    cursor: pointer;
-    font-size: 12px;
-}
-
-    .dict-lang-menu-toggle:hover {
-        background: #e4ecee;
-        color: #23333c;
-    }
-
-/* El panel vive junto al chip y NO dentro de la tabla. La tabla necesita
-   overflow-x para el scroll horizontal, y CSS no permite recortar en un eje
-   y desbordar en el otro: en cuanto un eje es auto, el otro también recorta.
-   Dentro de la tabla el panel se cortaba por abajo en cuanto había pocas
-   filas. */
-
-.dict-chip-wrap {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
+.dict-lang-tools {
+    display: flex;
     gap: 2px;
 }
 
-.dict-lang-panel {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 20;
-    min-width: 230px;
-    padding: 10px 12px;
-    border: 1px solid #d8e1e5;
-    border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 8px 24px rgba(23, 43, 53, .12);
-}
-
-.dict-lang-panel-title {
-    display: block;
-    margin-bottom: 8px;
-    color: #7c8b93;
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: .4px;
-    text-transform: uppercase;
-}
-
-.dict-lang-panel-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 0;
-    font-size: 12px;
-    color: #3d4f58;
-}
-
-    .dict-lang-panel-row span {
-        flex: 1;
-    }
-
-    .dict-lang-panel-row button {
+    .dict-lang-tools button {
         width: 26px;
         height: 26px;
-        border: 1px solid #d8e1e5;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid transparent;
         border-radius: 6px;
-        background: #fff;
-        color: #4c5f68;
+        background: transparent;
+        color: #7c8b93;
         font-size: 11px;
         cursor: pointer;
     }
 
-        .dict-lang-panel-row button:hover:not(:disabled) {
-            border-color: #173d4f;
+        .dict-lang-tools button:hover,
+        .dict-lang-tools button.is-active {
+            border-color: #d8e1e5;
+            background: #fff;
             color: #173d4f;
         }
 
-        .dict-lang-panel-row button:disabled {
-            opacity: .45;
-            cursor: default;
-        }
+.dict-lang-coverage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    color: #4c5f68;
+    font-size: 10.5px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+    .dict-lang-coverage em {
+        margin-left: auto;
+        color: #3f7a5a;
+        font-size: 9.5px;
+        font-style: normal;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+    }
+
+.dict-lang-bar {
+    flex: 1;
+    max-width: 120px;
+    height: 4px;
+    border-radius: 999px;
+    background: #dde6e9;
+    overflow: hidden;
+}
+
+    .dict-lang-bar span {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+        background: #3f7a5a;
+        transition: width .2s ease;
+    }
 
 /* ------------------------------------------------------------- celdas */
 
 .dict-group td {
     padding: 9px 14px;
     background: #f9fbfc;
-    color: #7c8b93;
+    color: #5f727b;
     font-size: 10.5px;
     font-weight: 700;
     letter-spacing: .5px;
     text-transform: uppercase;
+}
+
+    .dict-group td i {
+        margin-right: 6px;
+        color: #8a99a1;
+    }
+
+    .dict-group td small {
+        margin-left: 10px;
+        color: #93a2a9;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0;
+        text-transform: none;
+    }
+
+.dict-group.is-preset td {
+    background: #f6f3fb;
+    color: #5b4a7a;
+}
+
+    .dict-group.is-preset td i {
+        color: #8a76ad;
+    }
+
+.dict-key-kind {
+    display: inline-block;
+    margin-bottom: 3px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #eef3f5;
+    color: #6e7f87;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+}
+
+tr.is-system .dict-col-key code {
+    color: #7c8b93;
 }
 
 .dict-cell {
@@ -514,8 +399,9 @@ thead .dict-col-key {
 }
 
 .dict-col-actions {
-    width: 48px;
+    width: 76px;
     text-align: right;
+    white-space: nowrap;
 }
 
     .dict-col-actions button {
@@ -529,10 +415,16 @@ thead .dict-col-key {
         cursor: pointer;
     }
 
-        .dict-col-actions button:hover {
+        .dict-col-actions button.is-delete:hover {
             border-color: #e6c3c3;
             background: #fdf4f4;
             color: #8c3a3a;
+        }
+
+        .dict-col-actions button.is-translate:hover {
+            border-color: #c3dbe6;
+            background: #f4fafd;
+            color: #2a5d72;
         }
 
 /* --------------------------------------------------- barra de guardado */
@@ -589,11 +481,6 @@ thead .dict-col-key {
         grid-template-columns: 1fr;
     }
 
-    .dict-chip {
-        flex: 1;
-        min-width: 150px;
-    }
-
     .dict-col-key {
         position: static;
         min-width: 180px;
@@ -614,4 +501,243 @@ thead .dict-col-key {
     height: 24px;
     color: #b6a06a;
     font-size: 10px;
+}
+
+
+/* ------------------------------------------------- navegación lateral */
+
+.dict-shell {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    align-items: start;
+    gap: 22px;
+}
+
+/* El menú lateral es el componente SideNav (Components/Shared). */
+
+.dict-main {
+    min-width: 0;
+}
+
+.dict-main-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px 20px;
+    margin-bottom: 14px;
+}
+
+    .dict-main-head h2 {
+        margin: 0;
+        color: #172b35;
+        font-size: 17px;
+        font-weight: 700;
+    }
+
+    .dict-main-head p {
+        margin: 4px 0 0;
+        color: #74858d;
+        font-size: 12.5px;
+    }
+
+/* Origen dentro de un report: base y cada preset. */
+.dict-origins {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.dict-origin {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 11px;
+    border: 1px solid #dfe7ea;
+    border-radius: 999px;
+    background: #fff;
+    color: #4c5f68;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .dict-origin i {
+        color: #8a99a1;
+        font-size: 10px;
+    }
+
+    .dict-origin span {
+        padding: 0 6px;
+        border-radius: 999px;
+        background: #eef3f5;
+        color: #6e7f87;
+        font-size: 10.5px;
+    }
+
+    .dict-origin.is-active {
+        border-color: #173d4f;
+        background: #173d4f;
+        color: #fff;
+    }
+
+        .dict-origin.is-active i {
+            color: #cfe0e8;
+        }
+
+        .dict-origin.is-active span {
+            background: rgba(255, 255, 255, .18);
+            color: #fff;
+        }
+
+/* Idiomas ocultos: se vuelven a mostrar desde aquí. */
+.dict-hidden-langs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: #8a99a1;
+    font-size: 11.5px;
+}
+
+    .dict-hidden-langs button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 9px;
+        border: 1px dashed #c8d5db;
+        border-radius: 999px;
+        background: #fff;
+        color: #4c5f68;
+        font-size: 11.5px;
+        cursor: pointer;
+    }
+
+        .dict-hidden-langs button:hover {
+            border-style: solid;
+            border-color: #173d4f;
+            color: #173d4f;
+        }
+
+        .dict-hidden-langs button i {
+            font-size: 10px;
+        }
+
+/* Panel de relleno: fuera de la tabla, porque dentro el scroll horizontal
+   lo recortaría. */
+.dict-fill {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid #c3dbe6;
+    border-radius: 9px;
+    background: #f4fafd;
+    color: #2a5d72;
+    font-size: 12.5px;
+}
+
+.dict-fill-title i {
+    margin-right: 6px;
+}
+
+.dict-fill-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 4px 3px 10px;
+    border: 1px solid #d5e5ec;
+    border-radius: 999px;
+    background: #fff;
+    color: #23333c;
+}
+
+    .dict-fill-source button {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 9px;
+        border: 0;
+        border-radius: 999px;
+        background: #eef4f7;
+        color: #173d4f;
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+        .dict-fill-source button:hover:not(:disabled) {
+            background: #173d4f;
+            color: #fff;
+        }
+
+        .dict-fill-source button:disabled {
+            opacity: .5;
+            cursor: default;
+        }
+
+.dict-fill-close {
+    margin-left: auto;
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #2a5d72;
+    cursor: pointer;
+}
+
+    .dict-fill-close:hover {
+        background: #e2f0f6;
+    }
+
+@media (max-width: 1100px) {
+
+    .dict-shell {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+
+/* ----------------------------------------- claves repetidas en presets */
+
+.dict-promote {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border: 1px solid #d9cfe9;
+    border-radius: 9px;
+    background: #f8f5fc;
+    color: #4a3d63;
+    font-size: 12.5px;
+}
+
+    .dict-promote > i {
+        color: #8a76ad;
+        font-size: 16px;
+    }
+
+    .dict-promote > div {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .dict-promote span {
+        color: #6e6385;
+        font-size: 11.5px;
+    }
+
+@media (max-width: 900px) {
+
+    .dict-promote {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }

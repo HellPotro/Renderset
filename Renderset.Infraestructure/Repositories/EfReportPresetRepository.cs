@@ -165,6 +165,38 @@ public sealed class EfReportPresetRepository
             cancellationToken);
     }
 
+    public async Task<bool> DeleteAsync(
+        string tenantId,
+        string presetId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context =
+            await _contextFactory.CreateDbContextAsync(
+                cancellationToken);
+
+        var entity =
+            await context.ReportPresets
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.TenantId == tenantId &&
+                        x.PresetId == presetId &&
+                        x.Active,
+                    cancellationToken);
+
+        if (entity is null)
+            return false;
+
+        // Baja lógica, como los temas: la fila se queda y un preset nuevo
+        // con el mismo id la reactiva.
+        entity.Active = false;
+        entity.UpdatedAtUtc = DateTime.UtcNow;
+
+        await context.SaveChangesAsync(
+            cancellationToken);
+
+        return true;
+    }
+
     #region Mapping
 
     private static ReportPreset ToModel(

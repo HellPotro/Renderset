@@ -1,18 +1,24 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Renderset.Api.Endpoints;
+using Renderset.Api.OpenApi;
+using Renderset.Api.Security;
 using Renderset.Api.Sharing;
 using Renderset.Core.Blocks;
 using Renderset.Core.Localization;
+using Renderset.Core.Mapping;
 using Renderset.Core.Presets;
 using Renderset.Core.Reports;
 using Renderset.Core.Rendering;
 using Renderset.Core.Rendering.Pdf;
+using Renderset.Core.Security;
 using Renderset.Core.Services;
 using Renderset.Core.Sharing;
 using Renderset.Core.Tenancy;
+using Renderset.Core.Themes;
 using Renderset.Core.Translations;
 using Renderset.Core.Variables;
 using Renderset.Blazor.Rendering;
@@ -34,7 +40,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
         new JsonStringEnumConverter());
 });
 
-builder.Services.AddOpenApi();
+// Resumen y descripción de cada operación: Renderset.Core.Api.ApiEndpointCatalog.
+builder.Services.AddRendersetOpenApi();
 
 builder.Services.AddDbContextFactory<RenderSetDbContext>(options =>
 {
@@ -44,6 +51,8 @@ builder.Services.AddDbContextFactory<RenderSetDbContext>(options =>
 
 builder.Services.AddScoped<IReportBlockRepository, EfReportBlockRepository>();
 builder.Services.AddScoped<IReportPresetRepository, EfReportPresetRepository>();
+builder.Services.AddScoped<IReportThemeRepository, EfReportThemeRepository>();
+builder.Services.AddScoped<IDataMappingRepository, EfDataMappingRepository>();
 builder.Services.AddScoped<IReportPresetAssignmentRepository, EfReportPresetAssignmentRepository>();
 builder.Services.AddScoped<IReportPresetProvider, ReportPresetProvider>();
 builder.Services.AddScoped<IReportRepository, EfReportRepository>();
@@ -97,24 +106,49 @@ var documentSharing =
 
 builder.Services.AddSingleton(documentSharing);
 
+// Dónde se abren los documentos emitidos (visor de Web): es el enlace que
+// lleva el QR de la cabecera. En Aspire lo rellena AppHost.
+//
+// El QR lleva por defecto el enlace PÚBLICO (/d/{tenant}/{id}/{firma}), que
+// abre cualquiera sin cuenta. Su dominio es el de los enlaces compartidos si
+// no se indica otro, y su firma usa DocumentLinks:SigningKey o, si no hay,
+// una clave derivada de la clave de servicio.
+var documentLinks =
+    builder.Configuration
+        .GetSection(DocumentLinkOptions.SectionName)
+        .Get<DocumentLinkOptions>()
+    ?? new DocumentLinkOptions();
+
+if (string.IsNullOrWhiteSpace(documentLinks.PublicBaseUrl))
+    documentLinks.PublicBaseUrl = documentSharing.PublicBaseUrl;
+
+documentLinks.UseSigningSecret(
+    !string.IsNullOrWhiteSpace(documentLinks.SigningKey)
+        ? documentLinks.SigningKey
+        : builder.Configuration
+            .GetSection(ApiSecurityOptions.SectionName)
+            .Get<ApiSecurityOptions>()
+            ?.ServiceKeys
+            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.Key))
+            ?.Key);
+
+builder.Services.AddSingleton(documentLinks);
+
 // Cifra el token de los enlaces para poder volver a abrirlos desde la
 // gestión. El nombre de aplicación fijo hace que varias instancias de la API
 // compartan claves si comparten carpeta.
-var dataProtection =
-    builder.Services
-        .AddDataProtection()
-        .SetApplicationName("Renderset.ApiService");
-
-if (!string.IsNullOrWhiteSpace(documentSharing.DataProtectionKeysPath))
-{
-    dataProtection.PersistKeysToFileSystem(
-        new DirectoryInfo(documentSharing.DataProtectionKeysPath));
-}
+// En Azure: DataProtection:BlobUri (+ KeyVaultKeyId); si no, la carpeta de
+// DocumentSharing:DataProtectionKeysPath.
+builder.Services.AddRendersetDataProtection(
+    builder.Configuration,
+    "Renderset.ApiService",
+    documentSharing.DataProtectionKeysPath);
 
 builder.Services.AddSingleton<IBundleTokenProtector, DataProtectionBundleTokenProtector>();
 
 builder.Services.AddScoped<IDocumentBundleRepository, EfDocumentBundleRepository>();
 builder.Services.AddScoped<IDocumentBundleService, DocumentBundleService>();
+builder.Services.AddScoped<IDocumentBundleTextProvider, DocumentBundleTextProvider>();
 builder.Services.AddScoped<IDocumentSharingSettingsRepository, EfDocumentSharingSettingsRepository>();
 builder.Services.AddSingleton<IDocumentBundlePageRenderer, BlazorDocumentBundlePageRenderer>();
 
@@ -184,28 +218,122 @@ builder.Services.AddHttpClient<ITranslationService, AzureTranslationService>((se
 
 builder.Services.AddSingleton<IReportConfigurationComposer, ReportConfigurationComposer>();
 
+// ---------------------------------------------------------------- seguridad
+
+// Toda la API /api exige una clave: de tenant (el ERP de un cliente, sólo su
+// tenant) o de servicio (RenderSet Web, cualquier tenant). /share sigue
+// abierto: ahí la autorización es el token del enlace.
+var security =
+    builder.Configuration
+        .GetSection(ApiSecurityOptions.SectionName)
+        .Get<ApiSecurityOptions>()
+    ?? new ApiSecurityOptions();
+
+builder.Services.AddSingleton(security);
+builder.Services.AddSingleton<ServiceKeyRegistry>();
+
+// Token de usuario de Web: limita la clave de servicio al tenant y al rol
+// del usuario que origina cada llamada. Obligatorio salvo en desarrollo.
+var requireUserToken =
+    security.RequireUserToken ?? !builder.Environment.IsDevelopment();
+
+if (requireUserToken && string.IsNullOrWhiteSpace(security.UserTokenPublicKey))
+{
+    throw new InvalidOperationException(
+        "Falta 'Security:UserTokenPublicKey' (clave pública de los tokens de usuario de Web). " +
+        "Sin ella ninguna llamada de Web pasaría; para desarrollar sin tokens, Security:RequireUserToken = false.");
+}
+
+builder.Services.AddSingleton(
+    new UserTokenSettings(
+        string.IsNullOrWhiteSpace(security.UserTokenPublicKey)
+            ? null
+            : new TenantTokenValidator(security.UserTokenPublicKey),
+        requireUserToken));
+builder.Services.AddScoped<IApiKeyRepository, EfApiKeyRepository>();
+builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
+
+builder.Services
+    .AddAuthentication(ApiKeyAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+        ApiKeyAuthenticationHandler.SchemeName,
+        configureOptions: null);
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(
+        RendersetPolicies.ApiCaller,
+        policy => policy.RequireAuthenticatedUser());
+
+    options.AddPolicy(
+        RendersetPolicies.ServiceOnly,
+        policy => policy
+            .RequireAuthenticatedUser()
+            .RequireClaim(
+                RendersetClaims.CallerKind,
+                nameof(RendersetCallerKind.Service)));
+});
+
 var app = builder.Build();
+
+// Lo primero del pipeline: una petición que el navegador abandona no es un
+// error (ver UseClientAbortHandling).
+app.UseClientAbortHandling();
+
+if (app.Services.GetRequiredService<ServiceKeyRegistry>().HasKeys is false)
+{
+    app.Logger.LogWarning(
+        "No hay ninguna clave de servicio configurada (Security:ServiceKeys). " +
+        "RenderSet Web no podrá llamar a la API.");
+}
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
+else
+{
+    app.UseHsts();
 }
 
 app.UseHttpsRedirection();
 
 app.UseRateLimiter();
 
-app.MapAssignmentEndpoints();
-app.MapPresetEndpoints();
-app.MapReportBlockEndpoints();
-app.MapReportEndpoints();
-app.MapRenderEndpoints();
-app.MapBundleEndpoints();
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Un único grupo para toda la API privada: la clave y el control de tenant
+// se aplican aquí y no endpoint a endpoint, para que un endpoint nuevo no
+// pueda quedarse abierto por olvido.
+var api =
+    app.MapGroup(string.Empty)
+        .RequireAuthorization(RendersetPolicies.ApiCaller)
+        .AddEndpointFilter<TenantAccessFilter>();
+
+api.MapAssignmentEndpoints();
+api.MapPresetEndpoints();
+api.MapThemeEndpoints();
+api.MapDataMappingEndpoints();
+api.MapReportBlockEndpoints();
+api.MapReportEndpoints();
+api.MapRenderEndpoints();
+api.MapBundleEndpoints();
+api.MapSharingSettingsEndpoints();
+api.MapReportVariableEndpoints();
+api.MapReportResourceEndpoints();
+api.MapTenantCultureEndpoints();
+api.MapApiKeyEndpoints();
+
+// Público: enlaces compartidos con token propio.
 app.MapSharingEndpoints();
-app.MapSharingSettingsEndpoints();
-app.MapReportVariableEndpoints();
-app.MapReportResourceEndpoints();
-app.MapTenantCultureEndpoints();
+
+// El QR de la cabecera enlaza al visor de Web (/documents/{id}). Si
+// DocumentLinks:BaseUrl apuntaba a la API en vez de a Web, los documentos
+// emitidos llevan https://<api>/documents/{id}, que aquí no existía y daba
+// una página en blanco. Con BaseUrl ya corregida se redirige al visor, así
+// que los QR que ya están impresos siguen valiendo.
+app.MapDocumentLinkRedirect();
 
 app.MapDefaultEndpoints();
 

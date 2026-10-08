@@ -92,20 +92,24 @@
                 <i class="fa-solid fa-palette"></i>
             </span>
 
-            <span>Estilos</span>
+            <span>Temas</span>
 
         </NavLink>
 
-        <NavLink href="/idiomas"
-                 class="renderset-nav-item">
+        @* Las opciones de administración sólo se enseñan a Admin y Owner; la
+           protección de verdad es la política de cada página y la API. *@
+        <AuthorizeView Policy="@TenantPolicies.Admin">
+            <NavLink href="/idiomas"
+                     class="renderset-nav-item">
 
-            <span class="renderset-nav-icon">
-                <i class="fa-solid fa-language"></i>
-            </span>
+                <span class="renderset-nav-icon">
+                    <i class="fa-solid fa-language"></i>
+                </span>
 
-            <span>Idiomas</span>
+                <span>Idiomas</span>
 
-        </NavLink>
+            </NavLink>
+        </AuthorizeView>
 
     </div>
 
@@ -127,6 +131,41 @@
 
         </NavLink>
 
+        <AuthorizeView Policy="@TenantPolicies.Admin">
+            <NavLink href="/settings/api-keys"
+                     class="renderset-nav-item">
+
+                <span class="renderset-nav-icon">
+                    <i class="fa-solid fa-key"></i>
+                </span>
+
+                <span>API keys</span>
+
+            </NavLink>
+        </AuthorizeView>
+
     </div>
+
+
+    <AuthorizeView Policy="@TenantPolicies.Admin">
+        <div class="renderset-nav-section">
+
+            <div class="renderset-nav-title">
+                Administración
+            </div>
+
+            <NavLink href="/settings/members"
+                     class="renderset-nav-item">
+
+                <span class="renderset-nav-icon">
+                    <i class="fa-solid fa-users"></i>
+                </span>
+
+                <span>Miembros</span>
+
+            </NavLink>
+
+        </div>
+    </AuthorizeView>
 
 </nav>

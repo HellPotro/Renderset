@@ -202,7 +202,7 @@ public sealed class DocumentSharingSettingsTests
                     PrimaryColor = "#AA0000",
                     DefaultMessage = "Adjuntamos la documentación."
                 },
-                "es-ES",
+                DocumentBundleTexts.For("es-ES"),
                 new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc),
                 fallbackExpirationDays: 30);
 

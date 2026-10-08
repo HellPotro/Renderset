@@ -70,13 +70,19 @@ public sealed class ReportConfigurationComposer
         effective.Header.Visible ??= blockConfiguration.Visible;
         effective.Header.TitleKey ??= blockConfiguration.TitleKey;
         effective.Header.SubtitleKey ??= blockConfiguration.SubtitleKey;
+        effective.Header.ShowTitle ??= blockConfiguration.ShowTitle;
+        effective.Header.ShowSubtitle ??= blockConfiguration.ShowSubtitle;
         effective.Header.ShowLogo ??= blockConfiguration.ShowLogo;
         effective.Header.LogoUrl ??= blockConfiguration.LogoUrl;
         effective.Header.LogoMaxHeight ??= blockConfiguration.LogoMaxHeight;
         effective.Header.Layout ??= blockConfiguration.Layout;
+        effective.Header.TitlePlacement ??= blockConfiguration.TitlePlacement;
         effective.Header.BackgroundColor ??= blockConfiguration.BackgroundColor;
         effective.Header.TextColor ??= blockConfiguration.TextColor;
         effective.Header.ShowDivider ??= blockConfiguration.ShowDivider;
+        effective.Header.ShowQr ??= blockConfiguration.ShowQr;
+        effective.Header.QrContent ??= blockConfiguration.QrContent;
+        effective.Header.QrSize ??= blockConfiguration.QrSize;
 
         // Las líneas van en bloque, no línea a línea: mezclar dos listas por
         // posición daría cabeceras imposibles de explicar.

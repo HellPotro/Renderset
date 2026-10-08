@@ -17,4 +17,13 @@ public interface IReportPresetRepository
         string tenantId,
         ReportPreset preset,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Baja lógica del preset. Falso si no existía. Los documentos emitidos
+    /// con él no cambian: guardan su HTML.
+    /// </summary>
+    Task<bool> DeleteAsync(
+        string tenantId,
+        string presetId,
+        CancellationToken cancellationToken = default);
 }

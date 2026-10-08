@@ -24,6 +24,12 @@ public sealed class DocumentBundleView
 
     public DateTime ExpiresAtUtc { get; init; }
 
+    /// <summary>
+    /// Falso en el enlace público de un único documento (el del QR), que no
+    /// caduca: no se enseña "disponible hasta".
+    /// </summary>
+    public bool ShowExpiry { get; init; } = true;
+
     public required TenantBranding Branding { get; init; }
 
     public required DocumentBundleTexts Texts { get; init; }
@@ -45,6 +51,12 @@ public sealed class DocumentBundleView
     /// son PDF (cambia el texto del botón).
     /// </summary>
     public bool PdfAvailable { get; init; }
+
+    /// <summary>
+    /// Enseña Exportar CSV y Descargar JSON. Aun así, cada botón sólo
+    /// aparece si el documento abierto trae datos.
+    /// </summary>
+    public bool AllowDataDownload { get; init; }
 }
 
 

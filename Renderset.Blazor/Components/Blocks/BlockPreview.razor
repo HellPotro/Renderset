@@ -2,6 +2,7 @@
 @using Renderset.Core.Configurations
 @using Renderset.Core.Definitions
 @using Renderset.Core.Localization
+@using Renderset.Core.Rendering
 @using Renderset.Core.Resolved
 @using Renderset.Core.Themes
 @using Renderset.Core.Variables
@@ -34,15 +35,23 @@
             @switch (Type)
             {
                 case ReportBlockType.Header:
-                    <DynamicReportHeader Header="_resolvedHeader" />
+                    <DynamicReportHeader Header="_resolvedHeader"
+                                         MissingData="MarkData" />
                     break;
 
                 case ReportBlockType.Footer:
-                    <DynamicReportFooter Footer="_resolvedFooter" />
+                    <DynamicReportFooter Footer="_resolvedFooter"
+                                         MissingData="MarkData" />
                     break;
 
                 case ReportBlockType.Text:
-                    <DynamicReportBlock Block="_resolvedTextBlock" />
+                    <DynamicReportBlock Block="_resolvedTextBlock"
+                                        MissingData="MarkData" />
+                    break;
+
+                case ReportBlockType.Fields:
+                    <DynamicReportBlock Block="_resolvedFieldsBlock"
+                                        MissingData="MarkData" />
                     break;
             }
 
@@ -53,7 +62,16 @@
     @if (IsEmpty)
     {
         <p class="blkprev-empty">
-            Todavía no hay nada que mostrar. Rellena los campos de arriba.
+            Todavía no hay nada que mostrar. Rellena los campos del bloque.
+        </p>
+    }
+
+    @if (_dataTokens.Count > 0)
+    {
+        <p class="blkprev-note">
+            <i class="fa-solid fa-database"></i>
+            Los datos del documento (@string.Join(", ", _dataTokens.Select(x => "data." + x)))
+            se rellenan al emitir cada documento.
         </p>
     }
 
@@ -80,6 +98,9 @@
 
     [Parameter]
     public ReportTextBlockConfiguration? Text { get; set; }
+
+    [Parameter]
+    public ReportFieldsBlockConfiguration? Fields { get; set; }
 
     /// <summary>
     /// Diccionario en edición: los bloques guardan claves, no literales.
@@ -118,21 +139,59 @@
         Type = ReportBlockType.Text,
         Text = new ReportTextBlockConfiguration()
     };
+    private ResolvedReportBlock _resolvedFieldsBlock = new()
+    {
+        Id = "preview",
+        Type = ReportBlockType.Fields,
+        Fields = new ResolvedFieldsBlock()
+    };
+
+    /// <summary>
+    /// {{data.ruta}} que aparecen en el bloque. No son variables sin definir:
+    /// se rellenan con cada documento.
+    /// </summary>
+    private IReadOnlyList<string> _dataTokens = [];
+
+    private static string MarkData(
+        string path) =>
+        $"\u27e8data.{path}\u27e9";
+
+    /// <summary>
+    /// Se calculan aquí y no al pintar: los componentes hijos se pintan
+    /// después que este y el aviso iría siempre un render por detrás.
+    /// </summary>
+    private IReadOnlyList<string> CollectDataTokens()
+    {
+        var texts = new List<string?>();
+
+        if (_resolvedHeader is not null)
+        {
+            texts.Add(_resolvedHeader.Title);
+            texts.Add(_resolvedHeader.Subtitle);
+            texts.AddRange(_resolvedHeader.Lines.Select(x => x.Text));
+            texts.AddRange(_resolvedHeader.Columns.SelectMany(x => x.Lines).Select(x => x.Text));
+        }
+
+        texts.Add(_resolvedFooter?.Text);
+        texts.Add(_resolvedTextBlock.Text?.Title);
+        texts.Add(_resolvedTextBlock.Text?.Text);
+
+        if (_resolvedFieldsBlock.Fields is { } fields)
+        {
+            texts.Add(fields.Title);
+            texts.AddRange(fields.Fields.Select(x => x.Label));
+            texts.AddRange(fields.Fields.Select(x => x.Value));
+        }
+
+        return texts
+            .SelectMany(ReportDataTemplate.Paths)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
 
 
-    private string ThemeStyle => $"""
-        --report-primary:{Theme.PrimaryColor};
-        --report-secondary:{Theme.SecondaryColor};
-        --report-text:{Theme.TextColor};
-        --report-muted:{Theme.MutedTextColor};
-        --report-border:{Theme.BorderColor};
-        --report-section-bg:{Theme.SectionBackgroundColor};
-        --report-section-text:{Theme.SectionTextColor};
-        --report-table-header-bg:{Theme.TableHeaderBackgroundColor};
-        --report-table-header-text:{Theme.TableHeaderTextColor};
-        --report-background:{Theme.BackgroundColor};
-        --report-font:{Theme.FontFamily};
-        """;
+    private string ThemeStyle =>
+        ReportThemeCss.Variables(Theme);
 
 
     private bool IsEmpty =>
@@ -151,6 +210,10 @@
             ReportBlockType.Text =>
                 string.IsNullOrWhiteSpace(_resolvedTextBlock.Text?.Title) &&
                 string.IsNullOrWhiteSpace(_resolvedTextBlock.Text?.Text),
+
+            ReportBlockType.Fields =>
+                (_resolvedFieldsBlock.Fields?.Fields.Count ?? 0) == 0 &&
+                string.IsNullOrWhiteSpace(_resolvedFieldsBlock.Fields?.Title),
 
             _ => true
         };
@@ -171,6 +234,46 @@
         _resolvedHeader = BuildHeader();
         _resolvedFooter = BuildFooter();
         _resolvedTextBlock = BuildTextBlock();
+        _resolvedFieldsBlock = BuildFieldsBlock();
+
+        _dataTokens = CollectDataTokens();
+    }
+
+
+    private ResolvedReportBlock BuildFieldsBlock()
+    {
+        var grid =
+            ReportSectionGrid.Normalize(
+                Fields?.Layout,
+                Fields?.Columns);
+
+        return new ResolvedReportBlock
+        {
+            Id = "preview",
+            Type = ReportBlockType.Fields,
+
+            Fields = Fields is null
+                ? new ResolvedFieldsBlock()
+                : new ResolvedFieldsBlock
+                {
+                    Title = Resolve(Fields.TitleKey),
+                    ShowTitle = Fields.ShowTitle ?? true,
+                    Layout = grid.Layout,
+                    Columns = grid.Columns,
+                    Fields = Fields.Fields
+                        .OrderBy(x => x.Order)
+                        .Select(field => new ResolvedFixedField
+                        {
+                            Id = field.Id,
+                            Label = Resolve(field.LabelKey ?? ReportTextKeys.BlockFieldLabel(field.Id)) ?? string.Empty,
+                            Value = Resolve(field.ValueKey ?? ReportTextKeys.BlockFieldValue(field.Id)) ?? string.Empty
+                        })
+                        .Where(x =>
+                            !string.IsNullOrWhiteSpace(x.Label) ||
+                            !string.IsNullOrWhiteSpace(x.Value))
+                        .ToList()
+                }
+        };
     }
 
 
@@ -187,6 +290,8 @@
 
             Title = Resolve(Header.TitleKey),
             Subtitle = Resolve(Header.SubtitleKey),
+            ShowTitle = Header.ShowTitle ?? true,
+            ShowSubtitle = Header.ShowSubtitle ?? true,
             ShowLogo = Header.ShowLogo ?? false,
 
             // La URL es un literal de la configuración, no una clave del
@@ -197,6 +302,7 @@
 
             LogoMaxHeight = Header.LogoMaxHeight,
             Layout = Header.Layout ?? ReportHeaderLayout.LogoLeft,
+            TitlePlacement = Header.TitlePlacement ?? ReportHeaderTitlePlacement.Inline,
             BackgroundColor = Header.BackgroundColor,
             TextColor = Header.TextColor,
             ShowDivider = Header.ShowDivider ?? true,
@@ -319,6 +425,11 @@
             _variableValues,
             onMissing: key =>
             {
+                // Los datos del documento no son variables: se dejan tal
+                // cual y los marca el componente al pintar.
+                if (key.StartsWith(ReportDataTemplate.Prefix, StringComparison.OrdinalIgnoreCase))
+                    return "{{" + key + "}}";
+
                 if (!_unresolved.Contains(key))
                     _unresolved.Add(key);
 

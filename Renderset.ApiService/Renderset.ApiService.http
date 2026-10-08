@@ -1,13 +1,16 @@
 @ApiService_HostAddress = http://localhost:5351
+# Clave de API: una de tenant (créala en Web → API keys) o la de servicio.
+@apiKey = rs_live_DhA-QBypbK2nrFqvW4m80ILfx0IdCxZbLBAcJwrxpr0
 @tenantId = oranauto
-@reportId = albaran
-@presetId = albaran-default
+@reportId = deca
+@presetId = deca-default
 
 ### Generar un documento con datos ya jerárquicos
 # fileName admite variables del tenant y rutas del documento, por ejemplo
 # factura-{{data.numeroFactura}}.html (aquí va literal para no chocar con la
 # interpolación de este fichero .http)
 POST {{ApiService_HostAddress}}/api/render/{{tenantId}}
+X-Api-Key: {{apiKey}}
 Content-Type: application/json
 {
   "reportId": "{{reportId}}",
@@ -95,6 +98,7 @@ Content-Type: application/json
 
 ### Generar un documento con datos ya jerárquicos
 POST {{ApiService_HostAddress}}/api/render/{{tenantId}}
+X-Api-Key: {{apiKey}}
 Content-Type: application/json
 {
   "reportId": "reporte-de-horas-trabajador",
@@ -104,7 +108,6 @@ Content-Type: application/json
   },
   "output": {
     "format": "Html",
-    "includeToolbar": true,
     "includeDocumentData": true,
     "fileName": "factura-060098.html"
   },
@@ -164,6 +167,7 @@ Content-Type: application/json
 
 ### Sin presetId: el preset se resuelve por assignment segun el contexto
 POST {{ApiService_HostAddress}}/api/render/{{tenantId}}
+X-Api-Key: {{apiKey}}
 Content-Type: application/json
 {
   "reportId": "{{reportId}}",
@@ -182,12 +186,15 @@ Content-Type: application/json
 
 ### Ver el documento (es la url que devuelve el render)
 GET {{ApiService_HostAddress}}/api/documents/{{tenantId}}/f3ad6d5120f84c3cbd3ad4922bd039b0
+X-Api-Key: {{apiKey}}
 
 ### Descargarlo con su nombre de fichero
 GET {{ApiService_HostAddress}}/api/documents/{{tenantId}}/REEMPLAZA_DOCUMENT_ID/download
+X-Api-Key: {{apiKey}}
 
 ### Metadatos, sin el contenido
 GET {{ApiService_HostAddress}}/api/documents/{{tenantId}}/REEMPLAZA_DOCUMENT_ID/metadata
+X-Api-Key: {{apiKey}}
 Accept: application/json
 
 ###
@@ -205,6 +212,7 @@ Accept: application/json
 # trae "url": es el enlace para el cliente y sólo se devuelve aquí, porque
 # el token no se guarda en claro.
 POST {{ApiService_HostAddress}}/api/bundles/{{tenantId}}
+X-Api-Key: {{apiKey}}
 Content-Type: application/json
 
 {
@@ -235,12 +243,15 @@ Content-Type: application/json
 
 ### Últimos bundles del tenant
 GET {{ApiService_HostAddress}}/api/bundles/{{tenantId}}?take=20
+X-Api-Key: {{apiKey}}
 
 ### Estado de un bundle (accesos, caducidad, documentos)
 GET {{ApiService_HostAddress}}/api/bundles/{{tenantId}}/{{bundleId}}
+X-Api-Key: {{apiKey}}
 
 ### Enlace nuevo (el anterior deja de valer)
 POST {{ApiService_HostAddress}}/api/bundles/{{tenantId}}/{{bundleId}}/link
+X-Api-Key: {{apiKey}}
 Content-Type: application/json
 
 {
@@ -249,3 +260,98 @@ Content-Type: application/json
 
 ### Revocar el enlace
 POST {{ApiService_HostAddress}}/api/bundles/{{tenantId}}/{{bundleId}}/revoke
+X-Api-Key: {{apiKey}}
+
+
+### ==========================================================
+### Filas planas: el resultado del SELECT tal cual
+### (requiere el mapping guardado en Reports → Datos)
+### ==========================================================
+
+### Mapping asignado al report
+GET {{ApiService_HostAddress}}/api/mappings/{{tenantId}}?reportId=packing-list-2026
+X-Api-Key: {{apiKey}}
+
+### Probar las filas sin emitir documento: devuelve el JSON que se usaría
+POST {{ApiService_HostAddress}}/api/mappings/{{tenantId}}/packing-list-2026-rows/preview
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "rows": {
+    "columns": [
+      { "name": "SalidaId", "type": "Number" },
+      { "name": "Nombre" },
+      { "name": "AlbaranEjercicio" },
+      { "name": "Referencia" },
+      { "name": "Jaula" },
+      { "name": "Articulo" },
+      { "name": "Sinonimo" },
+      { "name": "Descripcion_esp" },
+      { "name": "Cantidad", "type": "Number" }
+    ],
+    "rows": [
+      [3116, "Inter Cars, S.A.", "001963/2026", "7th", "PAL235071 ", "00119012.A2", "6504-04-6621312Q", "Aleta Del. D. Seat-Ibiza 2008", 16],
+      [3116, "Inter Cars, S.A.", "001963/2026", "7th", "PAL235072 ", "00158011.A2", "6504-04-6614311Q", "Aleta Del. I. Seat-Leon 2012", 8]
+    ]
+  }
+}
+
+### Emitir el packing list con filas (sin mappingId: el del report)
+POST {{ApiService_HostAddress}}/api/render/{{tenantId}}
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "reportId": "packing-list-2026",
+  "rows": {
+    "columns": [
+      { "name": "SalidaId", "type": "Number" },
+      { "name": "Nombre" },
+      { "name": "AlbaranEjercicio" },
+      { "name": "Referencia" },
+      { "name": "Jaula" },
+      { "name": "Articulo" },
+      { "name": "Sinonimo" },
+      { "name": "Descripcion_esp" },
+      { "name": "Cantidad", "type": "Number" }
+    ],
+    "rows": [
+      [3116, "Inter Cars, S.A.", "001963/2026", "7th", "PAL235071 ", "00119012.A2", "6504-04-6621312Q", "Aleta Del. D. Seat-Ibiza 2008", 16],
+      [3116, "Inter Cars, S.A.", "001963/2026", "7th", "PAL235072 ", "00158011.A2", "6504-04-6614311Q", "Aleta Del. I. Seat-Leon 2012", 8]
+    ]
+  },
+  "context": { "culture": "en-GB" },
+  "output": { "format": "Pdf" }
+}
+
+
+### ==========================================================
+### Fichero directo y validación
+### ==========================================================
+
+### Emitir y recibir el PDF en la misma respuesta
+### (id del documento en la cabecera X-Renderset-Document-Id)
+POST {{ApiService_HostAddress}}/api/render/{{tenantId}}/file
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "reportId": "{{reportId}}",
+  "context": { "culture": "es-ES" },
+  "output": { "format": "Pdf" },
+  "data": { "salida": "3128" }
+}
+
+### Validar sin emitir: { valid, reportId, presetId, presetVersion, errors }
+POST {{ApiService_HostAddress}}/api/render/{{tenantId}}/validate
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "reportId": "{{reportId}}",
+  "data": { "salida": "10001" }
+}
+
+### Documento OpenAPI (sólo en desarrollo)
+GET {{ApiService_HostAddress}}/openapi/v1.json

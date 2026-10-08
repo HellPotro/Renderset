@@ -1,30 +1,33 @@
 ﻿@page "/blocks"
 
+@using System.Text.Json
+@using System.Text.Json.Serialization
 @using Renderset.Core.Blocks
+@using Renderset.Core.Configurations
 
 @inject IRenderSetApi RenderSetApi
 @inject ICurrentTenant CurrentTenant
 @inject NavigationManager Navigation
 @inject IToastService Toasts
 
-<PageTitle>Blocks - RenderSet</PageTitle>
+<PageTitle>Bloques - RenderSet</PageTitle>
 
 <div class="page">
 
     <header class="page-header">
 
         <div>
-            <h1>Blocks</h1>
+            <h1>Bloques</h1>
 
             <p>
-                Componentes reutilizables que puedes compartir
-                entre distintos reports.
+                Piezas reutilizables entre reports: la cabecera y el pie de la
+                empresa, avisos y condiciones, datos fijos.
             </p>
         </div>
 
         <button type="button"
                 class="primary-button"
-                @onclick="CreateBlock">
+                @onclick="() => CreateBlock(null)">
             <i class="fa-solid fa-plus"></i>
             Nuevo bloque
         </button>
@@ -49,15 +52,21 @@
             <h2>No hay bloques</h2>
 
             <p>
-                Crea una cabecera, un pie de página u otro
-                componente reutilizable.
+                Empieza por la cabecera o el pie de tu empresa: se eligen en el
+                diseñador de cualquier report.
             </p>
 
-            <button type="button"
-                    class="primary-button"
-                    @onclick="CreateBlock">
-                Crear primer bloque
-            </button>
+            <div class="blk-empty-actions">
+                @foreach (var type in Types)
+                {
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="() => CreateBlock(type.Type)">
+                        <i class="fa-solid @type.Icon"></i>
+                        @type.Label
+                    </button>
+                }
+            </div>
 
         </div>
     }
@@ -69,39 +78,50 @@
                     class="@GetFilterClass(null)"
                     @onclick="() => SetFilter(null)">
                 Todos
+                <span class="filter-count">@_blocks.Count</span>
             </button>
 
-            <button type="button"
-                    class="@GetFilterClass(ReportBlockType.Header)"
-                    @onclick="() => SetFilter(ReportBlockType.Header)">
-                Cabeceras
-            </button>
+            @foreach (var type in Types)
+            {
+                var count = _blocks.Count(x => x.Type == type.Type);
 
-            <button type="button"
-                    class="@GetFilterClass(ReportBlockType.Footer)"
-                    @onclick="() => SetFilter(ReportBlockType.Footer)">
-                Pies
-            </button>
-
-            <button type="button"
-                    class="@GetFilterClass(ReportBlockType.Text)"
-                    @onclick="() => SetFilter(ReportBlockType.Text)">
-                Textos
-            </button>
+                <button type="button"
+                        class="@GetFilterClass(type.Type)"
+                        @onclick="() => SetFilter(type.Type)">
+                    <i class="fa-solid @type.Icon"></i>
+                    @type.Plural
+                    @if (count > 0)
+                    {
+                        <span class="filter-count">@count</span>
+                    }
+                </button>
+            }
 
         </div>
 
 
         <div class="blocks-grid">
 
+            @if (_filter is { } filter && !FilteredBlocks.Any())
+            {
+                <button type="button"
+                        class="block-card blk-new-card"
+                        @onclick="() => CreateBlock(filter)">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Crear @TypeOf(filter).Label.ToLowerInvariant()</span>
+                </button>
+            }
+
             @foreach (var block in FilteredBlocks)
             {
+                var type = TypeOf(block.Type);
+
                 <article class="block-card">
 
                     <div class="block-card-header">
 
-                        <div class="block-icon @GetBlockTypeClass(block.Type)">
-                            <i class="@GetBlockIcon(block.Type)"></i>
+                        <div class="block-icon @type.Css">
+                            <i class="fa-solid @type.Icon"></i>
                         </div>
 
                         <div class="block-heading">
@@ -113,7 +133,7 @@
                         </div>
 
                         <span class="block-type">
-                            @block.Type
+                            @type.Label
                         </span>
 
                     </div>
@@ -121,7 +141,17 @@
 
                     <div class="block-content">
 
-                        <pre>@GetConfigurationPreview(block)</pre>
+                        <ul class="blk-summary">
+                            @foreach (var line in Summary(block))
+                            {
+                                <li>@line</li>
+                            }
+                        </ul>
+
+                        <p class="blk-summary-where">
+                            <i class="fa-solid fa-location-dot"></i>
+                            @type.WhereUsed
+                        </p>
 
                     </div>
 
@@ -148,6 +178,37 @@
 
 @code {
 
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
+    };
+
+    private sealed record TypeInfo(
+        ReportBlockType Type,
+        string Label,
+        string Plural,
+        string Icon,
+        string Css,
+        string WhereUsed);
+
+    private static readonly TypeInfo[] Types =
+    [
+        new(ReportBlockType.Header, "Cabecera", "Cabeceras", "fa-heading", "header", "Pestaña Cabecera del diseñador."),
+        new(ReportBlockType.Footer, "Pie de página", "Pies", "fa-shoe-prints", "footer", "Pestaña Cabecera → Pie de página."),
+        new(ReportBlockType.Text, "Texto", "Textos", "fa-align-left", "text", "Estructura → Añadir contenido."),
+        new(ReportBlockType.Fields, "Campos fijos", "Campos fijos", "fa-table-list", "fields", "Estructura → Añadir contenido.")
+    ];
+
+    private static TypeInfo TypeOf(
+        ReportBlockType type) =>
+        Types.FirstOrDefault(x => x.Type == type)
+        ?? new TypeInfo(type, type.ToString(), type.ToString(), "fa-cube", string.Empty, string.Empty);
+
     private IReadOnlyCollection<ReportBlock> _blocks = [];
 
     private ReportBlockType? _filter;
@@ -156,9 +217,11 @@
 
 
     private IEnumerable<ReportBlock> FilteredBlocks =>
-        _filter is null
+        (_filter is null
             ? _blocks
-            : _blocks.Where(x => x.Type == _filter);
+            : _blocks.Where(x => x.Type == _filter))
+        .OrderBy(x => x.Type)
+        .ThenBy(x => x.Name);
 
 
     protected override async Task OnInitializedAsync()
@@ -181,82 +244,129 @@
 
 
     private void SetFilter(
-        ReportBlockType? type)
-    {
+        ReportBlockType? type) =>
         _filter = type;
-    }
 
 
     private string GetFilterClass(
-        ReportBlockType? type)
-    {
-        return _filter == type
+        ReportBlockType? type) =>
+        _filter == type
             ? "filter-button active"
             : "filter-button";
-    }
 
 
-    private void CreateBlock()
-    {
-        Navigation.NavigateTo("/blocks/new");
-    }
+    private void CreateBlock(
+        ReportBlockType? type) =>
+        Navigation.NavigateTo(
+            type is null
+                ? "/blocks/new"
+                : $"/blocks/new?type={type}");
 
 
     private void EditBlock(
-        ReportBlock block)
-    {
+        ReportBlock block) =>
         Navigation.NavigateTo(
             $"/blocks/{Uri.EscapeDataString(block.Id)}");
-    }
 
 
-    private static string GetBlockIcon(
-        ReportBlockType type)
-    {
-        return type switch
-        {
-            ReportBlockType.Header =>
-                "fa-solid fa-heading",
-
-            ReportBlockType.Footer =>
-                "fa-solid fa-align-justify",
-
-            ReportBlockType.Text =>
-                "fa-solid fa-file-lines",
-
-            _ =>
-                "fa-solid fa-cube"
-        };
-    }
-
-
-    private static string GetBlockTypeClass(
-        ReportBlockType type)
-    {
-        return type switch
-        {
-            ReportBlockType.Header => "header",
-            ReportBlockType.Footer => "footer",
-            ReportBlockType.Text => "text",
-            _ => ""
-        };
-    }
-
-
-    private static string GetConfigurationPreview(
+    /// <summary>
+    /// Qué lleva el bloque, en dos o tres líneas legibles. Antes se
+    /// enseñaba el JSON tal cual.
+    /// </summary>
+    private static IEnumerable<string> Summary(
         ReportBlock block)
     {
-        if (string.IsNullOrWhiteSpace(
-                block.ConfigurationJson))
+        switch (block.Type)
         {
-            return "Sin configuración";
+            case ReportBlockType.Header:
+            {
+                var header = Read<ReportHeaderConfiguration>(block);
+                var lines = header.Lines.Count + header.Columns.Sum(x => x.Lines.Count);
+                var parts = new List<string>();
+
+                if (header.ShowLogo == true)
+                    parts.Add("Logo");
+
+                if (header.TitleKey is not null)
+                    parts.Add("título");
+
+                if (header.ShowQr == true)
+                    parts.Add("QR");
+
+                yield return parts.Count == 0
+                    ? "Sin logo ni título"
+                    : string.Join(", ", parts);
+
+                yield return header.Columns.Count > 0
+                    ? $"{lines} línea(s) de datos en {header.Columns.Count} columnas"
+                    : $"{lines} línea(s) de datos";
+
+                yield break;
+            }
+
+            case ReportBlockType.Footer:
+            {
+                var footer = Read<ReportFooterConfiguration>(block);
+
+                yield return footer.TextKey is null ? "Sin texto" : "Con texto";
+
+                if (footer.ShowGenerationDate == true)
+                    yield return "Fecha de generación";
+
+                if (footer.ShowPageNumber == true)
+                    yield return "Número de página";
+
+                yield break;
+            }
+
+            case ReportBlockType.Text:
+            {
+                var text = Read<ReportTextBlockConfiguration>(block);
+
+                yield return string.IsNullOrWhiteSpace(text.Title)
+                    ? "Sin título"
+                    : text.Title;
+
+                if (!string.IsNullOrWhiteSpace(text.Text))
+                {
+                    yield return text.Text.Length > 90
+                        ? text.Text[..90] + "…"
+                        : text.Text;
+                }
+
+                yield break;
+            }
+
+            case ReportBlockType.Fields:
+            {
+                var fields = Read<ReportFieldsBlockConfiguration>(block);
+
+                yield return $"{fields.Fields.Count} campo(s)";
+
+                yield return fields.Layout is null or Renderset.Core.Definitions.ReportSectionLayout.List
+                    ? "En lista"
+                    : $"En cuadrícula de {fields.Columns ?? 2}";
+
+                yield break;
+            }
         }
-
-        const int maxLength = 180;
-
-        return block.ConfigurationJson.Length <= maxLength
-            ? block.ConfigurationJson
-            : block.ConfigurationJson[..maxLength] + "…";
     }
 
+
+    private static T Read<T>(
+        ReportBlock block)
+        where T : new()
+    {
+        if (string.IsNullOrWhiteSpace(block.ConfigurationJson))
+            return new T();
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(block.ConfigurationJson, JsonOptions) ?? new T();
+        }
+        catch (JsonException)
+        {
+            return new T();
+        }
+    }
 }

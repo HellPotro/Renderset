@@ -1,0 +1,37 @@
+/* Visor de documentos: barra arriba y el documento ocupando el resto. La
+   barra es DocumentViewerToolbar (document-viewer.css de Renderset.Blazor),
+   la misma que la página pública de bundles; aquí sólo va el marco. */
+
+.doc-viewer {
+    position: relative;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+    background: #F3F5F7;
+}
+
+.doc-viewer-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 100dvh;
+    color: #74858d;
+}
+
+    .doc-viewer-state.is-error {
+        flex-direction: column;
+    }
+
+.doc-viewer-frame {
+    /* Un iframe es un elemento reemplazado: en una rejilla no se estira
+       solo, y con height:100% se queda en sus 150px de serie. */
+    display: block;
+    align-self: stretch;
+    justify-self: stretch;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    border: 0;
+    background: #F3F5F7;
+}

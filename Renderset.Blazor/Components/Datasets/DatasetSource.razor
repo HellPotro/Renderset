@@ -61,23 +61,26 @@
 
             <div class="dsrc-head">
 
-                <div class="dsrc-segmented">
+                @if (FixedKind is null)
+                {
+                    <div class="dsrc-segmented">
 
-                    <button type="button"
-                            class="@(_kind == DatasetSourceKind.Json ? "is-on" : "")"
-                            @onclick="() => SwitchTo(DatasetSourceKind.Json)">
-                        <i class="fa-solid fa-code"></i>
-                        JSON
-                    </button>
+                        <button type="button"
+                                class="@(_kind == DatasetSourceKind.Json ? "is-on" : "")"
+                                @onclick="() => SwitchTo(DatasetSourceKind.Json)">
+                            <i class="fa-solid fa-code"></i>
+                            JSON
+                        </button>
 
-                    <button type="button"
-                            class="@(_kind == DatasetSourceKind.Tabular ? "is-on" : "")"
-                            @onclick="() => SwitchTo(DatasetSourceKind.Tabular)">
-                        <i class="fa-solid fa-table"></i>
-                        SQL / CSV
-                    </button>
+                        <button type="button"
+                                class="@(_kind == DatasetSourceKind.Tabular ? "is-on" : "")"
+                                @onclick="() => SwitchTo(DatasetSourceKind.Tabular)">
+                            <i class="fa-solid fa-table"></i>
+                            SQL / CSV
+                        </button>
 
-                </div>
+                    </div>
+                }
 
                 <p class="dsrc-hint">
                     @(_kind == DatasetSourceKind.Json
@@ -129,6 +132,17 @@
                         }
 
                     </div>
+
+                    @if (_renamedHeaders.Count > 0)
+                    {
+                        <div class="dsrc-warn">
+                            Columnas con el mismo nombre: se han renombrado a
+                            <strong>@string.Join(", ", _renamedHeaders)</strong>.
+                            Mejor ponerles un alias en la consulta
+                            (<code>t.Direccion AS TransportistaDireccion</code>):
+                            por API las columnas llegan con su nombre de SQL.
+                        </div>
+                    }
                 }
             }
 
@@ -206,6 +220,13 @@
                         </option>
                     }
 
+                    @if (level.KeyColumn is { } syntheticKey && _syntheticKeys.Contains(syntheticKey))
+                    {
+                        <option value="@syntheticKey">
+                            @(_payload!.Columns[syntheticKey].Name + " (clave, no es un campo)")
+                        </option>
+                    }
+
                 </select>
 
                 @if (KeyHint is not null)
@@ -256,10 +277,32 @@
 
                 </div>
 
-                <p class="dsrc-legend">
-                    Ordenadas de menos a más valores distintos: arriba las que
-                    no cambian nunca, abajo las que cambian en cada fila.
-                </p>
+                <div class="dsrc-sortbar">
+
+                    <p class="dsrc-legend">
+                        @(_sortByName
+                            ? "Ordenadas por nombre."
+                            : "Ordenadas de menos a más valores distintos: arriba las que no cambian nunca, abajo las que cambian en cada fila.")
+                    </p>
+
+                    <div class="dsrc-sort" role="radiogroup" aria-label="Orden de las columnas">
+                        <button type="button"
+                                role="radio"
+                                aria-checked="@(!_sortByName ? "true" : "false")"
+                                class="@(!_sortByName ? "is-on" : null)"
+                                @onclick="() => _sortByName = false">
+                            Por variación
+                        </button>
+                        <button type="button"
+                                role="radio"
+                                aria-checked="@(_sortByName ? "true" : "false")"
+                                class="@(_sortByName ? "is-on" : null)"
+                                @onclick="() => _sortByName = true">
+                            Por nombre
+                        </button>
+                    </div>
+
+                </div>
 
                 @if (available.Count == 0)
                 {
@@ -278,25 +321,26 @@
                             var assigned = IsAssignedTo(ordinal, level);
 
                             <label class="@ColumnClass(ordinal, level)"
+                                   title="@column.Name"
                                    @key="ordinal">
 
                                 <input type="checkbox"
                                        checked="@assigned"
                                        @onchange="e => ToggleColumnAsync(level, ordinal, GetBool(e.Value))" />
 
+                                @* Nombre entero (parte en dos líneas si hace falta)
+                                   y el ejemplo debajo: es lo que hay que leer para
+                                   decidir. Variación y tipo van en su columna, a la
+                                   misma altura en todas las filas. *@
                                 <span class="dsrc-column-body">
 
                                     <span class="dsrc-column-top">
-                                        <code>@column.Name</code>
-
                                         @if (level.KeyColumn == ordinal)
                                         {
                                             <span class="dsrc-badge is-key">clave</span>
                                         }
 
-                                        <span class="@CardinalityClass(ordinal)">
-                                            @CardinalityLabel(ordinal)
-                                        </span>
+                                        <code>@column.Name</code>
                                     </span>
 
                                     <span class="dsrc-column-sample">
@@ -305,7 +349,21 @@
 
                                 </span>
 
-                                <em>@column.Type</em>
+                                <span class="@CardinalityClass(ordinal)">
+                                    @CardinalityLabel(ordinal)
+                                </span>
+
+                                @* Dentro de la etiqueta, pero un select es
+                                   interactivo: cambiarlo no marca la casilla. *@
+                                <select class="dsrc-type"
+                                        title="Tipo del dato en el JSON"
+                                        value="@_assignments[ordinal].Type"
+                                        @onchange="e => TypeChanged(ordinal, e)">
+                                    @foreach (var (type, label) in Types)
+                                    {
+                                        <option value="@type">@label</option>
+                                    }
+                                </select>
 
                             </label>
                         }
@@ -315,6 +373,16 @@
 
             </div>
 
+
+            @if (DuplicateNames(level) is { Count: > 0 } duplicates)
+            {
+                <div class="dsrc-warn">
+                    Dos campos de este nivel se llamarían igual:
+                    <strong>@string.Join(", ", duplicates)</strong>.
+                    Cámbiale el nombre a uno en Revisar o deja sólo uno marcado;
+                    así no se puede continuar.
+                </div>
+            }
 
             @if (UnassignedCount > 0)
             {
@@ -458,6 +526,16 @@
                                             <input value="@_assignments[ordinal].Name"
                                                    @onchange="e => FieldNameChanged(ordinal, e)" />
 
+                                            <select class="dsrc-type"
+                                                    title="Tipo del dato en el JSON"
+                                                    value="@_assignments[ordinal].Type"
+                                                    @onchange="e => TypeChanged(ordinal, e, rebuild: true)">
+                                                @foreach (var (type, label) in Types)
+                                                {
+                                                    <option value="@type">@label</option>
+                                                }
+                                            </select>
+
                                         </div>
                                     }
 
@@ -595,6 +673,72 @@
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
 
+    /// <summary>
+    /// Fija el tipo de origen y oculta el selector JSON / SQL. La pantalla de
+    /// datos tabulares de un report sólo tiene sentido con filas.
+    /// </summary>
+    [Parameter]
+    public DatasetSourceKind? FixedKind { get; set; }
+
+    /// <summary>
+    /// Filas con las que arrancar sin pegar nada: las del report existente,
+    /// reconstruidas desde sus datos de ejemplo. Con
+    /// <see cref="InitialMapping"/> el asistente abre con los niveles y los
+    /// campos ya colocados, para moverlos de sitio.
+    /// </summary>
+    [Parameter]
+    public TabularPayload? InitialRows { get; set; }
+
+    [Parameter]
+    public DataMapping? InitialMapping { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (FixedKind is { } kind)
+            _kind = kind;
+
+        if (InitialRows is { Rows.Count: > 0 } rows)
+        {
+            _kind = DatasetSourceKind.Tabular;
+
+            // El primer paso enseña las filas como si se hubieran pegado, y
+            // se pueden retocar o sustituir desde ahí.
+            _raw = ToTabText(rows);
+
+            LoadPayload(rows);
+
+            if (_payload is not null && InitialMapping is not null)
+            {
+                ApplyMapping(InitialMapping);
+
+                _activeLevel = 0;
+                _step = WizardStep.Level;
+
+                RefreshSuggestion();
+            }
+        }
+    }
+
+    private static readonly (ReportDataType Type, string Label)[] Types =
+    [
+        (ReportDataType.String, "Texto"),
+        (ReportDataType.Number, "Número"),
+        (ReportDataType.Date, "Fecha"),
+        (ReportDataType.DateTime, "Fecha y hora"),
+        (ReportDataType.Boolean, "Sí / No")
+    ];
+
+    private bool _sortByName;
+
+    /// <summary>
+    /// Claves que agrupan un nivel pero no son campos suyos (al reorganizar
+    /// un report, valores inventados para volver a agrupar igual). No se
+    /// ofrecen como campos ni cuentan como columnas sin colocar.
+    /// </summary>
+    private readonly HashSet<int> _syntheticKeys = [];
+
+    private IReadOnlyList<string> _renamedHeaders = [];
+
     private DatasetSourceKind _kind = DatasetSourceKind.Json;
 
     private string _json = string.Empty;
@@ -686,7 +830,7 @@
         _schema is not null;
 
     private int UnassignedCount =>
-        _assignments.Count(x => x.Value.LevelPath == IgnorePath);
+        _assignments.Count(x => x.Value.LevelPath == IgnorePath && !_syntheticKeys.Contains(x.Key));
 
     private string? KeyHint
     {
@@ -826,9 +970,12 @@
         if (string.IsNullOrWhiteSpace(_raw))
             return;
 
+        TabularPayload parsed;
+
         try
         {
-            _payload = DelimitedTextParser.Parse(_raw);
+            parsed = DelimitedTextParser.Parse(_raw, out var renamed);
+            _renamedHeaders = renamed;
         }
         catch (Exception exception)
         {
@@ -837,14 +984,25 @@
             return;
         }
 
-        if (_payload.Rows.Count == 0)
+        if (parsed.Rows.Count == 0)
         {
             _error = "No se ha encontrado ninguna fila de datos.";
-            _payload = null;
 
             return;
         }
 
+        LoadPayload(parsed);
+    }
+
+
+    /// <summary>
+    /// Describe unas filas ya leídas: valores distintos por columna y la
+    /// mejor candidata a documento.
+    /// </summary>
+    private void LoadPayload(
+        TabularPayload payload)
+    {
+        _payload = payload;
         _dataSchema = _payload.ToSchema();
 
         _rows =
@@ -861,7 +1019,8 @@
                 {
                     LevelPath = IgnorePath,
                     Name = DataMappingSuggester.ToCamelCase(
-                        _payload.Columns[ordinal].Name)
+                        _payload.Columns[ordinal].Name),
+                    Type = _payload.Columns[ordinal].Type
                 };
 
             var position = ordinal;
@@ -1282,15 +1441,156 @@
     private async Task AddRemainingToLevelAsync(
         LevelState level)
     {
-        foreach (var assignment in _assignments.Values)
+        foreach (var (ordinal, assignment) in _assignments)
         {
-            if (assignment.LevelPath == IgnorePath)
+            if (assignment.LevelPath == IgnorePath && !_syntheticKeys.Contains(ordinal))
                 assignment.LevelPath = level.Path;
         }
 
         Build();
 
         await Task.CompletedTask;
+    }
+
+
+    /// <summary>
+    /// Filas como texto con tabuladores, igual que las copia SSMS. Una celda
+    /// con tabulador, salto de línea o comillas va entre comillas.
+    /// </summary>
+    private static string ToTabText(
+        TabularPayload payload)
+    {
+        static string Cell(object? value)
+        {
+            var text =
+                value switch
+                {
+                    null => string.Empty,
+                    IFormattable formattable => formattable.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+                    _ => value.ToString() ?? string.Empty
+                };
+
+            return text.IndexOfAny(['\t', '\n', '\r', '"']) >= 0
+                ? "\"" + text.Replace("\"", "\"\"") + "\""
+                : text;
+        }
+
+        var builder = new System.Text.StringBuilder();
+
+        builder.AppendJoin('\t', payload.Columns.Select(x => Cell(x.Name)));
+
+        foreach (var row in payload.Rows)
+        {
+            builder.Append('\n');
+            builder.AppendJoin('\t', row.Select(Cell));
+        }
+
+        return builder.ToString();
+    }
+
+
+    private void TypeChanged(
+        int ordinal,
+        ChangeEventArgs e,
+        bool rebuild = false)
+    {
+        if (!Enum.TryParse<ReportDataType>(e.Value?.ToString(), out var type))
+            return;
+
+        _assignments[ordinal].Type = type;
+
+        if (rebuild)
+            Build();
+    }
+
+
+    /// <summary>
+    /// Nombres de campo que se repiten dentro del nivel (sin distinguir
+    /// mayúsculas, igual que el JSON que se usa después).
+    /// </summary>
+    private List<string> DuplicateNames(
+        LevelState level) =>
+        ColumnsOf(level)
+            .Select(ordinal => _assignments[ordinal].Name)
+            .Concat(_levels
+                .Where(x => x.Depth == level.Depth + 1)
+                .Select(x => x.Name))
+            .GroupBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToList();
+
+
+    /// <summary>
+    /// Coloca las columnas como dice un mapping guardado: un nivel por nodo
+    /// (siguiendo la cadena documento → primer hijo → ...) y cada campo en
+    /// su nivel, con su nombre y su tipo. Es lo que permite volver a la
+    /// estructura de un report ya creado y mover un campo de sitio.
+    /// </summary>
+    private void ApplyMapping(
+        DataMapping mapping)
+    {
+        if (_payload is null)
+            return;
+
+        var columns = _payload.Columns;
+
+        int? OrdinalOf(string? column)
+        {
+            if (string.IsNullOrWhiteSpace(column))
+                return null;
+
+            var index = columns.FindIndex(x =>
+                string.Equals(x.Name, column, StringComparison.OrdinalIgnoreCase));
+
+            return index >= 0 ? index : null;
+        }
+
+        _levels.Clear();
+
+        var node = mapping.Root;
+        var depth = 0;
+
+        while (node is not null)
+        {
+            var level =
+                new LevelState
+                {
+                    Depth = depth,
+                    Name = depth == 0 ? string.Empty : node.Name,
+                    KeyColumn = OrdinalOf(node.KeyColumns.FirstOrDefault())
+                };
+
+            _levels.Add(level);
+
+            foreach (var field in node.Fields)
+            {
+                if (OrdinalOf(field.SourceColumn) is not { } ordinal)
+                    continue;
+
+                _assignments[ordinal].LevelPath = level.Path;
+                _assignments[ordinal].Name = field.Name;
+                _assignments[ordinal].Type = field.Type;
+            }
+
+            if (level.KeyColumn is { } key &&
+                _assignments[key].LevelPath != level.Path)
+            {
+                _syntheticKeys.Add(key);
+            }
+
+            // El asistente es una cadena: si un nivel tuviera dos hijos, sólo
+            // se sigue el primero.
+            if (node.Children.Count > 1)
+            {
+                _structureWarning =
+                    $"'{GetLevelDisplayName(level)}' tiene {node.Children.Count} niveles dentro; " +
+                    "aquí sólo se puede editar el primero.";
+            }
+
+            node = node.Children.FirstOrDefault();
+            depth++;
+        }
     }
 
 
@@ -1323,10 +1623,11 @@
         LevelState level) =>
         _assignments
             .Where(x =>
-                x.Value.LevelPath == IgnorePath ||
+                (x.Value.LevelPath == IgnorePath && !_syntheticKeys.Contains(x.Key)) ||
                 x.Value.LevelPath == level.Path)
             .Select(x => x.Key)
-            .OrderBy(DistinctOf)
+            .OrderBy(x => _sortByName ? 0 : DistinctOf(x))
+            .ThenBy(x => _sortByName ? _payload!.Columns[x].Name : string.Empty, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(x => x)
             .ToList();
 
@@ -1343,7 +1644,7 @@
     /// </summary>
     private List<int> UnassignedOrdinals() =>
         _assignments
-            .Where(x => x.Value.LevelPath == IgnorePath)
+            .Where(x => x.Value.LevelPath == IgnorePath && !_syntheticKeys.Contains(x.Key))
             .Select(x => x.Key)
             .OrderBy(x => x)
             .ToList();
@@ -1419,7 +1720,7 @@
             return "siempre igual";
 
         return count >= _rows.Count
-            ? "distinta en cada fila"
+            ? "única por fila"
             : $"{count} valores";
     }
 
@@ -1517,6 +1818,16 @@
 
         _mapping = BuildMapping();
 
+        // Lo que haría inservible el JSON (dos campos con el mismo nombre en
+        // un nivel, un nivel sin nombre) se para aquí, antes de construir.
+        var invalid = DataMappingRules.Validate(_mapping);
+
+        if (invalid.Count > 0)
+        {
+            _error = string.Join(" ", invalid);
+            return;
+        }
+
         try
         {
             var builder = new HierarchyBuilder();
@@ -1551,7 +1862,7 @@
 
         foreach (var level in _levels)
         {
-            if (level.KeyColumn is null)
+            if (level.KeyColumn is null || _syntheticKeys.Contains(level.KeyColumn.Value))
                 continue;
 
             if (!ColumnsOf(level).Contains(level.KeyColumn.Value))
@@ -1618,7 +1929,7 @@
                                 {
                                     Name = _assignments[ordinal].Name,
                                     SourceColumn = column.Name,
-                                    Type = column.Type,
+                                    Type = _assignments[ordinal].Type,
                                     Nullable = column.Nullable
                                 };
                             })
@@ -1681,6 +1992,8 @@
         _selected = 0;
         _activeLevel = 0;
         _step = WizardStep.Source;
+        _renamedHeaders = [];
+        _syntheticKeys.Clear();
     }
 
 
@@ -1724,5 +2037,11 @@
         public string LevelPath { get; set; } = string.Empty;
 
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Tipo en el JSON. Sale del análisis de la columna y se puede
+        /// cambiar aquí mismo: un código "001963" detectado como número.
+        /// </summary>
+        public ReportDataType Type { get; set; } = ReportDataType.String;
     }
 }

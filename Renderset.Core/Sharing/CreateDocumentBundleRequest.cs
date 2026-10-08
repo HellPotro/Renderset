@@ -29,6 +29,12 @@ public sealed class CreateDocumentBundleRequest
 
     public int? ExpiresInDays { get; set; }
 
+    /// <summary>
+    /// Deja al cliente descargar los datos de los documentos (CSV y JSON).
+    /// Por defecto no: compartir el documento no implica compartir sus datos.
+    /// </summary>
+    public bool AllowDataDownload { get; set; }
+
     public List<CreateDocumentBundleItem> Items { get; set; } = [];
 }
 

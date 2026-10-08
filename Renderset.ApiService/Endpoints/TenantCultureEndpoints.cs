@@ -1,3 +1,5 @@
+using Renderset.Api.Security;
+using Renderset.Core.Tenancy;
 using Renderset.Core.Localization;
 
 namespace Renderset.Api.Endpoints;
@@ -15,13 +17,16 @@ public static class TenantCultureEndpoints
             "/{tenantId}",
             GetAllAsync);
 
+        // Cambiar los idiomas del tenant afecta a todos sus documentos.
         group.MapPut(
             "/{tenantId}/{culture}",
-            SaveAsync);
+            SaveAsync)
+            .RequireTenantRole(TenantRole.Admin);
 
         group.MapDelete(
             "/{tenantId}/{culture}",
-            DeleteAsync);
+            DeleteAsync)
+            .RequireTenantRole(TenantRole.Admin);
 
         return app;
     }

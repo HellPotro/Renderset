@@ -1,0 +1,186 @@
+/* Estilos propios de la página de API keys. Lo común (.page, .editor-card,
+   .form-group, botones) viene de pages.css. */
+
+.api-keys-page {
+    max-width: 1050px;
+}
+
+.api-key-created {
+    margin-bottom: 20px;
+    padding: 16px 18px;
+    border: 1px solid #ead9a8;
+    border-radius: 10px;
+    background: #fffaf0;
+}
+
+.api-key-created-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+    .api-key-created-heading > i {
+        margin-top: 2px;
+        color: #a0761c;
+    }
+
+    .api-key-created-heading > div {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .api-key-created-heading strong {
+        color: #5c4612;
+        font-size: 13px;
+    }
+
+    .api-key-created-heading small {
+        color: #7d6526;
+        font-size: 11px;
+    }
+
+.api-key-created-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+}
+
+    .api-key-created-row input {
+        min-width: 0;
+        padding: 8px 10px;
+        border: 1px solid #e3d3a3;
+        border-radius: 7px;
+        background: #fff;
+        color: #20323a;
+        font-family: "Cascadia Code", Consolas, monospace;
+        font-size: 12px;
+    }
+
+.api-key-usage {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: #f5efe0;
+    color: #5c4612;
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.api-key-form {
+    margin-bottom: 16px;
+}
+
+.api-key-form-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 160px auto;
+    gap: 12px;
+    align-items: end;
+}
+
+    .api-key-form-body .form-group {
+        margin-bottom: 0;
+    }
+
+.api-key-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) 150px 120px 120px 90px 31px;
+    align-items: center;
+    gap: 12px;
+    min-height: 50px;
+    padding: 0 18px;
+    border-bottom: 1px solid #edf1f3;
+    font-size: 12px;
+}
+
+    .api-key-row:last-child {
+        border-bottom: 0;
+    }
+
+    .api-key-row.is-header {
+        min-height: 36px;
+        border-bottom: 1px solid #e5ebee;
+        background: #f7f9fa;
+    }
+
+        .api-key-row.is-header span {
+            color: #84939a;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+    .api-key-row strong {
+        overflow: hidden;
+        color: #20323a;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .api-key-row code {
+        color: #61757e;
+        font-size: 11px;
+    }
+
+    .api-key-row .icon-button:disabled {
+        opacity: .4;
+        cursor: default;
+    }
+
+.api-key-muted {
+    color: #61757e;
+    font-size: 11px;
+}
+
+.api-key-status {
+    justify-self: start;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+    .api-key-status.is-active {
+        background: #e5f4ec;
+        color: #2f7a52;
+    }
+
+    .api-key-status.is-expired {
+        background: #f4f0e4;
+        color: #8a6d24;
+    }
+
+    .api-key-status.is-revoked {
+        background: #f8e9e9;
+        color: #9a3d3d;
+    }
+
+.api-key-empty {
+    padding: 32px 24px;
+    color: #8a999f;
+    font-size: 12px;
+    text-align: center;
+}
+
+@media (max-width: 800px) {
+
+    .api-key-form-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .api-key-row {
+        grid-template-columns: minmax(0, 1fr) auto 31px;
+    }
+
+        .api-key-row > code,
+        .api-key-row > .api-key-muted,
+        .api-key-row.is-header {
+            display: none;
+        }
+}

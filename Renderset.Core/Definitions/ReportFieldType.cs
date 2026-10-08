@@ -8,5 +8,11 @@ public enum ReportFieldType
     Date,
     Percentage,
     Email,
-    Boolean
+    Boolean,
+
+    /// <summary>
+    /// Número sin decimales (1.480). Para cantidades, que con "Number"
+    /// salían como 16,00.
+    /// </summary>
+    Integer
 }

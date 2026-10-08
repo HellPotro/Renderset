@@ -12,6 +12,14 @@ public sealed class ReportHeaderConfiguration
 
     public string? SubtitleKey { get; set; }
 
+    /// <summary>
+    /// Nulo = se muestra, como antes de existir la propiedad. El texto se
+    /// conserva aunque se oculte, para poder volver a mostrarlo.
+    /// </summary>
+    public bool? ShowTitle { get; set; }
+
+    public bool? ShowSubtitle { get; set; }
+
     public bool? ShowLogo { get; set; }
 
     public string? LogoUrl { get; set; }
@@ -24,6 +32,12 @@ public sealed class ReportHeaderConfiguration
     public ReportHeaderLayout? Layout { get; set; }
 
     /// <summary>
+    /// Título junto al logo o en banda propia. Nulo = junto al logo, como
+    /// antes de existir la propiedad.
+    /// </summary>
+    public ReportHeaderTitlePlacement? TitlePlacement { get; set; }
+
+    /// <summary>
     /// Fondo de la banda de cabecera. Nulo significa sin fondo, que es como
     /// se comportaba antes de existir esta propiedad.
     /// </summary>
@@ -32,6 +46,23 @@ public sealed class ReportHeaderConfiguration
     public string? TextColor { get; set; }
 
     public bool? ShowDivider { get; set; }
+
+    /// <summary>
+    /// Código QR en la cabecera. Nulo = sin QR, como antes de existir.
+    /// </summary>
+    public bool? ShowQr { get; set; }
+
+    /// <summary>
+    /// Qué lleva el QR. Nulo = el enlace del documento ({documentUrl}).
+    /// Admite marcadores de datos: https://erp/salidas/{salidaid}.
+    /// Ver <see cref="Rendering.ReportQrContent"/>.
+    /// </summary>
+    public string? QrContent { get; set; }
+
+    /// <summary>
+    /// Lado del QR en píxeles. Nulo = <see cref="Resolved.ResolvedReportHeader.DefaultQrSize"/>.
+    /// </summary>
+    public int? QrSize { get; set; }
 
     /// <summary>
     /// Líneas de datos de empresa. Sparse como el resto: si el preset no

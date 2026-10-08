@@ -19,10 +19,19 @@
 	<ItemGroup>
 		<EmbeddedResource Include="wwwroot\css\report-document.css" LogicalName="Renderset.Blazor.report-document.css" />
 		<EmbeddedResource Include="wwwroot\css\document-bundle.css" LogicalName="Renderset.Blazor.document-bundle.css" />
+		<EmbeddedResource Include="wwwroot\css\document-viewer.css" LogicalName="Renderset.Blazor.document-viewer.css" />
+		<EmbeddedResource Include="wwwroot\js\document-viewer.js" LogicalName="Renderset.Blazor.document-viewer.js" />
+
+		<!-- Tipografías incluidas: el documento emitido lleva incrustada la de
+		     su tema (ReportFontFaces), así que la API las lee del ensamblado. -->
+		<EmbeddedResource Include="wwwroot\fonts\*.woff2" LogicalName="Renderset.Blazor.fonts.%(Filename)%(Extension)" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
+		<!-- QR de la cabecera. Sólo se usa su matriz de módulos; el SVG se
+		     dibuja en ReportQrSvg. MIT. -->
+		<PackageReference Include="QRCoder" Version="1.8.0" />
 	</ItemGroup>
 
 	<ItemGroup>

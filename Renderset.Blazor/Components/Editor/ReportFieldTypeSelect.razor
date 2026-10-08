@@ -1,0 +1,75 @@
+@using Renderset.Core.Definitions
+
+@*
+    Tipo con el que se pinta un campo o una columna. Elegir el tipo inferido
+    devuelve null: la configuración sólo guarda el cambio, no el valor por
+    defecto (sparse).
+*@
+
+<select class="@(Compact ? "report-editor-chip-select" : null) @(IsOverridden ? "is-overridden" : null)"
+        title="@Title"
+        value="@Value"
+        disabled="@Disabled"
+        @onchange="ChangedAsync">
+
+    @foreach (var (type, label) in Options)
+    {
+        <option value="@type">
+            @(type == Inferred && !Compact ? $"{label} (detectado)" : label)
+        </option>
+    }
+
+</select>
+
+@code {
+
+    private static readonly (ReportFieldType Type, string Label)[] Options =
+    [
+        (ReportFieldType.Text, "Texto"),
+        (ReportFieldType.Integer, "Entero"),
+        (ReportFieldType.Number, "Número"),
+        (ReportFieldType.Currency, "Moneda"),
+        (ReportFieldType.Percentage, "Porcentaje"),
+        (ReportFieldType.Date, "Fecha"),
+        (ReportFieldType.Boolean, "Sí / No"),
+        (ReportFieldType.Email, "Email")
+    ];
+
+    [Parameter]
+    public ReportFieldType Value { get; set; }
+
+    /// <summary>
+    /// Tipo de la definición, el que se dedujo de los datos.
+    /// </summary>
+    [Parameter]
+    public ReportFieldType Inferred { get; set; }
+
+    [Parameter]
+    public bool Compact { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback<ReportFieldType?> Changed { get; set; }
+
+    private bool IsOverridden =>
+        Value != Inferred;
+
+    private string Title =>
+        IsOverridden
+            ? $"Se pinta como {Label(Value)} (detectado: {Label(Inferred)})"
+            : $"Se pinta como {Label(Value)}, el tipo detectado";
+
+    private static string Label(ReportFieldType type) =>
+        Options.FirstOrDefault(x => x.Type == type).Label ?? type.ToString();
+
+    private Task ChangedAsync(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<ReportFieldType>(e.Value?.ToString(), out var type))
+            return Task.CompletedTask;
+
+        return Changed.InvokeAsync(
+            type == Inferred ? null : type);
+    }
+}

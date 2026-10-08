@@ -14,6 +14,7 @@
 @inject ICurrentTenant CurrentTenant
 @inject NavigationManager Navigation
 @inject IToastService Toasts
+@inject IJSRuntime JS
 
 <PageTitle>Presets - RenderSet</PageTitle>
 
@@ -173,33 +174,6 @@
     }
     else
     {
-        <div class="toolbar">
-
-            <div class="toolbar-group">
-
-                <label>Report</label>
-
-                <select value="@_selectedReportId"
-                        @onchange="ReportFilterChanged">
-
-                    <option value="">
-                        Todos los reports
-                    </option>
-
-                    @foreach (var report in _reports)
-                    {
-                        <option value="@report.Id">
-                            @report.Name
-                        </option>
-                    }
-
-                </select>
-
-            </div>
-
-        </div>
-
-
         @if (!_reports.Any())
         {
             <div class="empty-state">
@@ -218,6 +192,16 @@
         }
         else
         {
+            <div class="presets-shell">
+
+            @* El mismo menú que el Diccionario: con muchos reports un
+               desplegable no se puede ni leer ni buscar. *@
+            <SideNav Items="NavItems"
+                     SelectedKey="@SelectedNavKey"
+                     Selected="NavSelected"
+                     AriaLabel="Report"
+                     SearchPlaceholder="Filtrar reports" />
+
             <div class="preset-groups">
 
                 @foreach (var group in FilteredGroups)
@@ -331,9 +315,17 @@
 
                                             <button type="button"
                                                     class="icon-button"
-                                                    title="Editar preset"
+                                                    title="Asignaciones y datos del preset"
                                                     @onclick="() => EditPreset(group.Report, preset)">
                                                 <i class="fa-solid fa-pen"></i>
+                                            </button>
+
+                                            <button type="button"
+                                                    class="icon-button is-danger"
+                                                    title="@(CanDelete(group, preset) ? "Eliminar preset" : "Es el preset por defecto: marca otro como predeterminado antes de eliminarlo")"
+                                                    disabled="@(_saving || !CanDelete(group, preset))"
+                                                    @onclick="() => DeletePresetAsync(group.Report, preset)">
+                                                <i class="fa-solid fa-trash"></i>
                                             </button>
 
                                         </div>
@@ -346,6 +338,8 @@
 
                     </section>
                 }
+
+            </div>
 
             </div>
         }
@@ -620,6 +614,13 @@
                             _copyFromPresetId,
                             StringComparison.OrdinalIgnoreCase));
 
+            // Un preset en blanco nace con el tema de empresa por defecto; una
+            // copia se queda con el tema (o la referencia) del original.
+            var defaultTheme =
+                source is null
+                    ? await GetDefaultThemeAsync()
+                    : null;
+
             var configuration =
                 source is null
                     ? new ReportConfiguration
@@ -627,7 +628,8 @@
                         Id = presetId,
                         ReportId = _newReportId!,
                         Name = _newName.Trim(),
-                        Version = 1
+                        Version = 1,
+                        ThemeId = defaultTheme?.Theme.Id
                     }
                     : Clone(source.Configuration);
 
@@ -647,7 +649,7 @@
                     Configuration = configuration,
 
                     Theme = source is null
-                        ? new ReportTheme()
+                        ? defaultTheme?.Theme.Clone() ?? new ReportTheme()
                         : Clone(source.Theme)
                 };
 
@@ -664,8 +666,8 @@
             if (source is not null)
             {
                 await CopyPresetResourcesAsync(
-                    source.Id,
-                    presetId);
+                    source,
+                    preset);
             }
 
             if (_makeDefault || !HasDefaultForNewReport)
@@ -708,40 +710,164 @@
 
 
     /// <summary>
-    /// Al duplicar hay que llevarse también las etiquetas propias del preset
-    /// original. Si no, la copia pierde en silencio los textos que el cliente
-    /// tenía personalizados.
+    /// Al duplicar hay que llevarse también los textos propios del preset
+    /// original: si no, la copia pierde en silencio lo que el cliente tenía
+    /// personalizado.
+    ///
+    /// Antes se copiaban todos al preset nuevo, y la misma clave acababa
+    /// repetida en cada preset (y había que traducirla en cada uno). Ahora
+    /// lo que vale igual para los dos y no cambia a ningún otro preset del
+    /// report se pasa al ámbito del report, que ambos heredan
+    /// (ReportResourcePromotion). Sólo se copia lo que no se puede subir.
     /// </summary>
     private async Task CopyPresetResourcesAsync(
-        string sourcePresetId,
-        string targetPresetId)
+        ReportPreset source,
+        ReportPreset target)
     {
-        var resources =
+        var sourceScope = ReportResourceScope.ForPreset(source.Id);
+        var targetScope = ReportResourceScope.ForPreset(target.Id);
+
+        var sourceResources =
             await RenderSetApi.GetResourcesAsync(
                 CurrentTenant.Id,
-                ReportResourceScope.ForPreset(sourcePresetId));
+                sourceScope);
 
-        if (resources.Count == 0)
+        if (sourceResources.Count == 0)
             return;
 
-        var targetScope =
-            ReportResourceScope.ForPreset(targetPresetId);
+        var reportId = target.Configuration.ReportId;
+
+        var report =
+            _reports.FirstOrDefault(x =>
+                string.Equals(x.Id, reportId, StringComparison.OrdinalIgnoreCase));
+
+        var copies =
+            sourceResources
+                .Select(x => new ReportResource
+                {
+                    Scope = targetScope,
+                    Key = x.Key,
+                    Culture = x.Culture,
+                    Value = x.Value,
+                    Source = x.Source,
+                    Description = x.Description
+                })
+                .ToList();
+
+        var promoted =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (report is not null)
+        {
+            var plan =
+                await PlanPromotionAsync(
+                    report,
+                    source,
+                    target,
+                    sourceResources,
+                    copies);
+
+            if (!plan.IsEmpty)
+            {
+                var writes =
+                    plan.ReportWrites.Count == 0 ||
+                    await Toasts.RunApiAsync(
+                        () => RenderSetApi.SaveResourcesAsync(
+                            CurrentTenant.Id,
+                            plan.ReportWrites),
+                        errorTitle: "No se han podido pasar los textos al report");
+
+                if (writes)
+                {
+                    promoted.UnionWith(plan.PromotedKeys);
+
+                    // Las copias del original sobran: ya las hereda del
+                    // report. Del nuevo no hay nada que borrar todavía.
+                    foreach (var (scope, key) in plan.Deletions.Where(x => x.Scope == sourceScope))
+                    {
+                        await Toasts.RunApiAsync(
+                            () => RenderSetApi.DeleteResourceAsync(
+                                CurrentTenant.Id,
+                                scope,
+                                key),
+                            errorTitle: $"No se ha podido quitar '{key}' del preset original");
+                    }
+                }
+            }
+        }
+
+        var remaining =
+            copies
+                .Where(x => !promoted.Contains(x.Key))
+                .ToList();
+
+        if (remaining.Count == 0)
+            return;
 
         await Toasts.RunApiAsync(
             () => RenderSetApi.SaveResourcesAsync(
                 CurrentTenant.Id,
-                resources
-                    .Select(x => new ReportResource
-                    {
-                        Scope = targetScope,
-                        Key = x.Key,
-                        Culture = x.Culture,
-                        Value = x.Value,
-                        Source = x.Source,
-                        Description = x.Description
-                    })
-                    .ToList()),
+                remaining),
             errorTitle: "No se han podido copiar los textos del preset");
+    }
+
+
+    /// <summary>
+    /// El preset nuevo cuenta como si ya tuviera las copias: así el plan
+    /// ve dos presets con el mismo texto y lo sube al report si no cambia a
+    /// ningún otro.
+    /// </summary>
+    private async Task<ReportResourcePromotion.Plan> PlanPromotionAsync(
+        Report report,
+        ReportPreset source,
+        ReportPreset target,
+        IReadOnlyCollection<ReportResource> sourceResources,
+        IReadOnlyCollection<ReportResource> copies)
+    {
+        var others =
+            _presets
+                .Where(x =>
+                    string.Equals(x.Configuration.ReportId, report.Id, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(x.Id, source.Id, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(x.Id, target.Id, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        var resources =
+            new Dictionary<string, IReadOnlyCollection<ReportResource>>(StringComparer.OrdinalIgnoreCase)
+            {
+                [source.Id] = sourceResources,
+                [target.Id] = copies
+            };
+
+        foreach (var other in others)
+        {
+            resources[other.Id] =
+                await RenderSetApi.GetResourcesAsync(
+                    CurrentTenant.Id,
+                    ReportResourceScope.ForPreset(other.Id));
+        }
+
+        var reportResources =
+            await RenderSetApi.GetResourcesAsync(
+                CurrentTenant.Id,
+                ReportResourceScope.ForReport(report.Id));
+
+        var presets =
+            new[] { source, target }
+                .Concat(others)
+                .Select(x => new ReportResourcePromotion.PresetInfo(
+                    x.Id,
+                    x.Configuration.Name,
+                    x.Configuration))
+                .ToList();
+
+        return ReportResourcePromotion.Build(
+            report.Definition,
+            presets,
+            reportResources,
+            resources,
+            minHolders: 2,
+            onlyKeys: sourceResources.Select(x => x.Key).ToList());
     }
 
 
@@ -756,6 +882,54 @@
         _makeDefault = false;
 
         RegenerateId();
+    }
+
+
+    // ------------------------------------------------------------ borrado
+
+    /// <summary>
+    /// El preset por defecto no se borra mientras haya otros: el report se
+    /// quedaría sin preset al que recurrir. Si es el único, sí (el report
+    /// vuelve a "sin presets").
+    /// </summary>
+    private bool CanDelete(
+        PresetGroup group,
+        ReportPreset preset) =>
+        !IsDefaultPreset(group.Report.Id, preset.Id) ||
+        group.Presets.Count == 1;
+
+
+    private async Task DeletePresetAsync(
+        Report report,
+        ReportPreset preset)
+    {
+        var confirmed =
+            await JS.InvokeAsync<bool>(
+                "confirm",
+                $"Se eliminará el preset '{preset.Configuration.Name}' y sus asignaciones. " +
+                "Los documentos ya emitidos no cambian. ¿Continuar?");
+
+        if (!confirmed)
+            return;
+
+        _saving = true;
+
+        try
+        {
+            var deleted = await Toasts.RunApiAsync(
+                () => RenderSetApi.DeletePresetAsync(
+                    CurrentTenant.Id,
+                    preset.Id),
+                success: $"Preset '{preset.Configuration.Name}' eliminado.",
+                errorTitle: "No se ha podido eliminar el preset");
+
+            if (deleted)
+                await LoadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
 
@@ -776,12 +950,54 @@
     }
 
 
-    private void ReportFilterChanged(
-        ChangeEventArgs e)
-    {
+    private const string AllReportsKey = "*";
+
+    /// <summary>
+    /// Menú lateral: todos los reports o uno, con cuántos presets tiene.
+    /// </summary>
+    private IReadOnlyList<SideNavItem> NavItems =>
+        new[]
+        {
+            new SideNavItem(
+                AllReportsKey,
+                "Todos los reports",
+                Count(_presets.Count),
+                "fa-layer-group",
+                "Vista",
+                Accent: true)
+        }
+        .Concat(
+            _reports
+                .OrderBy(x => x.Name)
+                .Select(report => new SideNavItem(
+                    report.Id,
+                    report.Name,
+                    Count(_presets.Count(x =>
+                        string.Equals(x.Configuration.ReportId, report.Id, StringComparison.OrdinalIgnoreCase))),
+                    "fa-file-lines",
+                    "Reports")))
+        .ToList();
+
+    private string SelectedNavKey =>
+        string.IsNullOrWhiteSpace(_selectedReportId)
+            ? AllReportsKey
+            : _selectedReportId;
+
+    private void NavSelected(
+        string key) =>
         _selectedReportId =
-            e.Value?.ToString();
-    }
+            key == AllReportsKey
+                ? null
+                : key;
+
+    private static string Count(
+        int presets) =>
+        presets switch
+        {
+            0 => "Sin presets",
+            1 => "1 preset",
+            _ => $"{presets} presets"
+        };
 
 
     private void OpenReport(
@@ -872,4 +1088,23 @@
     private sealed record PresetGroup(
         Report Report,
         IReadOnlyCollection<ReportPreset> Presets);
+
+    /// <summary>
+    /// Tema de empresa marcado por defecto. Si no hay o no se puede leer, el
+    /// preset nace con el tema base de siempre: no es motivo para fallar.
+    /// </summary>
+    private async Task<TenantReportTheme?> GetDefaultThemeAsync()
+    {
+        try
+        {
+            var themes =
+                await RenderSetApi.GetThemesAsync(CurrentTenant.Id);
+
+            return themes.FirstOrDefault(x => x.IsDefault);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 }

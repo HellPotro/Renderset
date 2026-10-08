@@ -218,30 +218,6 @@ body.rs-share-page {
     min-height: 0;
 }
 
-.rs-share-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
-    background: var(--rs-share-surface);
-    border-bottom: 1px solid var(--rs-share-border);
-}
-
-.rs-share-current {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    font-weight: 600;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-}
-
-.rs-share-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
 .rs-share-frame {
     flex: 1;
     width: 100%;
@@ -346,14 +322,6 @@ body.rs-share-page {
     .rs-share-body {
         grid-template-columns: 220px minmax(0, 1fr);
     }
-
-    .rs-share-toolbar {
-        flex-wrap: wrap;
-    }
-
-    .rs-share-current {
-        flex-basis: 100%;
-    }
 }
 
 
@@ -419,23 +387,6 @@ body.rs-share-page {
         margin: 12px 0 0;
     }
 
-    .rs-share-toolbar {
-        flex-wrap: wrap;
-        padding: 10px 16px;
-    }
-
-    .rs-share-current {
-        flex-basis: 100%;
-    }
-
-    .rs-share-actions {
-        width: 100%;
-    }
-
-        .rs-share-actions > .rs-share-button {
-            flex: 1 1 auto;
-        }
-
     .rs-share-frame {
         flex: none;
         height: 75vh;
@@ -452,8 +403,7 @@ body.rs-share-page {
 
     .rs-share-header,
     .rs-share-message,
-    .rs-share-list,
-    .rs-share-toolbar {
+    .rs-share-list {
         display: none;
     }
 
@@ -466,4 +416,11 @@ body.rs-share-page {
     .rs-share-frame {
         height: 100vh;
     }
+}
+
+
+/* ---------- Un solo documento (enlace público del QR) ---------- */
+
+.rs-share.is-single .rs-share-body {
+    grid-template-columns: minmax(0, 1fr);
 }

@@ -5,6 +5,7 @@
 @using Renderset.Core.Configurations
 @using Renderset.Core.DataSources
 @using Renderset.Core.Localization
+@using Renderset.Core.Mapping
 @using Renderset.Core.Persistence
 @using Renderset.Core.Presets
 @using Renderset.Core.Reports
@@ -375,9 +376,27 @@
 
             Toasts.Success("Report creado.");
 
-            // Cuando exista persistencia de mappings, aquí se guardará
-            // dataset.Mapping y se enlazará con el report. Sin eso, un report
-            // creado desde SQL no sabrá interpretar filas planas enviadas por API.
+            // Creado desde un SELECT: el mapping queda guardado y asignado,
+            // así la API acepta esas mismas filas sin configurar nada más.
+            if (dataset.Mapping is not null)
+            {
+                var mapping =
+                    new DataMapping
+                    {
+                        Id = $"{_reportId}-rows",
+                        Name = $"{_name} (filas)",
+                        ReportId = _reportId,
+                        Root = dataset.Mapping.Root
+                    };
+
+                await Toasts.RunApiAsync(
+                    () => RenderSetApi.SaveMappingAsync(
+                        CurrentTenant.Id,
+                        mapping.Id,
+                        mapping),
+                    errorTitle: "El report se ha creado, pero no el mapping de filas");
+            }
+
             Navigation.NavigateTo($"/reports/{Uri.EscapeDataString(_reportId)}/designer");
         }
         catch (Exception exception)
@@ -391,9 +410,31 @@
     }
 
 
+    /// <summary>
+    /// Tema de empresa marcado por defecto. Si no hay o no se puede leer, el
+    /// preset nace con el tema base de siempre: no es motivo para fallar.
+    /// </summary>
+    private async Task<TenantReportTheme?> GetDefaultThemeAsync()
+    {
+        try
+        {
+            var themes =
+                await RenderSetApi.GetThemesAsync(CurrentTenant.Id);
+
+            return themes.FirstOrDefault(x => x.IsDefault);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private async Task<bool> CreateDefaultPresetAsync()
     {
         var presetId = $"{_reportId}-default";
+
+        var defaultTheme =
+            await GetDefaultThemeAsync();
 
         var preset =
             new ReportPreset
@@ -408,11 +449,13 @@
                         ReportId = _reportId,
                         Name = "Default",
                         Version = 1,
+                        ThemeId = defaultTheme?.Theme.Id,
                         Sections = []
                     },
 
                 Theme =
-                    new ReportTheme
+                    defaultTheme?.Theme.Clone()
+                    ?? new ReportTheme
                     {
                         Id = "default",
                         Name = "Default"

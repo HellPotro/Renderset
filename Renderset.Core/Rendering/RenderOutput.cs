@@ -16,24 +16,17 @@ public sealed class RenderOutput
     public RenderBatchMode BatchMode { get; set; } = RenderBatchMode.Single;
 
     /// <summary>
-    /// Añade al documento una barra con imprimir, exportar y copiar datos.
-    ///
-    /// Apagada por defecto a propósito. Un ERP que incrusta el HTML en su
-    /// propia pantalla no quiere controles ajenos dentro; un enlace que se
-    /// manda a un cliente sí. Quien pide el documento es el único que sabe
-    /// en cuál de los dos casos está.
-    ///
-    /// La barra nunca sale impresa ni en el PDF: sólo existe en pantalla.
+    /// Retirado: el documento emitido ya no lleva barra. Imprimir, PDF, CSV y
+    /// copiar datos los pone la página que lo enseña (el visor de Web o el de
+    /// bundles). Se sigue aceptando para no romper a quien ya lo envía, pero
+    /// no hace nada.
     /// </summary>
     public bool IncludeToolbar { get; set; }
 
     /// <summary>
-    /// Incrusta en el documento sus datos en JSON y añade a la barra el
-    /// botón de copiarlos, para quien quiera integrarlos en otro sistema.
-    ///
-    /// Es un interruptor aparte de la barra a propósito: una cosa es meter
-    /// controles en el documento y otra meter datos. Con un solo flag se
-    /// acabaría activando lo segundo sin quererlo al pedir lo primero.
+    /// Incrusta en el documento sus datos: el JSON del documento y los de
+    /// cada tabla. Con ellos, el visor ofrece "Exportar CSV" y "Copiar JSON";
+    /// sin ellos, sólo imprimir, abrir y PDF.
     ///
     /// Sólo salen los campos y columnas visibles, con los identificadores
     /// como claves. Aun así el documento pesa casi el doble, que para una

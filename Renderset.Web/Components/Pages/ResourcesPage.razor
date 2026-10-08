@@ -1,6 +1,7 @@
 ﻿@page "/resources"
 
 @using Renderset.Core.Localization
+@using Renderset.Core.Persistence
 @using Renderset.Core.Reports
 @using Renderset.Core.Resources
 @using Renderset.Core.Translations
@@ -13,6 +14,23 @@
 
 <PageTitle>Diccionario - RenderSet</PageTitle>
 
+@*
+    Diccionario: una fila por clave, una columna por idioma.
+
+    Navegación a la izquierda en vez del desplegable de ámbitos:
+
+      - Elementos comunes: el diccionario común del tenant (etiquetas
+        compartidas, bloques, variables, numeración...) y los textos de la
+        página pública de documentos compartidos.
+      - Reports: cada report enseña en la misma tabla sus textos base y los
+        de todos sus presets, marcados con su origen. Antes cada preset era
+        un ámbito aparte y había que ir uno a uno para ver qué cambiaba.
+
+    Los idiomas están en un solo sitio, la cabecera de cada columna: nombre,
+    cobertura, ocultar y rellenar huecos. Los ocultos se vuelven a mostrar
+    desde la barra de herramientas.
+*@
+
 <div class="dict">
 
     <header class="dict-header">
@@ -20,47 +38,16 @@
         <div>
             <h1>Diccionario</h1>
             <p>
-                Una fila por clave, una columna por idioma.
+                Textos del documento en cada idioma. Elige a la izquierda qué
+                quieres traducir.
             </p>
         </div>
 
         <div class="dict-header-actions">
 
-            <select class="dict-scope"
-                    value="@_scope"
-                    @onchange="ScopeChangedAsync">
-
-                <optgroup label="Comunes">
-                    <option value="@ReportResourceScope.Global">
-                        Diccionario común del tenant
-                    </option>
-                </optgroup>
-
-                <optgroup label="Reports">
-                    @foreach (var report in _reports)
-                    {
-                        <option value="@report.Id">
-                            @report.Name
-                        </option>
-                    }
-                </optgroup>
-
-                @if (PresetScopes.Any())
-                {
-                    <optgroup label="Presets">
-                        @foreach (var scope in PresetScopes)
-                        {
-                            <option value="@scope">
-                                @scope[("preset:".Length)..]
-                            </option>
-                        }
-                    </optgroup>
-                }
-
-            </select>
-
             <button type="button"
                     class="secondary-button"
+                    disabled="@(_loading || _cultures.Count == 0)"
                     @onclick="ToggleNewKey">
                 <i class="fa-solid fa-plus"></i>
                 Nueva clave
@@ -70,323 +57,431 @@
 
     </header>
 
-    @if (_showNewKey)
-    {
-        <section class="dict-newkey">
 
-            <div class="form-group">
-                <label>Clave</label>
-                <input value="@_newKey"
-                       @oninput="e => _newKey = e.Value?.ToString() ?? string.Empty"
-                       placeholder="field.customer.name" />
-            </div>
+    <div class="dict-shell">
 
-            <div class="form-group">
-                <label>Descripción</label>
-                <input value="@_newKeyDescription"
-                       @oninput="e => _newKeyDescription = e.Value?.ToString() ?? string.Empty"
-                       placeholder="Ayuda interna para quien traduce" />
-            </div>
+        @* ------------------------------------------------- navegación *@
 
-            <div class="dict-newkey-actions">
-
-                <button type="button"
-                        class="secondary-button"
-                        @onclick="ToggleNewKey">
-                    Cancelar
-                </button>
-
-                <button type="button"
-                        class="primary-button"
-                        disabled="@string.IsNullOrWhiteSpace(_newKey)"
-                        @onclick="AddKey">
-                    Añadir
-                </button>
-
-            </div>
-
-        </section>
-    }
+        <SideNav Items="NavItems"
+                 SelectedKey="@SelectedNavKey"
+                 Selected="NavSelectedAsync"
+                 AriaLabel="Qué diccionario"
+                 SearchPlaceholder="Filtrar reports y diccionarios" />
 
 
-    <div class="dict-toolbar">
+        @* ------------------------------------------------- contenido *@
 
-        <div class="dict-search">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input value="@_search"
-                   @oninput="e => _search = e.Value?.ToString() ?? string.Empty"
-                   placeholder="Filtrar por clave o por texto" />
-        </div>
+        <section class="dict-main">
 
-        <button type="button"
-                class="secondary-button"
-                disabled="@(_isBusy || BaseCulture is null)"
-                title="Traduce, desde el idioma base, todas las claves que falten en cualquier idioma"
-                @onclick="TranslateEverythingAsync">
-            <i class="fa-solid fa-language"></i>
-            Rellenar todos los huecos
-        </button>
+            <div class="dict-main-head">
 
-        <label class="dict-toggle">
-            <input type="checkbox"
-                   checked="@_onlyPending"
-                   @onchange="e => _onlyPending = e.Value is bool v && v" />
-            <span>Sólo con huecos</span>
-        </label>
+                <div>
+                    <h2>@ViewTitle</h2>
+                    <p>@ViewDescription</p>
+                </div>
 
-        <span class="dict-count">
-            @Rows.Count() de @_matrix.Count claves
-        </span>
-
-    </div>
-
-
-    @if (_cultures.Count > 0)
-    {
-        <div class="dict-langs">
-
-            @foreach (var culture in _cultures)
-            {
-                var visible = IsVisible(culture);
-
-                <div class="dict-chip-wrap" @key="culture.Culture">
-
-                <button type="button"
-                        class="@ChipClass(culture, visible)"
-                        title="@ChipTitle(culture, visible)"
-                        disabled="@culture.IsDefault"
-                        @onclick="() => ToggleCulture(culture)">
-
-                    <span class="dict-chip-check">
-                        @if (culture.IsDefault)
-                        {
-                            <i class="fa-solid fa-lock"></i>
-                        }
-                        else if (visible)
-                        {
-                            <i class="fa-solid fa-check"></i>
-                        }
-                    </span>
-
-                    <span class="dict-chip-body">
-
-                        <span class="dict-chip-name">
-                            <span aria-hidden="true">@CultureFlag.For(culture.Culture)</span>
-                            @culture.DisplayName
-                            <code>@culture.Culture</code>
-                        </span>
-
-                        <span class="dict-chip-bar">
-                            <span style="width:@(Coverage(culture.Culture))%"></span>
-                        </span>
-
-                    </span>
-
-                    <span class="dict-chip-pct">
-                        @Coverage(culture.Culture)%
-                    </span>
-
-                </button>
-
-                @if (!culture.IsDefault)
+                @if (_reportId is not null && Origins.Count > 1)
                 {
-                    <button type="button"
-                            class="dict-lang-menu-toggle"
-                            title="Rellenar huecos de @culture.DisplayName"
-                            @onclick="() => ToggleLanguageMenu(culture.Culture)">
-                        <i class="fa-solid fa-ellipsis"></i>
-                    </button>
+                    <div class="dict-origins" role="tablist" aria-label="Origen de los textos">
 
-                    @if (_openMenu == culture.Culture)
-                    {
-                        <div class="dict-lang-panel">
+                        <button type="button"
+                                class="@OriginClass(null)"
+                                @onclick="() => _originFilter = null">
+                            Todo
+                            <span>@_matrix.Count</span>
+                        </button>
 
-                            <span class="dict-lang-panel-title">
-                                Rellenar huecos desde
-                            </span>
+                        @foreach (var origin in Origins)
+                        {
+                            <button type="button"
+                                    class="@OriginClass(origin.Scope)"
+                                    title="@origin.Hint"
+                                    @onclick="() => _originFilter = origin.Scope">
+                                <i class="fa-solid @origin.Icon"></i>
+                                @origin.Label
+                                <span>@_matrix.Count(x => x.Scope == origin.Scope)</span>
+                            </button>
+                        }
 
-                            @foreach (var source in _cultures.Where(x => x.Culture != culture.Culture))
-                            {
-                                <div class="dict-lang-panel-row">
-
-                                    <span>@source.DisplayName</span>
-
-                                    <button type="button"
-                                            title="Copiar el texto original tal cual"
-                                            disabled="@_isBusy"
-                                            @onclick="() => CopyMissingAsync(source.Culture, culture.Culture)">
-                                        <i class="fa-regular fa-copy"></i>
-                                    </button>
-
-                                    <button type="button"
-                                            title="Traducir con Azure"
-                                            disabled="@_isBusy"
-                                            @onclick="() => TranslateMissingAsync(source.Culture, culture.Culture)">
-                                        <i class="fa-solid fa-language"></i>
-                                    </button>
-
-                                </div>
-                            }
-
-                        </div>
-                    }
+                    </div>
                 }
+
+            </div>
+
+
+            @if (_promotion is { IsEmpty: false } promotion)
+            {
+                <div class="dict-promote">
+
+                    <i class="fa-solid fa-layer-group"></i>
+
+                    <div>
+                        <strong>
+                            @promotion.PromotedKeys.Count
+                            @(promotion.PromotedKeys.Count == 1 ? "clave está repetida" : "claves están repetidas")
+                            con el mismo texto en varios presets.
+                        </strong>
+                        <span>
+                            Pasándolas al report quedan en una sola fila: se traducen una vez y valen
+                            para todos sus presets. Lo que es distinto en algún preset se queda donde está.
+                        </span>
+                    </div>
+
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@_isBusy"
+                            @onclick="PromoteAsync">
+                        <i class="fa-solid fa-arrow-up"></i>
+                        Pasar al report
+                    </button>
 
                 </div>
             }
 
-        </div>
-    }
 
+            @if (_showNewKey)
+            {
+                <section class="dict-newkey">
 
-    @if (_loading)
-    {
-        <div class="dict-state">
-            Cargando diccionario...
-        </div>
-    }
-    else if (_cultures.Count == 0)
-    {
-        <div class="dict-state">
-            No hay idiomas configurados.
-            <a href="/idiomas">Añade al menos uno</a>
-            antes de traducir nada.
-        </div>
-    }
-    else if (_matrix.Count == 0)
-    {
-        <div class="dict-state">
-            Este ámbito no tiene ninguna clave todavía.
-        </div>
-    }
-    else
-    {
-        <div class="dict-scroll">
+                    <div class="form-group">
+                        <label>Clave</label>
+                        <input value="@_newKey"
+                               @oninput="e => _newKey = e.Value?.ToString() ?? string.Empty"
+                               placeholder="field.customer.name" />
+                    </div>
 
-            <table class="dict-table">
-
-                <thead>
-                    <tr>
-                        <th class="dict-col-key">
-                            Clave
-                        </th>
-
-                        @foreach (var culture in _visibleCultures)
-                        {
-                            <th class="@(culture.IsDefault ? "dict-col-lang is-base" : "dict-col-lang")">
-
-                                <div class="dict-lang-head">
-
-                                    <div class="dict-lang-name">
-                                        <strong>
-                                            <CultureFlagIcon Culture="@culture.Culture"
-                                                Size="CultureFlagIcon.CultureFlagSize.Small" />
-                                            @culture.DisplayName
-                                        </strong>
-                                        <code>@culture.Culture</code>
-                                    </div>
-
-
-                                </div>
-
-                                @if (culture.IsDefault)
-                                {
-                                    <div class="dict-lang-base">
-                                        Idioma base
-                                    </div>
-                                }
-
-                            </th>
-                        }
-
-                        <th class="dict-col-actions"></th>
-                    </tr>
-                </thead>
-
-                <tbody>
-
-                    @foreach (var group in Rows.GroupBy(GroupOf))
+                    @if (_reportId is not null && Origins.Count > 1)
                     {
-                        <tr class="dict-group">
-                            <td colspan="@(_visibleCultures.Count + 2)">
-                                @group.Key
-                            </td>
-                        </tr>
+                        <div class="form-group">
+                            <label>Dónde</label>
+                            <select value="@_newKeyScope"
+                                    @onchange="e => _newKeyScope = e.Value?.ToString()">
+                                @foreach (var origin in Origins)
+                                {
+                                    <option value="@origin.Scope">@origin.Label</option>
+                                }
+                            </select>
+                        </div>
+                    }
 
-                        @foreach (var row in group)
+                    <div class="form-group">
+                        <label>Descripción</label>
+                        <input value="@_newKeyDescription"
+                               @oninput="e => _newKeyDescription = e.Value?.ToString() ?? string.Empty"
+                               placeholder="Ayuda interna para quien traduce" />
+                    </div>
+
+                    <div class="dict-newkey-actions">
+
+                        <button type="button"
+                                class="secondary-button"
+                                @onclick="ToggleNewKey">
+                            Cancelar
+                        </button>
+
+                        <button type="button"
+                                class="primary-button"
+                                disabled="@string.IsNullOrWhiteSpace(_newKey)"
+                                @onclick="AddKey">
+                            Añadir
+                        </button>
+
+                    </div>
+
+                </section>
+            }
+
+
+            <div class="dict-toolbar">
+
+                <div class="dict-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input value="@_search"
+                           @oninput="e => _search = e.Value?.ToString() ?? string.Empty"
+                           placeholder="Filtrar por clave o por texto" />
+                </div>
+
+                <label class="dict-toggle">
+                    <input type="checkbox"
+                           checked="@_onlyPending"
+                           @onchange="e => _onlyPending = e.Value is bool v && v" />
+                    <span>Sólo con huecos</span>
+                </label>
+
+                @if (HiddenCultures.Count > 0)
+                {
+                    <div class="dict-hidden-langs">
+                        <span>Ocultos:</span>
+
+                        @foreach (var culture in HiddenCultures)
                         {
-                            <tr @key="row.Key">
+                            <button type="button"
+                                    title="Mostrar la columna @culture.DisplayName"
+                                    @onclick="() => ToggleCulture(culture)">
+                                <CultureFlagIcon Culture="@culture.Culture"
+                                                 Size="CultureFlagIcon.CultureFlagSize.Small" />
+                                @culture.DisplayName
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        }
+                    </div>
+                }
 
-                                <td class="dict-col-key">
-                                    <code>@row.Key</code>
-                                    @if (!string.IsNullOrWhiteSpace(row.Description))
-                                    {
-                                        <small>@row.Description</small>
-                                    }
-                                </td>
+                <span class="dict-count">
+                    @Rows.Count() de @VisibleScopeRows.Count() claves
+                </span>
+
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(_isBusy || BaseCulture is null || _cultures.Count < 2)"
+                        title="Traduce desde el idioma base todas las claves que falten en cualquier idioma"
+                        @onclick="TranslateEverythingAsync">
+                    <i class="fa-solid fa-language"></i>
+                    Rellenar todos los huecos
+                </button>
+
+            </div>
+
+
+            @if (_fillCulture is { } fill)
+            {
+                <div class="dict-fill">
+
+                    <span class="dict-fill-title">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        Rellenar los huecos de <strong>@fill.DisplayName</strong> desde
+                    </span>
+
+                    @foreach (var source in _cultures.Where(x => x.Culture != fill.Culture))
+                    {
+                        <span class="dict-fill-source">
+
+                            <CultureFlagIcon Culture="@source.Culture"
+                                             Size="CultureFlagIcon.CultureFlagSize.Small" />
+                            @source.DisplayName
+
+                            <button type="button"
+                                    title="Traducir automáticamente (Azure)"
+                                    disabled="@_isBusy"
+                                    @onclick="() => TranslateMissingAsync(source.Culture, fill.Culture)">
+                                <i class="fa-solid fa-language"></i>
+                                Traducir
+                            </button>
+
+                            <button type="button"
+                                    title="Copiar el texto tal cual"
+                                    disabled="@_isBusy"
+                                    @onclick="() => CopyMissingAsync(source.Culture, fill.Culture)">
+                                <i class="fa-regular fa-copy"></i>
+                                Copiar
+                            </button>
+
+                        </span>
+                    }
+
+                    <button type="button"
+                            class="dict-fill-close"
+                            title="Cerrar"
+                            @onclick="() => _fillCulture = null">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+
+                </div>
+            }
+
+
+            @if (_loading)
+            {
+                <div class="dict-state">
+                    Cargando diccionario...
+                </div>
+            }
+            else if (_cultures.Count == 0)
+            {
+                <div class="dict-state">
+                    No hay idiomas configurados.
+                    <a href="/idiomas">Añade al menos uno</a>
+                    antes de traducir nada.
+                </div>
+            }
+            else if (!VisibleScopeRows.Any())
+            {
+                <div class="dict-state">
+                    @(_reportId is null
+                        ? "Este diccionario no tiene ninguna clave todavía."
+                        : "Este report no tiene textos propios todavía. Se crean al editar etiquetas en el diseñador.")
+                </div>
+            }
+            else
+            {
+                <div class="dict-scroll">
+
+                    <table class="dict-table">
+
+                        <thead>
+                            <tr>
+                                <th class="dict-col-key">
+                                    Clave
+                                </th>
 
                                 @foreach (var culture in _visibleCultures)
                                 {
-                                    var value = CellValue(row.Key, culture.Culture);
-                                    var dirty = IsDirty(row.Key, culture.Culture);
-                                    var machine = IsMachine(row.Key, culture.Culture);
+                                    var coverage = Coverage(culture.Culture);
 
-                                    <td class="dict-cell">
+                                    <th class="@(culture.IsDefault ? "dict-col-lang is-base" : "dict-col-lang")">
 
-                                        <input class="@CellClass(value, dirty, machine)"
-                                               value="@value"
-                                               placeholder="@Placeholder(row.Key, culture)"
-                                               @onchange="e => CellChanged(row.Key, culture.Culture, e)" />
+                                        <div class="dict-lang-head">
 
-                                        @if (machine && !dirty)
-                                        {
-                                            <span class="dict-machine"
-                                                  title="Traducción automática sin revisar">
-                                                <i class="fa-solid fa-robot"></i>
+                                            <div class="dict-lang-name">
+                                                <strong>
+                                                    <CultureFlagIcon Culture="@culture.Culture"
+                                                                     Size="CultureFlagIcon.CultureFlagSize.Small" />
+                                                    @culture.DisplayName
+                                                </strong>
+                                                <code>@culture.Culture</code>
+                                            </div>
+
+                                            <div class="dict-lang-tools">
+
+                                                @if (!culture.IsDefault)
+                                                {
+                                                    <button type="button"
+                                                            class="@(_fillCulture?.Culture == culture.Culture ? "is-active" : null)"
+                                                            title="Rellenar los huecos de @culture.DisplayName"
+                                                            @onclick="() => ToggleFill(culture)">
+                                                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                                    </button>
+
+                                                    <button type="button"
+                                                            title="Ocultar esta columna"
+                                                            @onclick="() => ToggleCulture(culture)">
+                                                        <i class="fa-solid fa-eye-slash"></i>
+                                                    </button>
+                                                }
+
+                                            </div>
+
+                                        </div>
+
+                                        <div class="dict-lang-coverage"
+                                             title="@coverage% traducido">
+                                            <span class="dict-lang-bar">
+                                                <span style="width:@(coverage)%"></span>
                                             </span>
-                                        }
+                                            <span>@(coverage)%</span>
 
-                                    </td>
+                                            @if (culture.IsDefault)
+                                            {
+                                                <em>Idioma base</em>
+                                            }
+                                        </div>
+
+                                    </th>
                                 }
 
-                                <td class="dict-col-actions">
-
-                                    @if (IsTokenOnly(row))
-                                    {
-                                        <span class="dict-token-only"
-                                              title="El texto es sólo una variable: no se traduce aquí ni cuenta para la cobertura.">
-                                            <i class="fa-solid fa-code"></i>
-                                        </span>
-                                    }
-
-                                    @if (MissingCulturesOf(row).Count > 0)
-                                    {
-                                        <button type="button"
-                                                title="Traducir esta clave a los @MissingCulturesOf(row).Count idiomas que faltan"
-                                                disabled="@_isBusy"
-                                                @onclick="() => TranslateKeyEverywhereAsync(row)">
-                                            <i class="fa-solid fa-language"></i>
-                                        </button>
-                                    }
-
-                                    <button type="button"
-                                            title="Eliminar la clave en todos los idiomas"
-                                            @onclick="() => DeleteKeyAsync(row.Key)">
-                                        <i class="fa-solid fa-trash"></i>
-                                    </button>
-
-                                </td>
-
+                                <th class="dict-col-actions"></th>
                             </tr>
-                        }
-                    }
+                        </thead>
 
-                </tbody>
+                        <tbody>
 
-            </table>
+                            @foreach (var group in Rows.GroupBy(GroupOf))
+                            {
+                                <tr class="dict-group @(group.Key.IsPreset ? "is-preset" : null)">
+                                    <td colspan="@(_visibleCultures.Count + 2)">
+                                        <i class="fa-solid @group.Key.Icon"></i>
+                                        @group.Key.Label
+                                        @if (!string.IsNullOrWhiteSpace(group.Key.Hint))
+                                        {
+                                            <small>@group.Key.Hint</small>
+                                        }
+                                    </td>
+                                </tr>
 
-        </div>
-    }
+                                @foreach (var row in group)
+                                {
+                                    <tr @key="RowId(row)" class="@(row.IsSystem && !HasAnyValue(row) ? "is-system" : null)">
+
+                                        <td class="dict-col-key">
+                                            <span class="dict-key-kind">@KindOf(row.Key)</span>
+                                            <code>@row.Key</code>
+                                            @if (!string.IsNullOrWhiteSpace(row.Description))
+                                            {
+                                                <small>@row.Description</small>
+                                            }
+                                        </td>
+
+                                        @foreach (var culture in _visibleCultures)
+                                        {
+                                            var value = CellValue(row, culture.Culture);
+                                            var dirty = IsDirty(row, culture.Culture);
+                                            var machine = IsMachine(row, culture.Culture);
+
+                                            <td class="dict-cell">
+
+                                                <input class="@CellClass(value, dirty, machine)"
+                                                       value="@value"
+                                                       placeholder="@Placeholder(row, culture)"
+                                                       @onchange="e => CellChanged(row, culture.Culture, e)" />
+
+                                                @if (machine && !dirty)
+                                                {
+                                                    <span class="dict-machine"
+                                                          title="Traducción automática sin revisar">
+                                                        <i class="fa-solid fa-robot"></i>
+                                                    </span>
+                                                }
+
+                                            </td>
+                                        }
+
+                                        <td class="dict-col-actions">
+
+                                            @if (IsTokenOnly(row))
+                                            {
+                                                <span class="dict-token-only"
+                                                      title="El texto es sólo una variable o un dato: no se traduce aquí ni cuenta para la cobertura.">
+                                                    <i class="fa-solid fa-code"></i>
+                                                </span>
+                                            }
+
+                                            @if (MissingCulturesOf(row).Count > 0)
+                                            {
+                                                <button type="button"
+                                                        class="is-translate"
+                                                        title="Traducir esta clave a los @MissingCulturesOf(row).Count idiomas que faltan"
+                                                        disabled="@_isBusy"
+                                                        @onclick="() => TranslateKeyEverywhereAsync(row)">
+                                                    <i class="fa-solid fa-language"></i>
+                                                </button>
+                                            }
+
+                                            @if (!row.IsSystem || HasAnyValue(row))
+                                            {
+                                                <button type="button"
+                                                        class="is-delete"
+                                                        title="Eliminar la clave en todos los idiomas"
+                                                        @onclick="() => DeleteKeyAsync(row)">
+                                                    <i class="fa-solid fa-trash"></i>
+                                                </button>
+                                            }
+
+                                        </td>
+
+                                    </tr>
+                                }
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+            }
+
+        </section>
+
+    </div>
 
 
     @if (_dirty.Count > 0)
@@ -420,66 +515,555 @@
 @code {
 
     /// <summary>
-    /// Permite entrar directamente al diccionario de un report desde la
-    /// ficha del report: /resources?scope=invoice
+    /// Entrada directa desde otras pantallas: /resources?scope=invoice abre
+    /// el report; ?scope=preset:x, el report de ese preset filtrado a él;
+    /// ?scope=* o system:sharing, los comunes.
     /// </summary>
     [SupplyParameterFromQuery(Name = "scope")]
     public string? ScopeFromQuery { get; set; }
 
+    /// <summary>
+    /// Claves globales que el documento usa con un texto por defecto. Se
+    /// enseñan aunque nadie las haya escrito, para poder traducirlas sin
+    /// tener que saber cómo se llaman.
+    /// </summary>
+    private static readonly (string Key, string Default, string Description)[] SystemKeys =
+    [
+        (ReportTextKeys.TableTotal, "Total", "Etiqueta de la fila de totales de las tablas"),
+        (ReportTextKeys.FooterPageNumber, "Página {page} de {pages}", "Numeración del pie: {page} es la página y {pages} el total")
+    ];
+
+    private const char DirtySeparator = '\u001f';
+
     private bool _loading = true;
     private bool _isBusy;
 
-    private string _scope = ReportResourceScope.Global;
+    /// <summary>
+    /// Report abierto. Nulo = elementos comunes (<see cref="_commonScope"/>).
+    /// </summary>
+    private string? _reportId;
+
+    private string _commonScope = ReportResourceScope.Global;
+
+    /// <summary>
+    /// Origen al que se filtra la tabla dentro de un report (su ámbito base o
+    /// el de un preset). Nulo = todos.
+    /// </summary>
+    private string? _originFilter;
+
     private string _search = string.Empty;
     private bool _onlyPending;
 
     private bool _showNewKey;
     private string _newKey = string.Empty;
+    private string? _newKeyScope;
     private string _newKeyDescription = string.Empty;
 
     private IReadOnlyCollection<Report> _reports = [];
+    private IReadOnlyCollection<ReportPreset> _presets = [];
     private IReadOnlyCollection<TenantCulture> _cultures = [];
-    private IReadOnlyCollection<string> _presetScopes = [];
 
     /// <summary>
     /// Idiomas ocultos en la matriz. Con cinco idiomas la tabla se va de
-    /// ancho y casi siempre estás trabajando sobre uno o dos.
+    /// ancho y casi siempre se trabaja sobre uno o dos.
     /// </summary>
     private readonly HashSet<string> _hiddenCultures =
         new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Se recalcula al cargar y al togglear, no en cada render: se consulta
-    /// una vez por fila.
-    /// </summary>
     private List<TenantCulture> _visibleCultures = [];
 
     /// <summary>
-    /// Matriz en memoria: una entrada por clave, con el valor de cada cultura.
-    /// La API sigue devolviendo filas sueltas (clave × cultura); pivotarlas
-    /// aquí es lo que permite ver y editar un idioma al lado del otro.
+    /// Idioma cuyo panel de relleno está abierto.
+    /// </summary>
+    private TenantCulture? _fillCulture;
+
+    /// <summary>
+    /// Matriz en memoria: una entrada por ámbito y clave, con el valor de
+    /// cada cultura. La API devuelve filas sueltas (clave × cultura) por
+    /// ámbito; pivotarlas aquí es lo que permite ver un idioma al lado de
+    /// otro y el report junto a sus presets.
     /// </summary>
     private List<KeyRow> _matrix = [];
 
     /// <summary>
-    /// Idioma cuyo menú de relleno está abierto, o nulo si no hay ninguno.
-    ///
-    /// Antes era un &lt;details&gt;, que abre y cierra el navegador por su
-    /// cuenta: al terminar de traducir no había forma fiable de cerrarlo
-    /// desde aquí, porque el estado real vivía en el DOM y no en el
-    /// componente.
-    /// </summary>
-    private string? _openMenu;
-
-    /// <summary>
-    /// Ediciones pendientes, indexadas por clave|cultura. Se guardan todas
+    /// Ediciones pendientes, por ámbito + clave + cultura. Se guardan todas
     /// juntas en un único PUT.
     /// </summary>
     private readonly Dictionary<string, string?> _dirty = new(StringComparer.OrdinalIgnoreCase);
 
 
-    private IEnumerable<string> PresetScopes => _presetScopes;
+    // ------------------------------------------------------------ vistas
 
+    private sealed record Origin(
+        string Scope,
+        string Label,
+        string Icon,
+        string Hint,
+        bool IsPreset);
+
+    private IReadOnlyList<Origin> Origins { get; set; } = [];
+
+
+    private IReadOnlyList<ReportPreset> PresetsOf(
+        string reportId) =>
+        _presets
+            .Where(x => string.Equals(x.Configuration.ReportId, reportId, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.Configuration.Name)
+            .ToList();
+
+    private Report? CurrentReport =>
+        _reportId is null
+            ? null
+            : _reports.FirstOrDefault(x => string.Equals(x.Id, _reportId, StringComparison.OrdinalIgnoreCase));
+
+    private string ViewTitle =>
+        _reportId is null
+            ? _commonScope == ReportResourceScope.Sharing
+                ? "Página pública de documentos compartidos"
+                : "Diccionario común del tenant"
+            : CurrentReport?.Name ?? _reportId;
+
+    private string ViewDescription =>
+        _reportId is null
+            ? _commonScope == ReportResourceScope.Sharing
+                ? "Lo que ve el cliente al abrir un enlace: botones, avisos, caducidad."
+                : "Vale para todos los reports: bloques, variables traducibles, totales y numeración. Un report o un preset puede pisarlo."
+            : Origins.Count > 1
+                ? $"Textos del report y de sus {Origins.Count - 1} preset(s). Lo de un preset pisa al report sólo en ese preset."
+                : "Textos del report. Cuando un preset cambie una etiqueta, aparecerá aquí con su nombre.";
+
+    private const string CommonKeyPrefix = "common:";
+    private const string ReportKeyPrefix = "report:";
+
+    /// <summary>
+    /// Menú lateral: los dos diccionarios comunes y un elemento por report.
+    /// </summary>
+    private IReadOnlyList<SideNavItem> NavItems =>
+        new[]
+        {
+            new SideNavItem(
+                CommonKeyPrefix + ReportResourceScope.Global,
+                "Común del tenant",
+                "Bloques, variables, totales, numeración",
+                "fa-globe",
+                "Elementos comunes",
+                Accent: true),
+
+            new SideNavItem(
+                CommonKeyPrefix + ReportResourceScope.Sharing,
+                "Página pública",
+                "Enlaces de documentos compartidos",
+                "fa-share-nodes",
+                "Elementos comunes",
+                Accent: true)
+        }
+        .Concat(
+            _reports
+                .OrderBy(x => x.Name)
+                .Select(report =>
+                {
+                    var presets = PresetsOf(report.Id).Count;
+
+                    return new SideNavItem(
+                        ReportKeyPrefix + report.Id,
+                        report.Name,
+                        presets == 0 ? "Sin presets" : presets == 1 ? "1 preset" : $"{presets} presets",
+                        "fa-file-lines",
+                        "Reports");
+                }))
+        .ToList();
+
+    private string SelectedNavKey =>
+        _reportId is null
+            ? CommonKeyPrefix + _commonScope
+            : ReportKeyPrefix + _reportId;
+
+    private Task NavSelectedAsync(
+        string key) =>
+        key.StartsWith(ReportKeyPrefix, StringComparison.Ordinal)
+            ? SelectReportAsync(key[ReportKeyPrefix.Length..])
+            : SelectCommonAsync(key[CommonKeyPrefix.Length..]);
+
+    private string OriginClass(
+        string? scope) =>
+        string.Equals(_originFilter, scope, StringComparison.OrdinalIgnoreCase)
+            ? "dict-origin is-active"
+            : "dict-origin";
+
+    /// <summary>
+    /// Filas del report/ámbito abierto, antes de buscar y filtrar huecos.
+    /// </summary>
+    private IEnumerable<KeyRow> VisibleScopeRows =>
+        _originFilter is null
+            ? _matrix
+            : _matrix.Where(x => string.Equals(x.Scope, _originFilter, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<KeyRow> Rows =>
+        VisibleScopeRows
+            .Where(MatchesSearch)
+            .Where(row => !_onlyPending || HasGaps(row))
+            .OrderBy(x => OriginOrder(x.Scope))
+            .ThenBy(x => KindOrder(x.Key))
+            .ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase);
+
+    private List<TenantCulture> HiddenCultures =>
+        _cultures
+            .Where(x => !IsVisible(x))
+            .ToList();
+
+
+    // ------------------------------------------------------------- carga
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _reports =
+                await RenderSetApi.GetReportsAsync(
+                    CurrentTenant.Id);
+
+            _presets =
+                await RenderSetApi.GetPresetsAsync(
+                    CurrentTenant.Id);
+
+            _cultures =
+                await RenderSetApi.GetCulturesAsync(
+                    CurrentTenant.Id);
+
+            RefreshVisibleCultures();
+
+            ApplyScopeFromQuery();
+
+            await LoadViewAsync();
+        }
+        catch (Exception exception)
+        {
+            Toasts.Error(
+                ToastServiceExtensions.Describe(exception),
+                "No se ha podido cargar el diccionario");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+    private void ApplyScopeFromQuery()
+    {
+        var scope = ScopeFromQuery?.Trim();
+
+        if (string.IsNullOrWhiteSpace(scope) ||
+            scope == ReportResourceScope.Global)
+        {
+            return;
+        }
+
+        if (scope == ReportResourceScope.Sharing)
+        {
+            _commonScope = scope;
+            return;
+        }
+
+        if (ReportResourceScope.IsPreset(scope))
+        {
+            var presetId = scope["preset:".Length..];
+
+            var preset = _presets.FirstOrDefault(x =>
+                string.Equals(x.Id, presetId, StringComparison.OrdinalIgnoreCase));
+
+            if (preset is not null)
+            {
+                _reportId = preset.Configuration.ReportId;
+                _originFilter = scope;
+            }
+
+            return;
+        }
+
+        if (_reports.Any(x => string.Equals(x.Id, scope, StringComparison.OrdinalIgnoreCase)))
+            _reportId = scope;
+    }
+
+
+    private async Task SelectCommonAsync(
+        string scope)
+    {
+        if (!await ConfirmDiscardAsync())
+            return;
+
+        _reportId = null;
+        _commonScope = scope;
+        _originFilter = null;
+
+        await ReloadAsync();
+    }
+
+
+    private async Task SelectReportAsync(
+        string reportId)
+    {
+        if (!await ConfirmDiscardAsync())
+            return;
+
+        _reportId = reportId;
+        _originFilter = null;
+
+        await ReloadAsync();
+    }
+
+
+    private async Task ReloadAsync()
+    {
+        _isBusy = true;
+
+        try
+        {
+            await LoadViewAsync();
+        }
+        catch (Exception exception)
+        {
+            Toasts.Error(
+                ToastServiceExtensions.Describe(exception),
+                "No se ha podido cargar el diccionario");
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+
+    /// <summary>
+    /// Carga los ámbitos de la vista: uno para los comunes; el del report y
+    /// los de cada uno de sus presets para un report.
+    /// </summary>
+    private async Task LoadViewAsync()
+    {
+        _dirty.Clear();
+        _fillCulture = null;
+        _showNewKey = false;
+
+        Origins = BuildOrigins();
+
+        var loaded =
+            await Task.WhenAll(
+                Origins.Select(async origin =>
+                    (origin.Scope,
+                     Resources: await RenderSetApi.GetResourcesAsync(
+                         CurrentTenant.Id,
+                         origin.Scope))));
+
+        _matrix =
+            loaded
+                .SelectMany(x =>
+                    x.Resources
+                        .GroupBy(r => r.Key, StringComparer.OrdinalIgnoreCase)
+                        .Select(group => new KeyRow
+                        {
+                            Scope = x.Scope,
+                            Key = group.Key,
+                            Description =
+                                group
+                                    .Select(r => r.Description)
+                                    .FirstOrDefault(d => !string.IsNullOrWhiteSpace(d)),
+                            Values =
+                                group
+                                    .GroupBy(r => r.Culture, StringComparer.OrdinalIgnoreCase)
+                                    .ToDictionary(
+                                        g => g.Key,
+                                        g => g.First(),
+                                        StringComparer.OrdinalIgnoreCase)
+                        }))
+                .ToList();
+
+        if (_reportId is null &&
+            _commonScope == ReportResourceScope.Global)
+        {
+            AddSystemKeys();
+        }
+
+        if (_originFilter is not null &&
+            Origins.All(x => !string.Equals(x.Scope, _originFilter, StringComparison.OrdinalIgnoreCase)))
+        {
+            _originFilter = null;
+        }
+
+        _promotion = BuildPromotion();
+    }
+
+
+    // ----------------------------------------------------- pasar al report
+
+    /// <summary>
+    /// Claves repetidas con el mismo texto en varios presets del report
+    /// abierto, que pueden ir a una sola fila del report sin cambiar nada
+    /// (ReportResourcePromotion). Nulo fuera de un report.
+    /// </summary>
+    private ReportResourcePromotion.Plan? _promotion;
+
+
+    private ReportResourcePromotion.Plan? BuildPromotion()
+    {
+        if (_reportId is null || CurrentReport is not { } report)
+            return null;
+
+        var presets = PresetsOf(report.Id);
+
+        if (presets.Count < 2)
+            return null;
+
+        IReadOnlyCollection<ReportResource> ResourcesOf(string scope) =>
+            _matrix
+                .Where(x => string.Equals(x.Scope, scope, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(x => x.Values.Values)
+                .ToList();
+
+        return ReportResourcePromotion.Build(
+            report.Definition,
+            presets
+                .Select(x => new ReportResourcePromotion.PresetInfo(
+                    x.Id,
+                    x.Configuration.Name,
+                    x.Configuration))
+                .ToList(),
+            ResourcesOf(ReportResourceScope.ForReport(report.Id)),
+            presets.ToDictionary(
+                x => x.Id,
+                x => ResourcesOf(ReportResourceScope.ForPreset(x.Id)),
+                StringComparer.OrdinalIgnoreCase));
+    }
+
+
+    private async Task PromoteAsync()
+    {
+        if (_promotion is not { IsEmpty: false } plan)
+            return;
+
+        if (!await ConfirmDiscardAsync())
+            return;
+
+        var confirmed =
+            await JS.InvokeAsync<bool>(
+                "confirm",
+                $"Se pasarán {plan.PromotedKeys.Count} claves al report y se quitarán sus copias de " +
+                "los presets. Los documentos se seguirán viendo igual. ¿Continuar?");
+
+        if (!confirmed)
+            return;
+
+        _isBusy = true;
+
+        try
+        {
+            // Primero el report y después las copias: si algo falla a
+            // medias, el texto sigue estando en algún sitio.
+            if (plan.ReportWrites.Count > 0)
+            {
+                var saved = await Toasts.RunApiAsync(
+                    () => RenderSetApi.SaveResourcesAsync(
+                        CurrentTenant.Id,
+                        plan.ReportWrites),
+                    errorTitle: "No se han podido pasar los textos al report");
+
+                if (!saved)
+                    return;
+            }
+
+            var failed = 0;
+
+            foreach (var (scope, key) in plan.Deletions)
+            {
+                var deleted = await Toasts.RunApiAsync(
+                    () => RenderSetApi.DeleteResourceAsync(
+                        CurrentTenant.Id,
+                        scope,
+                        key),
+                    errorTitle: $"No se ha podido quitar '{key}' de {scope}");
+
+                if (!deleted)
+                    failed++;
+            }
+
+            if (failed == 0)
+                Toasts.Success($"{plan.PromotedKeys.Count} claves pasadas al report.");
+            else
+                Toasts.Warning($"Claves pasadas al report, pero {failed} copias no se han podido quitar de sus presets.");
+
+            await LoadViewAsync();
+        }
+        catch (Exception exception)
+        {
+            Toasts.Error(ToastServiceExtensions.Describe(exception));
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+
+    private IReadOnlyList<Origin> BuildOrigins()
+    {
+        if (_reportId is null)
+        {
+            return
+            [
+                new Origin(
+                    _commonScope,
+                    _commonScope == ReportResourceScope.Sharing ? "Página pública" : "Común",
+                    _commonScope == ReportResourceScope.Sharing ? "fa-share-nodes" : "fa-globe",
+                    string.Empty,
+                    IsPreset: false)
+            ];
+        }
+
+        var origins = new List<Origin>
+        {
+            new(
+                ReportResourceScope.ForReport(_reportId),
+                "Base del report",
+                "fa-file-lines",
+                "Lo que sale en todos los presets salvo que alguno lo cambie",
+                IsPreset: false)
+        };
+
+        origins.AddRange(
+            PresetsOf(_reportId)
+                .Select(preset => new Origin(
+                    ReportResourceScope.ForPreset(preset.Id),
+                    preset.Configuration.Name,
+                    "fa-sliders",
+                    $"Sólo en el preset {preset.Configuration.Name} ({preset.Id})",
+                    IsPreset: true)));
+
+        return origins;
+    }
+
+
+    private void AddSystemKeys()
+    {
+        foreach (var (key, _, description) in SystemKeys)
+        {
+            if (_matrix.Any(x => string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            _matrix.Add(
+                new KeyRow
+                {
+                    Scope = ReportResourceScope.Global,
+                    Key = key,
+                    Description = description,
+                    IsSystem = true,
+                    Values = new Dictionary<string, ReportResource>(StringComparer.OrdinalIgnoreCase)
+                });
+        }
+    }
+
+
+    // ----------------------------------------------------------- idiomas
 
     private bool IsVisible(
         TenantCulture culture) =>
@@ -489,7 +1073,7 @@
 
     /// <summary>
     /// El idioma base nunca se oculta: es la referencia desde la que se
-    /// traduce y el placeholder de las demás columnas.
+    /// traduce y el texto de ayuda de las demás columnas.
     /// </summary>
     private void ToggleCulture(
         TenantCulture culture)
@@ -500,172 +1084,78 @@
         if (!_hiddenCultures.Remove(culture.Culture))
             _hiddenCultures.Add(culture.Culture);
 
+        if (_fillCulture?.Culture == culture.Culture)
+            _fillCulture = null;
+
         RefreshVisibleCultures();
     }
 
 
-    private void RefreshVisibleCultures()
-    {
+    private void RefreshVisibleCultures() =>
         _visibleCultures =
             _cultures
+                .OrderByDescending(x => x.IsDefault)
                 .Where(IsVisible)
                 .ToList();
-    }
 
 
-    private static string ChipClass(
-        TenantCulture culture,
-        bool visible)
+    private void ToggleFill(
+        TenantCulture culture) =>
+        _fillCulture =
+            _fillCulture?.Culture == culture.Culture
+                ? null
+                : culture;
+
+
+    private TenantCulture? BaseCulture =>
+        _cultures.FirstOrDefault(x => x.IsDefault)
+        ?? _cultures.FirstOrDefault();
+
+
+    // ------------------------------------------------------------ celdas
+
+    private static string RowId(
+        KeyRow row) =>
+        $"{row.Scope}{DirtySeparator}{row.Key}";
+
+    private static string DirtyKey(
+        KeyRow row,
+        string culture) =>
+        $"{row.Scope}{DirtySeparator}{row.Key}{DirtySeparator}{culture}";
+
+    private static (string Scope, string Key, string Culture) SplitDirtyKey(
+        string dirtyKey)
     {
-        var classes = new List<string> { "dict-chip" };
+        var parts = dirtyKey.Split(DirtySeparator);
 
-        if (visible)
-            classes.Add("is-on");
-
-        if (culture.IsDefault)
-            classes.Add("is-base");
-
-        return string.Join(' ', classes);
+        return (parts[0], parts[1], parts[2]);
     }
 
-
-    private static string ChipTitle(
-        TenantCulture culture,
-        bool visible)
-    {
-        if (culture.IsDefault)
-            return "El idioma base siempre se muestra";
-
-        return visible
-            ? $"Ocultar la columna {culture.DisplayName}"
-            : $"Mostrar la columna {culture.DisplayName}";
-    }
-
-    private IEnumerable<KeyRow> Rows =>
-        _matrix
-            .Where(MatchesSearch)
-            .Where(row => !_onlyPending || HasGaps(row))
-            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase);
-
-
-    protected override async Task OnInitializedAsync()
-    {
-        if (!string.IsNullOrWhiteSpace(ScopeFromQuery))
-            _scope = ScopeFromQuery;
-
-        await LoadAsync();
-    }
-
-
-    private async Task LoadAsync()
-    {
-        _loading = true;
-
-        try
-        {
-            _reports =
-                await RenderSetApi.GetReportsAsync(
-                    CurrentTenant.Id);
-
-            _cultures =
-                await RenderSetApi.GetCulturesAsync(
-                    CurrentTenant.Id);
-
-            RefreshVisibleCultures();
-
-            // La cobertura sólo se usa para descubrir qué ámbitos de preset
-            // existen. Los porcentajes se calculan en cliente para que
-            // reflejen también lo que estás editando sin guardar.
-            var coverage =
-                await RenderSetApi.GetResourceCoverageAsync(
-                    CurrentTenant.Id);
-
-            _presetScopes =
-                coverage
-                    .Select(x => x.Scope)
-                    .Where(ReportResourceScope.IsPreset)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(x => x)
-                    .ToList();
-
-            await LoadScopeAsync();
-        }
-        catch (Exception exception)
-        {
-            Toasts.Error(ToastServiceExtensions.Describe(exception));
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-
-    private async Task LoadScopeAsync()
-    {
-        _dirty.Clear();
-
-        var resources =
-            await RenderSetApi.GetResourcesAsync(
-                CurrentTenant.Id,
-                _scope);
-
-        _matrix =
-            resources
-                .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(group => new KeyRow
-                {
-                    Key = group.Key,
-
-                    Description =
-                        group
-                            .Select(x => x.Description)
-                            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)),
-
-                    Values =
-                        group.ToDictionary(
-                            x => x.Culture,
-                            x => x,
-                            StringComparer.OrdinalIgnoreCase)
-                })
-                .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-    }
-
-
-    private async Task ScopeChangedAsync(
-        ChangeEventArgs e)
-    {
-        if (!await ConfirmDiscardAsync())
-            return;
-
-        _scope = e.Value?.ToString() ?? ReportResourceScope.Global;
-
-        await LoadScopeAsync();
-    }
-
-
-    // ---------------------------------------------------------------- celdas
 
     private string CellValue(
-        string key,
+        KeyRow row,
         string culture)
     {
-        if (_dirty.TryGetValue(DirtyKey(key, culture), out var pending))
+        if (_dirty.TryGetValue(DirtyKey(row, culture), out var pending))
             return pending ?? string.Empty;
 
-        var row = _matrix.FirstOrDefault(x =>
-            string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
-
-        return row is not null &&
-               row.Values.TryGetValue(culture, out var resource)
+        return row.Values.TryGetValue(culture, out var resource)
             ? resource.Value ?? string.Empty
             : string.Empty;
     }
 
 
+    private static string? OriginalValue(
+        KeyRow row,
+        string culture) =>
+        row.Values.TryGetValue(culture, out var resource) &&
+        !string.IsNullOrWhiteSpace(resource.Value)
+            ? resource.Value
+            : null;
+
+
     private void CellChanged(
-        string key,
+        KeyRow row,
         string culture,
         ChangeEventArgs e)
     {
@@ -675,13 +1165,11 @@
             ? null
             : value.Trim();
 
-        var original = OriginalValue(key, culture);
+        var dirtyKey = DirtyKey(row, culture);
 
-        var dirtyKey = DirtyKey(key, culture);
-
-        // Si vuelve al valor original deja de estar sucia: así el contador de
-        // la barra de guardado no miente.
-        if (string.Equals(original, normalized, StringComparison.Ordinal))
+        // Si vuelve al valor original deja de estar sucia: así el contador
+        // de la barra de guardado no miente.
+        if (string.Equals(OriginalValue(row, culture), normalized, StringComparison.Ordinal))
         {
             _dirty.Remove(dirtyKey);
             return;
@@ -691,43 +1179,18 @@
     }
 
 
-    private string? OriginalValue(
-        string key,
-        string culture)
-    {
-        var row = _matrix.FirstOrDefault(x =>
-            string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
-
-        if (row is null ||
-            !row.Values.TryGetValue(culture, out var resource))
-        {
-            return null;
-        }
-
-        return string.IsNullOrWhiteSpace(resource.Value)
-            ? null
-            : resource.Value;
-    }
-
-
     private bool IsDirty(
-        string key,
+        KeyRow row,
         string culture) =>
-        _dirty.ContainsKey(DirtyKey(key, culture));
+        _dirty.ContainsKey(DirtyKey(row, culture));
 
 
-    private bool IsMachine(
-        string key,
-        string culture)
-    {
-        var row = _matrix.FirstOrDefault(x =>
-            string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
-
-        return row is not null &&
-               row.Values.TryGetValue(culture, out var resource) &&
-               resource.Source == ReportResourceSource.Machine &&
-               !string.IsNullOrWhiteSpace(resource.Value);
-    }
+    private static bool IsMachine(
+        KeyRow row,
+        string culture) =>
+        row.Values.TryGetValue(culture, out var resource) &&
+        resource.Source == ReportResourceSource.Machine &&
+        !string.IsNullOrWhiteSpace(resource.Value);
 
 
     private static string CellClass(
@@ -751,32 +1214,53 @@
 
 
     /// <summary>
-    /// En las culturas no base se muestra el texto del idioma base como
-    /// marca de agua: traducir sin ver el original no se puede.
+    /// Texto de ayuda de una celda vacía: en los otros idiomas, el original
+    /// del idioma base (traducir sin verlo no se puede); en un preset, lo
+    /// que hereda del report; en una clave de sistema, su texto por defecto.
     /// </summary>
     private string Placeholder(
-        string key,
+        KeyRow row,
         TenantCulture culture)
     {
-        if (culture.IsDefault)
-            return "Sin texto";
+        var baseCulture = BaseCulture;
 
-        var baseCulture =
-            _cultures.FirstOrDefault(x => x.IsDefault);
+        if (!culture.IsDefault && baseCulture is not null)
+        {
+            var original = CellValue(row, baseCulture.Culture);
 
-        if (baseCulture is null)
-            return "Sin traducir";
+            if (!string.IsNullOrWhiteSpace(original))
+                return original;
+        }
 
-        var original =
-            CellValue(key, baseCulture.Culture);
+        if (ReportResourceScope.IsPreset(row.Scope) && _reportId is not null)
+        {
+            var inherited =
+                _matrix.FirstOrDefault(x =>
+                    x.Scope == ReportResourceScope.ForReport(_reportId) &&
+                    string.Equals(x.Key, row.Key, StringComparison.OrdinalIgnoreCase));
 
-        return string.IsNullOrWhiteSpace(original)
-            ? "Sin traducir"
-            : original;
+            if (inherited is not null)
+            {
+                var value = CellValue(inherited, culture.Culture);
+
+                if (!string.IsNullOrWhiteSpace(value))
+                    return $"Hereda: {value}";
+            }
+        }
+
+        if (row.IsSystem)
+        {
+            var system = SystemKeys.FirstOrDefault(x => x.Key == row.Key);
+
+            if (system.Key is not null)
+                return $"Por defecto: {system.Default}";
+        }
+
+        return culture.IsDefault ? "Sin texto" : "Sin traducir";
     }
 
 
-    // --------------------------------------------------------------- filtros
+    // ----------------------------------------------------------- filtros
 
     private bool MatchesSearch(
         KeyRow row)
@@ -788,7 +1272,7 @@
             return true;
 
         return _visibleCultures.Any(culture =>
-            Contains(CellValue(row.Key, culture.Culture)));
+            Contains(CellValue(row, culture.Culture)));
     }
 
 
@@ -800,58 +1284,107 @@
     private bool HasGaps(
         KeyRow row) =>
         _visibleCultures.Any(culture =>
-            string.IsNullOrWhiteSpace(
-                CellValue(row.Key, culture.Culture)));
+            string.IsNullOrWhiteSpace(CellValue(row, culture.Culture)));
 
 
-    /// <summary>
-    /// Agrupa por el prefijo de la clave. Con cuarenta claves seguidas se
-    /// pierde el hilo; separadas por campos, columnas y secciones, no.
-    /// </summary>
-    private static string GroupOf(
-        KeyRow row)
+    private bool HasAnyValue(
+        KeyRow row) =>
+        _cultures.Any(culture =>
+            !string.IsNullOrWhiteSpace(CellValue(row, culture.Culture)));
+
+
+    private int OriginOrder(
+        string scope)
     {
-        var key = row.Key;
+        var index = Origins
+            .Select((origin, i) => (origin, i))
+            .FirstOrDefault(x => string.Equals(x.origin.Scope, scope, StringComparison.OrdinalIgnoreCase))
+            .i;
 
-        if (key.StartsWith("section.", StringComparison.OrdinalIgnoreCase))
-            return "Secciones";
-
-        if (key.StartsWith("field.", StringComparison.OrdinalIgnoreCase))
-            return "Campos";
-
-        if (key.StartsWith("column.", StringComparison.OrdinalIgnoreCase))
-            return "Columnas de tabla";
-
-        if (key.StartsWith("header.", StringComparison.OrdinalIgnoreCase) ||
-            key.StartsWith("footer.", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Cabecera y pie";
-        }
-
-        if (key.StartsWith("block.", StringComparison.OrdinalIgnoreCase))
-            return "Bloques";
-
-        if (key.StartsWith("variable.", StringComparison.OrdinalIgnoreCase))
-            return "Variables";
-
-        return "Otras";
+        return index;
     }
 
 
     /// <summary>
-    /// Porcentaje traducido, descontando las claves que no tienen nada que
-    /// traducir.
-    ///
-    /// Sin ese descuento, una clave cuyo texto es sólo una variable deja un
-    /// hueco permanente: no se manda al traductor, así que el porcentaje no
-    /// podría llegar al 100% por mucho que se trabajase.
+    /// Grupos de la tabla: en un report, uno por origen (base y cada
+    /// preset); en los comunes, por tipo de clave.
+    /// </summary>
+    private GroupInfo GroupOf(
+        KeyRow row)
+    {
+        if (_reportId is not null)
+        {
+            var origin =
+                Origins.FirstOrDefault(x => string.Equals(x.Scope, row.Scope, StringComparison.OrdinalIgnoreCase));
+
+            return origin is null
+                ? new GroupInfo(row.Scope, "fa-folder", string.Empty, false)
+                : new GroupInfo(
+                    origin.IsPreset ? $"Preset · {origin.Label}" : origin.Label,
+                    origin.Icon,
+                    origin.Hint,
+                    origin.IsPreset);
+        }
+
+        return new GroupInfo(KindGroup(row.Key), "fa-folder-open", string.Empty, false);
+    }
+
+
+    private sealed record GroupInfo(
+        string Label,
+        string Icon,
+        string Hint,
+        bool IsPreset);
+
+
+    private static readonly (string Prefix, string Kind, string Group)[] Kinds =
+    [
+        ("section.", "Sección", "Secciones"),
+        ("field.", "Campo", "Campos"),
+        ("column.", "Columna", "Columnas de tabla"),
+        ("header.", "Cabecera", "Cabecera y pie"),
+        ("footer.", "Pie", "Cabecera y pie"),
+        ("table.", "Tabla", "Tablas"),
+        ("block.", "Bloque", "Bloques"),
+        ("blockfield.", "Campo fijo", "Bloques"),
+        ("variable.", "Variable", "Variables")
+    ];
+
+    private static string KindOf(
+        string key) =>
+        Kinds.FirstOrDefault(x => key.StartsWith(x.Prefix, StringComparison.OrdinalIgnoreCase)).Kind
+        ?? "Otra";
+
+    private static string KindGroup(
+        string key) =>
+        Kinds.FirstOrDefault(x => key.StartsWith(x.Prefix, StringComparison.OrdinalIgnoreCase)).Group
+        ?? "Otras";
+
+    private static int KindOrder(
+        string key)
+    {
+        for (var i = 0; i < Kinds.Length; i++)
+        {
+            if (key.StartsWith(Kinds[i].Prefix, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+
+        return Kinds.Length;
+    }
+
+
+    /// <summary>
+    /// Porcentaje traducido de lo que se ve, descontando las claves que no
+    /// tienen nada que traducir (sólo una variable o un dato) y las de
+    /// sistema sin escribir, que ya tienen su texto por defecto.
     /// </summary>
     private int Coverage(
         string culture)
     {
         var countable =
-            _matrix
+            VisibleScopeRows
                 .Where(row => !IsTokenOnly(row))
+                .Where(row => !row.IsSystem || HasAnyValue(row))
                 .ToList();
 
         if (countable.Count == 0)
@@ -859,21 +1392,19 @@
 
         var translated =
             countable.Count(row =>
-                !string.IsNullOrWhiteSpace(
-                    CellValue(row.Key, culture)));
+                !string.IsNullOrWhiteSpace(CellValue(row, culture)));
 
-        return (int)Math.Round(
-            translated * 100d / countable.Count);
+        return (int)Math.Round(translated * 100d / countable.Count);
     }
 
 
-    private bool IsTokenOnly(
+    private static bool IsTokenOnly(
         KeyRow row) =>
         row.Values.Values.Any(x =>
             ReportVariableTemplate.IsOnlyTokens(x.Value));
 
 
-    // -------------------------------------------------------------- guardado
+    // ----------------------------------------------------------- guardado
 
     private async Task SaveChangesAsync()
     {
@@ -888,13 +1419,13 @@
                 _dirty
                     .Select(entry =>
                     {
-                        var parts = SplitDirtyKey(entry.Key);
+                        var (scope, key, culture) = SplitDirtyKey(entry.Key);
 
                         return new ReportResource
                         {
-                            Scope = _scope,
-                            Key = parts.Key,
-                            Culture = parts.Culture,
+                            Scope = scope,
+                            Key = key,
+                            Culture = culture,
                             Value = entry.Value,
 
                             // Todo lo tocado a mano deja de ser automático.
@@ -903,10 +1434,8 @@
                             Description =
                                 _matrix
                                     .FirstOrDefault(x =>
-                                        string.Equals(
-                                            x.Key,
-                                            parts.Key,
-                                            StringComparison.OrdinalIgnoreCase))
+                                        x.Scope == scope &&
+                                        string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase))
                                     ?.Description
                         };
                     })
@@ -922,7 +1451,7 @@
             if (!saved)
                 return;
 
-            await LoadScopeAsync();
+            await LoadViewAsync();
         }
         catch (Exception exception)
         {
@@ -935,10 +1464,8 @@
     }
 
 
-    private void DiscardChanges()
-    {
+    private void DiscardChanges() =>
         _dirty.Clear();
-    }
 
 
     private async Task<bool> ConfirmDiscardAsync()
@@ -952,28 +1479,30 @@
     }
 
 
-    // ----------------------------------------------------------- claves y IA
+    // ------------------------------------------------------------ claves
 
     private void ToggleNewKey()
     {
         _showNewKey = !_showNewKey;
         _newKey = string.Empty;
         _newKeyDescription = string.Empty;
+        _newKeyScope = _originFilter ?? Origins.FirstOrDefault()?.Scope;
     }
 
 
     private void AddKey()
     {
         var key = _newKey.Trim();
+        var scope = _newKeyScope ?? Origins.FirstOrDefault()?.Scope ?? ReportResourceScope.Global;
 
         if (string.IsNullOrWhiteSpace(key))
             return;
 
         if (_matrix.Any(x =>
+                x.Scope == scope &&
                 string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase)))
         {
-
-            Toasts.Error($"La clave '{key}' ya existe en este ámbito.");
+            Toasts.Error($"La clave '{key}' ya existe ahí.");
             return;
         }
 
@@ -982,14 +1511,12 @@
         _matrix.Add(
             new KeyRow
             {
+                Scope = scope,
                 Key = key,
-
                 Description = string.IsNullOrWhiteSpace(_newKeyDescription)
                     ? null
                     : _newKeyDescription.Trim(),
-
-                Values = new Dictionary<string, ReportResource>(
-                    StringComparer.OrdinalIgnoreCase)
+                Values = new Dictionary<string, ReportResource>(StringComparer.OrdinalIgnoreCase)
             });
 
         ToggleNewKey();
@@ -997,40 +1524,45 @@
 
 
     private async Task DeleteKeyAsync(
-        string key)
+        KeyRow row)
     {
         var confirmed =
             await JS.InvokeAsync<bool>(
                 "confirm",
-                $"Se eliminará '{key}' en todos los idiomas. ¿Continuar?");
+                $"Se eliminará '{row.Key}' en todos los idiomas. ¿Continuar?");
 
         if (!confirmed)
             return;
 
+        // Una fila nueva que aún no se ha guardado sólo existe aquí.
+        if (row.Values.Count == 0)
+        {
+            _matrix.Remove(row);
+
+            foreach (var culture in _cultures)
+                _dirty.Remove(DirtyKey(row, culture.Culture));
+
+            return;
+        }
+
         var deleted = await Toasts.RunApiAsync(
             () => RenderSetApi.DeleteResourceAsync(
                 CurrentTenant.Id,
-                _scope,
-                key),
+                row.Scope,
+                row.Key),
             success: "Clave eliminada.",
             errorTitle: "No se ha podido eliminar la clave");
 
         if (deleted)
-            await LoadScopeAsync();
+            await LoadViewAsync();
     }
 
 
-    private TenantCulture? BaseCulture =>
-        _cultures.FirstOrDefault(x => x.IsDefault)
-        ?? _cultures.FirstOrDefault();
-
+    // -------------------------------------------------------- traducción
 
     /// <summary>
-    /// Idiomas en los que esta clave no tiene texto todavía.
-    ///
-    /// Una clave que es sólo un marcador no cuenta: su texto sale de la
-    /// variable, así que traducirla no arreglaría nada y el botón prometería
-    /// algo que no puede cumplir.
+    /// Idiomas en los que esta clave no tiene texto todavía. Una clave que
+    /// es sólo un marcador no cuenta: su texto sale de la variable.
     /// </summary>
     private List<string> MissingCulturesOf(
         KeyRow row)
@@ -1040,7 +1572,7 @@
         if (baseCulture is null)
             return [];
 
-        var source = CellValue(row.Key, baseCulture.Culture);
+        var source = CellValue(row, baseCulture.Culture);
 
         if (string.IsNullOrWhiteSpace(source) ||
             ReportVariableTemplate.IsOnlyTokens(source))
@@ -1051,26 +1583,28 @@
         return _cultures
             .Where(x =>
                 !x.IsDefault &&
-                string.IsNullOrWhiteSpace(
-                    CellValue(row.Key, x.Culture)))
+                string.IsNullOrWhiteSpace(CellValue(row, x.Culture)))
             .Select(x => x.Culture)
             .ToList();
     }
 
 
     /// <summary>
-    /// Traduce una sola clave a todos los idiomas donde falte.
-    ///
-    /// Va idioma por idioma porque el endpoint traduce a un destino cada
-    /// vez. Son cuatro o cinco llamadas y se resume en un aviso al final:
-    /// meter una lista de destinos en la API haría que el endpoint hiciera
-    /// dos cosas a cambio de ahorrar unos milisegundos.
+    /// Ámbitos sobre los que actúan "rellenar huecos": los que se están
+    /// viendo (todo el report con sus presets, o el origen filtrado).
     /// </summary>
+    private IReadOnlyList<string> TargetScopes =>
+        _originFilter is null
+            ? Origins.Select(x => x.Scope).ToList()
+            : [_originFilter];
+
+
     private async Task TranslateKeyEverywhereAsync(
         KeyRow row)
     {
         await TranslateGapsAsync(
             MissingCulturesOf(row),
+            [row.Scope],
             [row.Key],
             $"'{row.Key}'");
     }
@@ -1086,19 +1620,21 @@
 
         await TranslateGapsAsync(
             targets,
+            TargetScopes,
             keys: null,
-            what: "el diccionario");
+            what: "lo que estás viendo");
     }
 
 
     private async Task TranslateGapsAsync(
         IReadOnlyCollection<string> targets,
+        IReadOnlyCollection<string> scopes,
         IReadOnlyCollection<string>? keys,
         string what)
     {
         var baseCulture = BaseCulture;
 
-        if (baseCulture is null || targets.Count == 0)
+        if (baseCulture is null || targets.Count == 0 || scopes.Count == 0)
             return;
 
         if (!await ConfirmDiscardAsync())
@@ -1111,44 +1647,46 @@
             var translated = 0;
             var failed = 0;
 
-            foreach (var target in targets)
+            // Un ámbito o un idioma que falla no aborta los demás: lo normal
+            // es que sea un problema de ese par de idiomas, no del lote.
+            foreach (var scope in scopes)
             {
-                var result =
-                    await Toasts.RunApiAsync(
-                        () => RenderSetApi.TranslateMissingResourcesAsync(
-                            CurrentTenant.Id,
-                            new TranslateMissingReportResourcesRequest
-                            {
-                                Scope = _scope,
-                                SourceCulture = baseCulture.Culture,
-                                TargetCulture = target,
-                                IncludeEmptyValues = true,
-                                OverwriteExistingValues = false,
-                                Keys = keys?.ToList()
-                            }),
-                        errorTitle: $"No se ha podido traducir a {target}");
-
-                // Un idioma que falla no debe abortar los demás: lo normal es
-                // que sea un problema de ese par de idiomas, no del lote.
-                if (result is null)
+                foreach (var target in targets)
                 {
-                    failed++;
-                    continue;
-                }
+                    var result =
+                        await Toasts.RunApiAsync(
+                            () => RenderSetApi.TranslateMissingResourcesAsync(
+                                CurrentTenant.Id,
+                                new TranslateMissingReportResourcesRequest
+                                {
+                                    Scope = scope,
+                                    SourceCulture = baseCulture.Culture,
+                                    TargetCulture = target,
+                                    IncludeEmptyValues = true,
+                                    OverwriteExistingValues = false,
+                                    Keys = keys?.ToList()
+                                }),
+                            errorTitle: $"No se ha podido traducir a {target}");
 
-                translated += result.Translated;
-                failed += result.Failed;
+                    if (result is null)
+                    {
+                        failed++;
+                        continue;
+                    }
+
+                    translated += result.Translated;
+                    failed += result.Failed;
+                }
             }
 
             Toasts.Success(
                 $"Traducidas {translated} claves de {what} desde " +
-                $"{baseCulture.DisplayName}. Revisa las marcadas como " +
-                "automáticas.");
+                $"{baseCulture.DisplayName}. Revisa las marcadas como automáticas.");
 
             if (failed > 0)
                 Toasts.Warning($"{failed} traducciones no se han podido aplicar.");
 
-            await LoadScopeAsync();
+            await LoadViewAsync();
         }
         catch (Exception exception)
         {
@@ -1157,20 +1695,7 @@
         finally
         {
             _isBusy = false;
-            _openMenu = null;
         }
-    }
-
-
-    private void ToggleLanguageMenu(
-        string culture)
-    {
-        // Sólo uno abierto a la vez: son menús de la misma fila de cabecera
-        // y solapados no se leen.
-        _openMenu =
-            _openMenu == culture
-                ? null
-                : culture;
     }
 
 
@@ -1185,27 +1710,35 @@
 
         try
         {
-            var result = await Toasts.RunApiAsync(
-                () => RenderSetApi.CopyMissingResourcesAsync(
-                    CurrentTenant.Id,
-                    new CopyMissingReportResourcesRequest
-                    {
-                        Scope = _scope,
-                        SourceCulture = sourceCulture,
-                        TargetCulture = targetCulture,
-                        CopyValue = true
-                    }),
-                errorTitle: "No se han podido copiar las claves pendientes");
+            var created = 0;
+            var skipped = 0;
 
-            if (result is null)
-                return;
+            foreach (var scope in TargetScopes)
+            {
+                var result = await Toasts.RunApiAsync(
+                    () => RenderSetApi.CopyMissingResourcesAsync(
+                        CurrentTenant.Id,
+                        new CopyMissingReportResourcesRequest
+                        {
+                            Scope = scope,
+                            SourceCulture = sourceCulture,
+                            TargetCulture = targetCulture,
+                            CopyValue = true
+                        }),
+                    errorTitle: "No se han podido copiar las claves pendientes");
+
+                if (result is null)
+                    continue;
+
+                created += result.Created;
+                skipped += result.Skipped;
+            }
 
             Toasts.Success(
-                $"Copiadas {result.Created} claves de {sourceCulture} " +
-                $"a {targetCulture} ({result.Skipped} ya tenían texto)."
-            );
+                $"Copiadas {created} claves de {sourceCulture} a {targetCulture} " +
+                $"({skipped} ya tenían texto).");
 
-            await LoadScopeAsync();
+            await LoadViewAsync();
         }
         catch (Exception exception)
         {
@@ -1214,7 +1747,6 @@
         finally
         {
             _isBusy = false;
-            _openMenu = null;
         }
     }
 
@@ -1230,31 +1762,43 @@
 
         try
         {
-            var result =
-                await Toasts.RunApiAsync(
-                    () => RenderSetApi.TranslateMissingResourcesAsync(
-                        CurrentTenant.Id,
-                        new TranslateMissingReportResourcesRequest
-                        {
-                            Scope = _scope,
-                            SourceCulture = sourceCulture,
-                            TargetCulture = targetCulture,
-                            IncludeEmptyValues = true,
-                            OverwriteExistingValues = false
-                        }),
-                    errorTitle: "No se han podido traducir las claves pendientes");
+            var translated = 0;
+            var failed = 0;
+            string? provider = null;
 
-            if (result is null)
-                return;
+            foreach (var scope in TargetScopes)
+            {
+                var result =
+                    await Toasts.RunApiAsync(
+                        () => RenderSetApi.TranslateMissingResourcesAsync(
+                            CurrentTenant.Id,
+                            new TranslateMissingReportResourcesRequest
+                            {
+                                Scope = scope,
+                                SourceCulture = sourceCulture,
+                                TargetCulture = targetCulture,
+                                IncludeEmptyValues = true,
+                                OverwriteExistingValues = false
+                            }),
+                        errorTitle: "No se han podido traducir las claves pendientes");
+
+                if (result is null)
+                    continue;
+
+                translated += result.Translated;
+                failed += result.Failed;
+                provider ??= result.Provider;
+            }
 
             Toasts.Success(
-                $"Traducidas {result.Translated} claves con {result.Provider}. " +
-                $"Revisa las marcadas como automáticas.");
+                $"Traducidas {translated} claves" +
+                (provider is null ? "" : $" con {provider}") +
+                ". Revisa las marcadas como automáticas.");
 
-            if (result.Failed > 0)
-                Toasts.Warning($"{result.Failed} claves fallaron.");
+            if (failed > 0)
+                Toasts.Warning($"{failed} claves fallaron.");
 
-            await LoadScopeAsync();
+            await LoadViewAsync();
         }
         catch (Exception exception)
         {
@@ -1263,35 +1807,25 @@
         finally
         {
             _isBusy = false;
-            _openMenu = null;
         }
     }
 
 
-    // ---------------------------------------------------------------- tipos
-
-    private static string DirtyKey(
-        string key,
-        string culture) =>
-        $"{key}|{culture}";
-
-
-    private static (string Key, string Culture) SplitDirtyKey(
-        string dirtyKey)
-    {
-        var separator = dirtyKey.LastIndexOf('|');
-
-        return (
-            dirtyKey[..separator],
-            dirtyKey[(separator + 1)..]);
-    }
-
+    // ------------------------------------------------------------- tipos
 
     private sealed class KeyRow
     {
+        public required string Scope { get; init; }
+
         public required string Key { get; init; }
 
         public string? Description { get; init; }
+
+        /// <summary>
+        /// Clave de sistema que todavía no existe: se enseña para poder
+        /// traducirla, con su texto por defecto como ayuda.
+        /// </summary>
+        public bool IsSystem { get; init; }
 
         public required Dictionary<string, ReportResource> Values { get; init; }
     }

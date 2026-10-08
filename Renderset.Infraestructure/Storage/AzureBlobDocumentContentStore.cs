@@ -48,10 +48,25 @@ public sealed class AzureBlobDocumentContentStore
 
         if (!string.IsNullOrWhiteSpace(options.ConnectionString))
         {
-            return new AzureBlobDocumentContentStore(
-                new BlobContainerClient(
-                    options.ConnectionString,
-                    containerName));
+            try
+            {
+                return new AzureBlobDocumentContentStore(
+                    new BlobContainerClient(
+                        options.ConnectionString.Trim().Trim('"'),
+                        containerName));
+            }
+            catch (FormatException ex)
+            {
+                // El mensaje del SDK no dice qué valor mirar, y el valor no
+                // se puede enseñar porque lleva la clave de la cuenta.
+                throw new InvalidOperationException(
+                    "DocumentStorage:ConnectionString no tiene formato de cadena de " +
+                    "conexión de Azure Storage. Tiene que ser una sola línea con la forma " +
+                    "\"DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;" +
+                    "EndpointSuffix=core.windows.net\" (Storage account → Access keys → " +
+                    "Connection string). Revisa los user-secrets de Renderset.ApiService.",
+                    ex);
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(options.AccountUrl))

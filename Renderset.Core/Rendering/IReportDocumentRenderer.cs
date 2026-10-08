@@ -19,7 +19,7 @@ public interface IReportDocumentRenderer
         JsonElement data,
         ReportTheme theme,
         string? title = null,
-        bool includeToolbar = false,
         bool includeDocumentData = false,
+        ReportDocumentContext? document = null,
         CancellationToken cancellationToken = default);
 }

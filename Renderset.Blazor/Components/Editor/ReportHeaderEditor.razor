@@ -1,7 +1,10 @@
 @using Renderset.Core.Blocks
 @using Renderset.Core.Configurations
 @using Renderset.Core.Definitions
+@using System.Text.Json
+@using Renderset.Core.Rendering
 @using Renderset.Core.Resolved
+@using Renderset.Core.Reports
 
 <div class="report-editor-section">
 
@@ -49,21 +52,109 @@
                 </div>
             }
 
-            <div class="report-editor-property">
-                <label>Título</label>
+            <div class="report-editor-property @(ShowTitle ? null : "is-hidden-text")">
 
-                <input type="text"
-                       value="@HeaderTitle"
-                       @onchange="TitleChangedAsync" />
+                <div class="report-editor-property-heading">
+                    <label for="report-header-title">Título</label>
+
+                    <label class="report-editor-toggle-row is-compact"
+                           title="@(ShowTitle ? "Ocultar el título en el documento" : "Mostrar el título en el documento")">
+
+                        <input type="checkbox"
+                               class="report-editor-toggle-input"
+                               checked="@ShowTitle"
+                               @onchange="ToggleTitleAsync" />
+
+                        <span class="report-editor-toggle">
+                            <span></span>
+                        </span>
+
+                        <span>@(ShowTitle ? "Visible" : "Oculto")</span>
+
+                    </label>
+                </div>
+
+                <div class="report-editor-input-row">
+                    <input id="report-header-title"
+                           type="text"
+                           value="@HeaderTitle"
+                           disabled="@(!ShowTitle)"
+                           @onchange="TitleChangedAsync" />
+
+                    <DataFieldPicker Fields="DataFields"
+                                     Disabled="@(!ShowTitle)"
+                                     Selected="InsertTitleDataAsync" />
+                </div>
             </div>
 
-            <div class="report-editor-property">
-                <label>Subtítulo</label>
+            <div class="report-editor-property @(ShowSubtitle ? null : "is-hidden-text")">
 
-                <input type="text"
-                       value="@HeaderSubtitle"
-                       @onchange="SubtitleChangedAsync" />
+                <div class="report-editor-property-heading">
+                    <label for="report-header-subtitle">Subtítulo</label>
+
+                    <label class="report-editor-toggle-row is-compact"
+                           title="@(ShowSubtitle ? "Ocultar el subtítulo en el documento" : "Mostrar el subtítulo en el documento")">
+
+                        <input type="checkbox"
+                               class="report-editor-toggle-input"
+                               checked="@ShowSubtitle"
+                               @onchange="ToggleSubtitleAsync" />
+
+                        <span class="report-editor-toggle">
+                            <span></span>
+                        </span>
+
+                        <span>@(ShowSubtitle ? "Visible" : "Oculto")</span>
+
+                    </label>
+                </div>
+
+                <div class="report-editor-input-row">
+                    <input id="report-header-subtitle"
+                           type="text"
+                           value="@HeaderSubtitle"
+                           disabled="@(!ShowSubtitle)"
+                           @onchange="SubtitleChangedAsync" />
+
+                    <DataFieldPicker Fields="DataFields"
+                                     Disabled="@(!ShowSubtitle)"
+                                     Selected="InsertSubtitleDataAsync" />
+                </div>
+
+                @if (DataFields.Count > 0)
+                {
+                    <small>
+                        Con "+ Dato" el texto lleva un valor del documento, por
+                        ejemplo Albarán &#123;&#123;data.numero&#125;&#125;.
+                        También vale en las líneas de un bloque de cabecera.
+                    </small>
+                }
             </div>
+
+            @if (ShowTitle || ShowSubtitle)
+            {
+                <div class="report-editor-property">
+                    <label>Posición del título</label>
+
+                    <div class="report-layout-picker-modes" role="radiogroup" aria-label="Posición del título">
+                        @foreach (var (label, placement) in TitlePlacements)
+                        {
+                            <button type="button"
+                                    role="radio"
+                                    aria-checked="@(TitlePlacement == placement ? "true" : "false")"
+                                    class="@(TitlePlacement == placement ? "is-active" : null)"
+                                    @onclick="() => TitlePlacementChangedAsync(placement)">
+                                @label
+                            </button>
+                        }
+                    </div>
+
+                    <small>
+                        En banda, el título va a todo el ancho y arriba quedan
+                        logo, datos de empresa y QR en una sola fila.
+                    </small>
+                </div>
+            }
 
             @if (Definition.AllowLogo)
             {
@@ -95,6 +186,84 @@
                 }
             }
 
+            <label class="report-editor-toggle-row">
+
+                <input type="checkbox"
+                       class="report-editor-toggle-input"
+                       checked="@ShowQr"
+                       @onchange="ToggleQrAsync" />
+
+                <span class="report-editor-toggle">
+                    <span></span>
+                </span>
+
+                <span>Código QR</span>
+
+            </label>
+
+            @if (ShowQr)
+            {
+                <div class="report-editor-property">
+                    <label for="report-header-qr-kind">Contenido</label>
+
+                    <select id="report-header-qr-kind"
+                            value="@(QrIsCustom ? "custom" : "document")"
+                            @onchange="QrKindChangedAsync">
+                        <option value="document">Enlace público del documento</option>
+                        <option value="custom">Enlace o texto propio</option>
+                    </select>
+
+                    @if (QrIsCustom)
+                    {
+                        <input type="text"
+                               value="@QrContent"
+                               @onchange="QrContentChangedAsync"
+                               placeholder="https://erp/salidas/{salidaid}" />
+
+                        <small>
+                            Entre llaves, cualquier dato del documento por su
+                            ruta ({salidaid}, {cliente.codigo}), o
+                            {documentUrl} (enlace público), {viewerUrl} (visor
+                            interno, con sesión) / {documentId}.
+                        </small>
+
+                        @if (MissingQrTokens.Count > 0)
+                        {
+                            <small class="report-editor-warning">
+                                No están en los datos de ejemplo:
+                                @(string.Join(", ", MissingQrTokens.Select(x => "{" + x + "}"))).
+                                Sin ellos el documento sale sin QR.
+                            </small>
+                        }
+                    }
+                    else
+                    {
+                        <small>
+                            Cualquiera que lea el QR ve el documento y puede
+                            bajarlo en PDF, sin cuenta. El enlace va firmado:
+                            no se puede adivinar el de otro documento.
+                        </small>
+                    }
+                </div>
+
+                <div class="report-editor-property">
+                    <label>Tamaño</label>
+
+                    <div class="report-layout-picker-modes" role="radiogroup" aria-label="Tamaño del QR">
+                        @foreach (var (label, size) in QrSizes)
+                        {
+                            <button type="button"
+                                    role="radio"
+                                    aria-checked="@(QrSize == size ? "true" : "false")"
+                                    class="@(QrSize == size ? "is-active" : null)"
+                                    @onclick="() => QrSizeChangedAsync(size)">
+                                @label
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+
         </div>
     }
 
@@ -124,6 +293,37 @@
     [Parameter]
     public EventCallback Changed { get; set; }
 
+    /// <summary>
+    /// Campos de valor único del report, para el desplegable "+ Dato".
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<ReportDataFieldOption> DataFields { get; set; } = [];
+
+    private async Task InsertTitleDataAsync(string path)
+    {
+        Texts.SetText(
+            ReportTextKeys.HeaderTitle,
+            Append(HeaderTitle, ReportDataTemplate.TokenFor(path)));
+
+        await Changed.InvokeAsync();
+    }
+
+    private async Task InsertSubtitleDataAsync(string path)
+    {
+        Texts.SetText(
+            ReportTextKeys.HeaderSubtitle,
+            Append(HeaderSubtitle, ReportDataTemplate.TokenFor(path)));
+
+        await Changed.InvokeAsync();
+    }
+
+    private static string Append(
+        string? current,
+        string token) =>
+        string.IsNullOrWhiteSpace(current)
+            ? token
+            : current.TrimEnd() + " " + token;
+
     private string HeaderTitle =>
         Texts.GetText(
             ReportTextKeys.HeaderTitle,
@@ -148,10 +348,141 @@
         ?? Header.Visible
         ?? Definition.VisibleByDefault;
 
+    private bool ShowTitle =>
+        Resolved?.ShowTitle
+        ?? Header.ShowTitle
+        ?? true;
+
+    private bool ShowSubtitle =>
+        Resolved?.ShowSubtitle
+        ?? Header.ShowSubtitle
+        ?? true;
+
     private bool ShowLogo =>
         Resolved?.ShowLogo
         ?? Header.ShowLogo
         ?? Definition.AllowLogo;
+
+    /// <summary>
+    /// Datos del preview, para avisar de los marcadores del QR que no
+    /// existen.
+    /// </summary>
+    [Parameter]
+    public JsonElement PreviewData { get; set; }
+
+    private static readonly (string Label, ReportHeaderTitlePlacement Placement)[] TitlePlacements =
+    [
+        ("Junto al logo", ReportHeaderTitlePlacement.Inline),
+        ("Debajo", ReportHeaderTitlePlacement.Below),
+        ("Encima", ReportHeaderTitlePlacement.Above)
+    ];
+
+    private ReportHeaderTitlePlacement TitlePlacement =>
+        Resolved?.TitlePlacement
+        ?? Header.TitlePlacement
+        ?? ReportHeaderTitlePlacement.Inline;
+
+    /// <summary>
+    /// Junto al logo es lo de siempre y se guarda nulo. Con un bloque de
+    /// cabecera se guarda explícito: el bloque podría traer la banda y un
+    /// nulo la dejaría pasar.
+    /// </summary>
+    private async Task TitlePlacementChangedAsync(
+        ReportHeaderTitlePlacement placement)
+    {
+        Header.TitlePlacement =
+            placement == ReportHeaderTitlePlacement.Inline &&
+            string.IsNullOrWhiteSpace(Header.BlockId)
+                ? null
+                : placement;
+
+        await Changed.InvokeAsync();
+    }
+
+    private static readonly (string Label, int Size)[] QrSizes =
+    [
+        ("Pequeño", 64),
+        ("Mediano", ResolvedReportHeader.DefaultQrSize),
+        ("Grande", 112)
+    ];
+
+    private bool ShowQr =>
+        Resolved?.ShowQr
+        ?? Header.ShowQr
+        ?? false;
+
+    private string QrContent =>
+        Header.QrContent
+        ?? Resolved?.QrContent
+        ?? ReportQrContent.DocumentUrlTemplate;
+
+    private bool QrIsCustom =>
+        !string.Equals(
+            QrContent,
+            ReportQrContent.DocumentUrlTemplate,
+            StringComparison.OrdinalIgnoreCase);
+
+    private int QrSize =>
+        Resolved?.QrSize
+        ?? Header.QrSize
+        ?? ResolvedReportHeader.DefaultQrSize;
+
+    private IReadOnlyList<string> MissingQrTokens =>
+        ReportQrContent
+            .DataTokens(QrContent)
+            .Where(token =>
+                ReportQrContent.Resolve(
+                    "{" + token + "}",
+                    PreviewData,
+                    document: null) is null)
+            .ToList();
+
+    /// <summary>
+    /// Sin QR es lo de siempre, así que apagado se guarda nulo. Con un bloque
+    /// reutilizable de cabecera se guarda false: el bloque podría traer el
+    /// QR encendido y un nulo lo dejaría pasar.
+    /// </summary>
+    private async Task ToggleQrAsync(ChangeEventArgs e)
+    {
+        var show = GetBool(e);
+
+        Header.ShowQr =
+            show
+                ? true
+                : string.IsNullOrWhiteSpace(Header.BlockId)
+                    ? null
+                    : false;
+
+        await Changed.InvokeAsync();
+    }
+
+    private async Task QrKindChangedAsync(ChangeEventArgs e)
+    {
+        // Al pasar a propio se parte de un ejemplo editable; volver al
+        // enlace del documento es el valor por defecto: nulo.
+        Header.QrContent =
+            e.Value?.ToString() == "custom"
+                ? "{documentUrl}?ref={documentId}"
+                : null;
+
+        await Changed.InvokeAsync();
+    }
+
+    private async Task QrContentChangedAsync(ChangeEventArgs e)
+    {
+        Header.QrContent = Normalize(e.Value?.ToString());
+        await Changed.InvokeAsync();
+    }
+
+    private async Task QrSizeChangedAsync(int size)
+    {
+        Header.QrSize =
+            size == ResolvedReportHeader.DefaultQrSize
+                ? null
+                : size;
+
+        await Changed.InvokeAsync();
+    }
 
     private async Task ToggleVisibleAsync(ChangeEventArgs e)
     {
@@ -181,6 +512,39 @@
             e.Value?.ToString());
 
         await Changed.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Mostrar es el valor por defecto, así que se guarda nulo en vez de
+    /// true: el preset sólo lleva el override cuando de verdad se oculta.
+    /// </summary>
+    private async Task ToggleTitleAsync(ChangeEventArgs e)
+    {
+        Header.ShowTitle = Visibility(GetBool(e), Header.ShowTitle, Resolved?.ShowTitle);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task ToggleSubtitleAsync(ChangeEventArgs e)
+    {
+        Header.ShowSubtitle = Visibility(GetBool(e), Header.ShowSubtitle, Resolved?.ShowSubtitle);
+        await Changed.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Si estaba oculto sin override en el preset es que lo oculta el
+    /// bloque reutilizable: ahí nulo no basta y hay que guardar true.
+    /// </summary>
+    private static bool? Visibility(
+        bool show,
+        bool? current,
+        bool? resolved)
+    {
+        if (!show)
+            return false;
+
+        return current is null && resolved == false
+            ? true
+            : null;
     }
 
     private async Task ToggleLogoAsync(ChangeEventArgs e)

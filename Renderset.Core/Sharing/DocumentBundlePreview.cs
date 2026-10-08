@@ -10,14 +10,14 @@ public static class DocumentBundlePreview
     public static DocumentBundleView Build(
         string tenantId,
         DocumentSharingSettings settings,
-        string? culture,
+        DocumentBundleTexts texts,
         DateTime nowUtc,
         int fallbackExpirationDays)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(texts);
 
         var normalized = settings.Normalized();
-        var texts = DocumentBundleTexts.For(culture);
 
         var days =
             normalized.DefaultExpirationDays

@@ -89,7 +89,8 @@
 .report-composer-settings {
     padding: 18px 28px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 220px;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: start;
     gap: 18px;
     border-bottom: 1px solid #e7ecef;
     background: #ffffff;
@@ -458,21 +459,6 @@
     gap: 7px;
 }
 
-    .report-composer-selected-grid.list {
-        grid-template-columns: 1fr;
-    }
-
-    .report-composer-selected-grid.columns-2 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .report-composer-selected-grid.columns-3 {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .report-composer-selected-grid.columns-4 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
 
 .report-composer-selected-field {
     min-width: 0;

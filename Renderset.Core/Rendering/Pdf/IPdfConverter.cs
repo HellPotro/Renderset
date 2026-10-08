@@ -51,6 +51,28 @@ public sealed class PdfPageOptions
     /// </summary>
     public bool ShowPageNumbers { get; set; } = true;
 
+    /// <summary>
+    /// Pie propio del documento (HTML autosuficiente, con pageNumber y
+    /// totalPages). Si viene, sustituye a la numeración genérica de
+    /// <see cref="ShowPageNumbers"/>. Lo rellena DocumentPdfService a partir
+    /// del documento emitido; no se configura.
+    /// </summary>
+    public string? FooterHtml { get; set; }
+
+    public PdfPageOptions With(
+        string footerHtml,
+        double marginBottomMm) =>
+        new()
+        {
+            Paper = Paper,
+            MarginTopMm = MarginTopMm,
+            MarginLeftMm = MarginLeftMm,
+            MarginRightMm = MarginRightMm,
+            MarginBottomMm = Math.Max(MarginBottomMm, marginBottomMm),
+            ShowPageNumbers = false,
+            FooterHtml = footerHtml
+        };
+
     public (double WidthMm, double HeightMm) PaperSizeMm =>
         Paper.Equals("Letter", StringComparison.OrdinalIgnoreCase)
             ? (215.9, 279.4)

@@ -1,0 +1,339 @@
+/* Página API: pasos, pestañas, guía de la librería y catálogo de
+   endpoints. Las tarjetas y las etiquetas de método son las de pages.css. */
+
+/* ---------- Tres pasos ---------- */
+
+.api-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.api-step {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--rs-border, #d8e1e5);
+    border-radius: 12px;
+    background: #fff;
+}
+
+    .api-step strong {
+        color: var(--rs-text, #172b35);
+        font-size: 13px;
+    }
+
+    .api-step p {
+        margin: 4px 0 0;
+        color: var(--rs-muted, #74858d);
+        font-size: 12px;
+        line-height: 1.55;
+    }
+
+    .api-step code {
+        color: #294b59;
+        font-size: 11px;
+    }
+
+.api-step-number {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: #173d4f;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+
+/* ---------- Pestañas ---------- */
+
+.api-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--rs-border, #d8e1e5);
+}
+
+    .api-tabs button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: -1px;
+        padding: 10px 14px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        color: #5d6f78;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+        .api-tabs button:hover {
+            color: #173d4f;
+        }
+
+        .api-tabs button.is-active {
+            border-bottom-color: #173d4f;
+            color: #173d4f;
+        }
+
+
+/* ---------- Librería ---------- */
+
+.api-library {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    align-items: start;
+    gap: 18px;
+}
+
+.api-library-index {
+    position: sticky;
+    top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+    .api-library-index span {
+        margin-bottom: 6px;
+        color: #8a99a1;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .api-library-index a {
+        padding: 6px 9px;
+        border-radius: 6px;
+        color: #3d5560;
+        font-size: 12px;
+        text-decoration: none;
+    }
+
+        .api-library-index a:hover {
+            background: #eef3f5;
+            color: #173d4f;
+        }
+
+.api-library-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+
+.api-sample {
+    scroll-margin-top: 16px;
+}
+
+    .api-sample pre {
+        max-height: none;
+    }
+
+.api-sample-note {
+    display: flex;
+    gap: 8px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    background: #f3f8fb;
+    color: #46606c !important;
+}
+
+    .api-sample-note i {
+        margin-top: 2px;
+        color: #5b8aa3;
+    }
+
+
+/* ---------- Endpoints ---------- */
+
+.api-endpoints-head {
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.api-endpoints-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.api-search {
+    position: relative;
+}
+
+    .api-search i {
+        position: absolute;
+        top: 50%;
+        left: 10px;
+        transform: translateY(-50%);
+        color: #9aa9b1;
+        font-size: 11px;
+    }
+
+    .api-search input {
+        width: 260px;
+        height: 34px;
+        padding: 0 10px 0 30px;
+        border: 1px solid #dfe7ea;
+        border-radius: 8px;
+        font-size: 12.5px;
+    }
+
+.api-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #3d5560;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.api-group {
+    padding-top: 14px;
+    border-top: 1px solid #edf1f3;
+}
+
+    .api-group + .api-group {
+        margin-top: 14px;
+    }
+
+    .api-group > header h3 {
+        margin: 0;
+        color: var(--rs-text, #172b35);
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .api-group > header p {
+        margin: 3px 0 10px;
+        color: var(--rs-muted, #74858d);
+        font-size: 12px;
+    }
+
+.api-routes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+    .api-routes li {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr);
+        align-items: start;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 1px solid #edf1f3;
+        border-radius: 8px;
+        background: #f8fbfc;
+    }
+
+        .api-routes li .api-method {
+            margin-top: 1px;
+        }
+
+.api-route-text {
+    min-width: 0;
+}
+
+    .api-route-text p {
+        margin: 4px 0 0;
+        color: #5d6f78;
+        font-size: 12px;
+        line-height: 1.5;
+    }
+
+.api-route-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+}
+
+    .api-route-head code {
+        color: #294b59;
+        font-size: 11.5px;
+        overflow-wrap: anywhere;
+    }
+
+    .api-route-head strong {
+        color: #26404b;
+        font-size: 12px;
+    }
+
+.api-badge {
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+    .api-badge.is-integration {
+        background: #e8f3ef;
+        color: #2f7a5d;
+    }
+
+    .api-badge.is-service {
+        background: #fbf1e6;
+        color: #8a5a1f;
+    }
+
+    .api-badge.is-public {
+        background: #eef1fb;
+        color: #3c4f86;
+    }
+
+.api-empty {
+    margin: 16px 0 0;
+    color: var(--rs-muted, #74858d);
+    font-size: 12px;
+}
+
+
+/* ---------- Estrecho ---------- */
+
+@media (max-width: 1000px) {
+
+    .api-steps {
+        grid-template-columns: 1fr;
+    }
+
+    .api-library {
+        grid-template-columns: 1fr;
+    }
+
+    .api-library-index {
+        position: static;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+        .api-library-index span {
+            width: 100%;
+        }
+}
+
+@media (max-width: 650px) {
+
+    .api-search input {
+        width: 100%;
+    }
+
+    .api-routes li {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+}

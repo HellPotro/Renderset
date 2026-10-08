@@ -1,0 +1,153 @@
+@using Renderset.Core.Definitions
+
+@*
+    Selector de distribución de los campos de una sección: lista, o
+    cuadrícula con cualquier número de columnas entre 1 y 12. Lo comparten el
+    editor de secciones, las secciones personalizadas y el compositor.
+
+    Trabaja siempre con la forma normalizada (List | Grid + columnas). Los
+    Columns2/3/4 de presets antiguos se muestran como cuadrícula de 2/3/4 y,
+    en cuanto se toca algo, se guardan ya como Grid.
+*@
+
+<div class="report-layout-picker @Class">
+
+    @if (!string.IsNullOrWhiteSpace(Label))
+    {
+        <span class="report-layout-picker-label">@Label</span>
+    }
+
+    <div class="report-layout-picker-modes"
+         role="group"
+         aria-label="Distribución de los campos">
+
+        <button type="button"
+                class="@(Current.IsList ? "is-active" : null)"
+                aria-pressed="@Current.IsList"
+                @onclick="SelectListAsync">
+            <i class="fa-solid fa-list"></i>
+            Lista
+        </button>
+
+        <button type="button"
+                class="@(Current.IsList ? null : "is-active")"
+                aria-pressed="@(!Current.IsList)"
+                @onclick="SelectGridAsync">
+            <i class="fa-solid fa-table-cells-large"></i>
+            Cuadrícula
+        </button>
+
+    </div>
+
+    @if (!Current.IsList)
+    {
+        <div class="report-layout-picker-columns">
+
+            <span class="report-layout-picker-caption">Columnas</span>
+
+            <div class="report-layout-picker-stepper">
+
+                <button type="button"
+                        title="Una columna menos"
+                        disabled="@(Current.Columns <= ReportSectionGrid.MinColumns)"
+                        @onclick="() => SetColumnsAsync(Current.Columns - 1)">
+                    <i class="fa-solid fa-minus"></i>
+                </button>
+
+                <input type="number"
+                       min="@ReportSectionGrid.MinColumns"
+                       max="@ReportSectionGrid.MaxColumns"
+                       value="@Current.Columns"
+                       aria-label="Número de columnas"
+                       @onchange="ColumnsTypedAsync" />
+
+                <button type="button"
+                        title="Una columna más"
+                        disabled="@(Current.Columns >= ReportSectionGrid.MaxColumns)"
+                        @onclick="() => SetColumnsAsync(Current.Columns + 1)">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+
+            </div>
+
+            <div class="report-layout-picker-presets">
+                @foreach (var columns in Presets)
+                {
+                    <button type="button"
+                            class="@(Current.Columns == columns ? "is-active" : null)"
+                            @onclick="() => SetColumnsAsync(columns)">
+                        @columns
+                    </button>
+                }
+            </div>
+
+        </div>
+
+        @* Miniatura de la cuadrícula: con 5 o más columnas un número no basta
+           para hacerse una idea del ancho que va a tener cada campo. *@
+        <div class="report-layout-picker-preview"
+             style="@PreviewStyle"
+             aria-hidden="true">
+            @for (var i = 0; i < Current.Columns; i++)
+            {
+                <span></span>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+
+    private static readonly int[] Presets = [1, 2, 3, 4, 6];
+
+    [Parameter]
+    public ReportSectionLayout? Layout { get; set; }
+
+    [Parameter]
+    public int? Columns { get; set; }
+
+    [Parameter]
+    public string? Label { get; set; } = "Distribución";
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>
+    /// Devuelve siempre la forma normalizada. Quien guarda decide qué hacer
+    /// con ella (normalmente Layout + StoredColumns).
+    /// </summary>
+    [Parameter]
+    public EventCallback<ReportSectionGridLayout> Changed { get; set; }
+
+    private ReportSectionGridLayout Current =>
+        ReportSectionGrid.Normalize(Layout, Columns);
+
+    private string PreviewStyle =>
+        $"grid-template-columns:repeat({Current.Columns},minmax(0,1fr));";
+
+    private Task SelectListAsync() =>
+        Current.IsList
+            ? Task.CompletedTask
+            : Changed.InvokeAsync(ReportSectionGridLayout.List);
+
+    /// <summary>
+    /// Al pasar de lista a cuadrícula se empieza con 2 columnas, que es lo
+    /// que más se usa.
+    /// </summary>
+    private Task SelectGridAsync() =>
+        Current.IsList
+            ? SetColumnsAsync(ReportSectionGrid.DefaultColumns)
+            : Task.CompletedTask;
+
+    private Task SetColumnsAsync(int columns) =>
+        Changed.InvokeAsync(
+            new ReportSectionGridLayout(
+                ReportSectionLayout.Grid,
+                ReportSectionGrid.Clamp(columns)));
+
+    private Task ColumnsTypedAsync(ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), out var columns)
+            ? SetColumnsAsync(columns)
+            : Task.CompletedTask;
+}

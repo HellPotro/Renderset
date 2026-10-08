@@ -1,6 +1,7 @@
 ﻿@using System.Text.Json
 @using Renderset.Core.Data
 @using Renderset.Core.Definitions
+@using Renderset.Core.Rendering
 @using Renderset.Core.Resolved
 
 @if (VisibleColumns.Any())
@@ -36,6 +37,37 @@
                     </tr>
                 }
             </tbody>
+
+            @if (Table.HasTotals)
+            {
+                var rows = Rows;
+                var labelShown = false;
+
+                @* Una tabla dentro de una sección que se repite (las líneas de
+                   cada albarán) suma sólo sus propias filas. *@
+                <tfoot>
+                    <tr class="dynamic-report-total-row">
+                        @foreach (var column in VisibleColumns)
+                        {
+                            if (column.Total != ReportColumnTotal.None)
+                            {
+                                <td class="@GetAlignmentClass(column) is-total">
+                                    @TotalOf(rows, column)
+                                </td>
+                            }
+                            else
+                            {
+                                @* La etiqueta va en la primera columna sin total. *@
+                                <td class="@(labelShown ? null : "is-total-label")">
+                                    @(labelShown ? null : Table.TotalLabel)
+                                </td>
+
+                                labelShown = true;
+                            }
+                        }
+                    </tr>
+                </tfoot>
+            }
 
         </table>
 
@@ -92,26 +124,23 @@
             return string.Empty;
         }
 
-        return column.Type switch
-        {
-            ReportFieldType.Date when value is DateTime date
-                => date.ToString("dd/MM/yyyy"),
+        return ReportValueFormatter.Format(value, column.Type);
+    }
 
-            ReportFieldType.Currency when value is decimal number
-                => number.ToString("N2"),
+    private string TotalOf(
+        IReadOnlyList<JsonElement> rows,
+        ResolvedReportColumn column)
+    {
+        var values =
+            rows.Select(row =>
+                _dataAccessor.TryGetValue(row, column.DataPath, out var value)
+                    ? value
+                    : null);
 
-            ReportFieldType.Number when value is decimal number
-                => number.ToString("N2"),
-
-            ReportFieldType.Percentage when value is decimal number
-                => $"{number:N2} %",
-
-            ReportFieldType.Boolean when value is bool boolean
-                => boolean ? "Sí" : "No",
-
-            _ =>
-                value.ToString() ?? string.Empty
-        };
+        return ReportTableTotals.Format(
+            ReportTableTotals.Compute(values, column.Total),
+            column.Total,
+            column.Type);
     }
 
     private static readonly JsonSerializerOptions PayloadOptions =
@@ -190,6 +219,7 @@
         return column.Type switch
         {
             ReportFieldType.Number
+                or ReportFieldType.Integer
                 or ReportFieldType.Currency
                 or ReportFieldType.Percentage
                 => "number",

@@ -1,0 +1,151 @@
+@page "/documents/{DocumentId}"
+
+@using Renderset.Core.Rendering
+@using Renderset.Core.Sharing
+@using Renderset.Blazor.Components.Sharing
+
+@layout Renderset.Web.Components.Layout.EmptyLayout
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>@(_document?.FileName ?? "Documento") - RenderSet</PageTitle>
+
+@*
+    Visor de un documento emitido. El documento es sólo el documento (sin
+    barra ni scripts); las acciones están en DocumentViewerToolbar, la misma
+    barra que el visor público de bundles (mismo CSS y mismo script).
+    CSV y JSON sólo aparecen si el documento se emitió con sus datos
+    (output.includeDocumentData).
+*@
+
+@if (_loading)
+{
+    <div class="doc-viewer-state">
+        <i class="fa-solid fa-circle-notch fa-spin"></i>
+        Cargando documento…
+    </div>
+}
+else if (_document is null)
+{
+    <div class="doc-viewer-state is-error">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        No se ha encontrado el documento.
+        <a class="secondary-button" href="bundles">Documentos</a>
+    </div>
+}
+else
+{
+    <div class="doc-viewer"
+         @ref="_root"
+         data-rs-viewer
+         data-culture="@_document.Culture">
+
+        <DocumentViewerToolbar Texts="Texts"
+                               Title="@_document.FileName"
+                               OpenUrl="@OpenUrl"
+                               DownloadUrl="@DownloadUrl"
+                               DownloadIsPdf="true"
+                               AllowData="true"
+                               BackUrl="bundles"
+                               BackTitle="Documentos emitidos"
+                               Standalone="true">
+            <Details>
+                @_document.ReportId
+                <span aria-hidden="true">·</span>
+                <CultureFlagIcon Culture="@_document.Culture"
+                                 Size="CultureFlagIcon.CultureFlagSize.Small" />
+                @_document.Culture
+                <span aria-hidden="true">·</span>
+                @_document.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+            </Details>
+        </DocumentViewerToolbar>
+
+        <iframe class="doc-viewer-frame"
+                title="@_document.FileName"
+                src="@($"{OpenUrl}/embed")"
+                data-rs-viewer-frame></iframe>
+
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public string DocumentId { get; set; } = default!;
+
+    private bool _loading = true;
+    private bool _initialized;
+
+    private RenderDocumentResponse? _document;
+    private ElementReference _root;
+
+    private string OpenUrl =>
+        $"/files/documents/{Uri.EscapeDataString(DocumentId)}";
+
+    /// <summary>
+    /// Los textos de la barra son los de la página pública en español: así
+    /// el visor interno y el del bundle dicen lo mismo.
+    /// </summary>
+    private static readonly DocumentBundleTexts Texts =
+        DocumentBundleTexts.For("es");
+
+    private string? DownloadUrl =>
+        _document?.PdfUrl is null
+            ? null
+            : $"{OpenUrl}/pdf?download=true";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _initialized = false;
+
+        // En el prerender no se pinta el iframe: al arrancar el circuito
+        // Blazor sustituye ese HTML, el navegador cancelaba la primera carga
+        // del documento a medias y la pedía otra vez.
+        if (!RendererInfo.IsInteractive)
+            return;
+
+        try
+        {
+            _document = await RenderSetApi.GetDocumentMetadataAsync(
+                CurrentTenant.Id,
+                DocumentId);
+        }
+        catch (Refit.ApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _document = null;
+        }
+        catch (Exception exception)
+        {
+            _document = null;
+            Toasts.Error(
+                ToastServiceExtensions.Describe(exception),
+                "No se ha podido abrir el documento");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>
+    /// Los menús de CSV y JSON los activa document-viewer.js cuando el
+    /// iframe ha cargado y sabe qué datos trae el documento. Después la
+    /// página no vuelve a pintarse, así que lo que cambie el script se queda.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(
+        bool firstRender)
+    {
+        if (_initialized || _document is null)
+            return;
+
+        _initialized = true;
+
+        await JS.InvokeVoidAsync(
+            "RenderSetViewer.init",
+            _root);
+    }
+}

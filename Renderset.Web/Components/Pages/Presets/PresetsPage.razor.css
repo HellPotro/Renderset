@@ -114,3 +114,19 @@
         flex-direction: column;
     }
 }
+
+
+/* Menú de reports a la izquierda (SideNav), presets a la derecha. */
+.presets-shell {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    align-items: start;
+    gap: 22px;
+}
+
+@media (max-width: 1000px) {
+
+    .presets-shell {
+        grid-template-columns: 1fr;
+    }
+}

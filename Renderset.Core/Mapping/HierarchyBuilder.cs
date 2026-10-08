@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -180,7 +181,7 @@ public sealed class HierarchyBuilder
         var first = rows[0];
 
         foreach (var field in plan.Fields)
-            result[field.Name] = ToJsonValue(field, first);
+            result[field.Name] = ToJsonValue(field, first, options);
 
         foreach (var child in plan.Children)
         {
@@ -255,7 +256,8 @@ public sealed class HierarchyBuilder
 
     private static JsonNode? ToJsonValue(
         FieldPlan field,
-        object?[] row)
+        object?[] row,
+        HierarchyBuilderOptions options)
     {
         if (field.Ordinal < 0)
         {
@@ -269,26 +271,76 @@ public sealed class HierarchyBuilder
         if (value is null)
             return null;
 
-        return field.Type switch
+        // Un texto que llega donde se espera un número o una fecha se lee
+        // siempre en cultura invariante: el servidor puede estar en es-ES, y
+        // "29.12" no puede convertirse en 2912.
+        var invariant = CultureInfo.InvariantCulture;
+
+        if (value is string text)
         {
-            ReportDataType.Number =>
-                JsonValue.Create(Convert.ToDecimal(value)),
+            text = options.TrimStrings ? text.TrimEnd() : text;
 
-            ReportDataType.Boolean =>
-                JsonValue.Create(Convert.ToBoolean(value)),
+            if (text.Length == 0 && field.Type != ReportDataType.String)
+                return null;
 
-            ReportDataType.Date =>
-                JsonValue.Create(
-                    Convert.ToDateTime(value).ToString("yyyy-MM-dd")),
+            value = text;
+        }
 
-            ReportDataType.DateTime =>
-                JsonValue.Create(
-                    Convert.ToDateTime(value).ToString("s")),
+        try
+        {
+            return field.Type switch
+            {
+                ReportDataType.Number =>
+                    JsonValue.Create(Convert.ToDecimal(value, invariant)),
 
-            _ =>
-                JsonValue.Create(value.ToString())
-        };
+                ReportDataType.Boolean =>
+                    JsonValue.Create(ToBoolean(value)),
+
+                ReportDataType.Date =>
+                    JsonValue.Create(
+                        Convert.ToDateTime(value, invariant).ToString("yyyy-MM-dd", invariant)),
+
+                ReportDataType.DateTime =>
+                    JsonValue.Create(
+                        Convert.ToDateTime(value, invariant).ToString("s", invariant)),
+
+                _ =>
+                    JsonValue.Create(
+                        options.TrimStrings
+                            ? Convert.ToString(value, invariant)?.TrimEnd()
+                            : Convert.ToString(value, invariant))
+            };
+        }
+        catch (Exception exception) when (
+            !options.StrictTypes &&
+            exception is FormatException or InvalidCastException or OverflowException)
+        {
+            // Se queda el valor como texto. El diseñador lo pinta igual (los
+            // tipos numéricos aceptan texto con punto decimal) y el documento
+            // sale; cambiar el tipo del campo en Datos lo deja limpio.
+            return JsonValue.Create(
+                Convert.ToString(value, invariant)?.TrimEnd());
+        }
+        catch (Exception exception) when (exception is FormatException or InvalidCastException or OverflowException)
+        {
+            throw new DataMappingValueException(
+                field.Name,
+                field.SourceColumn,
+                field.Type,
+                value,
+                exception);
+        }
     }
+
+    private static bool ToBoolean(
+        object value) =>
+        value switch
+        {
+            bool boolean => boolean,
+            string text when text is "1" or "S" or "s" or "Y" or "y" => true,
+            string text when text is "0" or "N" or "n" => false,
+            _ => Convert.ToBoolean(value, CultureInfo.InvariantCulture)
+        };
 
     // ------------------------------------------------------------- planning
 
@@ -364,6 +416,7 @@ public sealed class HierarchyBuilder
                         .Select(field => new FieldPlan
                         {
                             Name = field.Name,
+                            SourceColumn = field.SourceColumn,
                             Type = field.Type,
                             ConstantValue = field.ConstantValue,
 
@@ -387,6 +440,8 @@ public sealed class HierarchyBuilder
         public required string Name { get; init; }
 
         public required int Ordinal { get; init; }
+
+        public string? SourceColumn { get; init; }
 
         public required ReportDataType Type { get; init; }
 

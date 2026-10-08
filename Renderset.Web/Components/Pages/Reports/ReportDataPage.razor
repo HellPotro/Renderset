@@ -1,0 +1,928 @@
+@page "/reports/{ReportId}/data"
+
+@using System.Text.Json
+@using System.Text.Json.Nodes
+@using Renderset.Blazor.Components.Datasets
+@using Renderset.Core.DataSources
+@using Renderset.Core.Mapping
+@using Renderset.Core.Reports
+@using Renderset.Core.Reports.Inference
+
+@inject IRenderSetApi RenderSetApi
+@inject ICurrentTenant CurrentTenant
+@inject IToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Datos tabulares - RenderSet</PageTitle>
+
+<div class="page report-data-page">
+
+    <header class="page-header">
+
+        <div>
+            <a class="back-button" href="/reports">
+                <i class="fa-solid fa-arrow-left"></i>
+                Reports
+            </a>
+
+            <h1>Datos tabulares @(_report is null ? null : $"· {_report.Name}")</h1>
+
+            <p>
+                Cómo convertir las filas planas de tu consulta en el JSON de
+                este report. Con el mapping guardado, la API acepta las filas
+                tal cual en <code>POST /api/render</code>.
+            </p>
+        </div>
+
+    </header>
+
+    @if (_loading)
+    {
+        <div class="rdata-empty">
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            Cargando…
+        </div>
+    }
+    else if (_report is null)
+    {
+        <div class="rdata-empty">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            No se ha podido abrir el report.
+        </div>
+    }
+    else if (_draft is not null)
+    {
+        @* ------------------------------------------------ revisión *@
+
+        <div class="rdata-layout">
+
+            <section class="editor-card">
+
+                <header class="editor-card-header rdata-card-header">
+                    <h2>Revisar antes de guardar</h2>
+                    <span class="rdata-chip">@DraftDocumentsText</span>
+                </header>
+
+                <div class="editor-card-body">
+
+                    @(IssuesList(_draftIssues))
+
+                    @(MappingTree(_draft.Root))
+
+                    @if (DraftChangesReport)
+                    {
+                        <label class="rdata-check is-strong">
+                            <input type="checkbox"
+                                   checked="@_updateReport"
+                                   @onchange="e => _updateReport = e.Value is true" />
+                            <span>
+                                <strong>Actualizar también la estructura del report</strong>
+                                <small>
+                                    Secciones, campos y columnas pasan a ser los
+                                    de este mapping. Se conservan nombres,
+                                    etiquetas, orden y anchos de lo que no se
+                                    mueve; un campo que cambia de nivel aparece
+                                    en su sitio nuevo con los valores por defecto.
+                                    Los datos de ejemplo pasan a ser el primer
+                                    documento.
+                                </small>
+                            </span>
+                        </label>
+                    }
+
+                    @if (!(_updateReport && DraftChangesReport))
+                    {
+                        <label class="rdata-check">
+                            <input type="checkbox"
+                                   checked="@_useAsSample"
+                                   @onchange="e => _useAsSample = e.Value is true" />
+                            <span>
+                                <strong>Usar el primer documento como datos de ejemplo</strong>
+                                <small>El preview del diseñador pasará a enseñar estos datos.</small>
+                            </span>
+                        </label>
+                    }
+
+                </div>
+
+                <footer class="rdata-actions">
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@_saving"
+                            @onclick="CancelDraft">
+                        Volver a las filas
+                    </button>
+
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@_saving"
+                            @onclick="SaveAsync">
+                        @if (_saving)
+                        {
+                            <i class="fa-solid fa-circle-notch fa-spin"></i>
+                        }
+                        Guardar mapping
+                    </button>
+                </footer>
+
+            </section>
+
+            <section class="editor-card">
+                <header class="editor-card-header">
+                    <h2>Primer documento</h2>
+                </header>
+                <pre class="rdata-json">@_draftJson</pre>
+            </section>
+
+        </div>
+    }
+    else if (_mapping is null || _editing)
+    {
+        @* ------------------------------------------------ asistente *@
+
+        <section class="editor-card">
+
+            <header class="editor-card-header rdata-card-header">
+                <h2>@WizardTitle</h2>
+
+                @if (_mapping is not null)
+                {
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="CancelEditing">
+                        Cancelar
+                    </button>
+                }
+            </header>
+
+            <div class="editor-card-body">
+
+                @if (_initialRows is not null)
+                {
+                    <p class="rdata-hint">
+                        Filas reconstruidas a partir de los datos de ejemplo del
+                        report (@_initialRows.Rows.Count), con cada campo donde
+                        está ahora. Marca o desmarca columnas en cada nivel para
+                        moverlas, cámbiales el tipo o añade un nivel; al revisar
+                        podrás actualizar también la estructura del report.
+                    </p>
+                }
+                else
+                {
+                    <p class="rdata-hint">
+                        Pega el resultado del SELECT con cabeceras (en SSMS:
+                        clic derecho en la rejilla → Copiar con encabezados) y
+                        define los niveles. Pon a cada nivel y a cada campo el
+                        nombre que ya usa el report:
+                        <code>@ReportLevelsHint</code>.
+                    </p>
+                }
+
+                <DatasetSource @key="_wizardKey"
+                               FixedKind="DatasetSourceKind.Tabular"
+                               InitialRows="_initialRows"
+                               InitialMapping="@(_initialRows is null ? null : _initialMapping)"
+                               OnDatasetReady="DraftReadyAsync"
+                               ContinueText="Revisar cambios"
+                               Rows="10" />
+
+            </div>
+
+        </section>
+    }
+    else
+    {
+        @* ------------------------------------------------ mapping guardado *@
+
+        <div class="rdata-layout">
+
+            <section class="editor-card">
+
+                <header class="editor-card-header rdata-card-header">
+
+                    <div>
+                        <h2>@_mapping.Name</h2>
+                        <small class="rdata-muted">
+                            <code>@_mapping.Id</code> · versión @_mapping.Version
+                            @if (_mapping.UpdatedAtUtc is { } updated)
+                            {
+                                @($" · {updated.ToLocalTime():dd/MM/yyyy HH:mm}")
+                            }
+                        </small>
+                    </div>
+
+                    <div class="rdata-header-actions">
+                        <a class="primary-button"
+                           href="@($"reports/{Uri.EscapeDataString(ReportId)}/generate")">
+                            <i class="fa-solid fa-file-export"></i>
+                            Generar
+                        </a>
+
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@(!CanRestructure)"
+                                title="@(CanRestructure
+                                    ? "Mover campos entre niveles, cambiar tipos o añadir un nivel, con los datos de ejemplo del report"
+                                    : "El report no tiene datos de ejemplo de los que partir: usa Rehacer con filas nuevas")"
+                                @onclick="StartRestructure">
+                            <i class="fa-solid fa-diagram-project"></i>
+                            Reorganizar campos
+                        </button>
+
+                        <button type="button"
+                                class="secondary-button"
+                                @onclick="StartPaste">
+                            <i class="fa-solid fa-table"></i>
+                            Rehacer con filas nuevas
+                        </button>
+
+                        <button type="button"
+                                class="icon-button danger"
+                                title="Quitar el mapping"
+                                @onclick="DeleteAsync">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+
+                </header>
+
+                <div class="editor-card-body">
+
+                    @(IssuesList(_issues))
+
+                    @(MappingTree(_mapping.Root))
+
+                </div>
+
+                @if (_mappingDirty)
+                {
+                    <footer class="rdata-actions">
+                        <span class="rdata-dirty">Tipos cambiados sin guardar</span>
+
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@_saving"
+                                @onclick="DiscardMappingChangesAsync">
+                            Descartar
+                        </button>
+
+                        <button type="button"
+                                class="primary-button"
+                                disabled="@_saving"
+                                @onclick="SaveMappingChangesAsync">
+                            Guardar cambios
+                        </button>
+                    </footer>
+                }
+
+            </section>
+
+            <section class="editor-card">
+
+                <header class="editor-card-header rdata-card-header">
+                    <h2>Cómo enviarlo</h2>
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="CopyExampleAsync">
+                        <i class="fa-regular fa-copy"></i>
+                        Copiar ejemplo
+                    </button>
+                </header>
+
+                <div class="editor-card-body">
+
+                    <p class="rdata-hint">
+                        Columnas que tiene que traer la consulta (el nombre
+                        es lo que cuenta, no el orden; mayúsculas indiferentes):
+                    </p>
+
+                    <div class="rdata-columns">
+                        @foreach (var column in RequiredColumns)
+                        {
+                            <code>@column</code>
+                        }
+                    </div>
+
+                    <p class="rdata-hint">
+                        Una petición emite un documento: manda las filas de un
+                        solo @(RootKeyText). Sin <code>mappingId</code> se usa
+                        este mapping.
+                    </p>
+
+                    <pre class="rdata-json">@ExampleRequest</pre>
+
+                </div>
+
+            </section>
+
+        </div>
+    }
+
+</div>
+
+@code {
+
+    [Parameter]
+    public string ReportId { get; set; } = default!;
+
+    private static readonly JsonSerializerOptions PrettyOptions =
+        new() { WriteIndented = true };
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _editing;
+    private bool _useAsSample;
+
+    /// <summary>
+    /// Al guardar el mapping, rehacer también secciones, campos y columnas
+    /// del report con la estructura nueva.
+    /// </summary>
+    private bool _updateReport = true;
+
+    /// <summary>
+    /// Filas reconstruidas desde los datos de ejemplo para "Reorganizar
+    /// campos". Nulo = el asistente arranca vacío, para pegar.
+    /// </summary>
+    private TabularPayload? _initialRows;
+
+    /// <summary>
+    /// Dónde está cada campo al abrir el asistente: el mapping guardado o,
+    /// al volver de Revisar, lo que ya se había movido.
+    /// </summary>
+    private DataMapping? _initialMapping;
+
+    private int _wizardKey;
+
+    /// <summary>
+    /// Tipos cambiados en el mapping guardado, pendientes de guardar.
+    /// </summary>
+    private bool _mappingDirty;
+
+    private Report? _report;
+    private DataMapping? _mapping;
+    private IReadOnlyList<DataMappingCompatibilityIssue> _issues = [];
+
+    // Borrador que sale del asistente, pendiente de guardar.
+    private DataMapping? _draft;
+    private DatasetResult? _draftDataset;
+    private IReadOnlyList<DataMappingCompatibilityIssue> _draftIssues = [];
+    private string _draftJson = string.Empty;
+    private int _draftDocuments;
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _report = await Toasts.RunAsync(
+                () => RenderSetApi.GetReportAsync(CurrentTenant.Id, ReportId),
+                errorTitle: "No se ha podido cargar el report");
+
+            if (_report is null)
+                return;
+
+            await LoadMappingAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadMappingAsync()
+    {
+        var mappings = await Toasts.RunAsync(
+            () => RenderSetApi.GetMappingsAsync(CurrentTenant.Id, ReportId),
+            errorTitle: "No se ha podido cargar el mapping");
+
+        _mapping = mappings?.FirstOrDefault();
+
+        _issues =
+            _mapping is null || _report is null
+                ? []
+                : DataMappingRules.CompareWithReport(_mapping, _report.DataSchema);
+    }
+
+
+    // ------------------------------------------------------------ asistente
+
+    private Task DraftReadyAsync(
+        DatasetResult dataset)
+    {
+        if (dataset.Mapping is null || _report is null)
+            return Task.CompletedTask;
+
+        _draftDataset = dataset;
+
+        _draft =
+            new DataMapping
+            {
+                // Se conserva el id para que el ERP que ya lo indique en
+                // mappingId siga funcionando tras rehacerlo.
+                Id = _mapping?.Id ?? $"{_report.Id}-rows",
+                Name = _mapping?.Name ?? $"{_report.Name} (filas)",
+                ReportId = _report.Id,
+                Root = dataset.Mapping.Root
+            };
+
+        _draftIssues =
+            DataMappingRules.CompareWithReport(_draft, _report.DataSchema);
+
+        _draftDocuments = dataset.Documents.Count;
+
+        _draftJson =
+            JsonSerializer.Serialize(dataset.SampleData, PrettyOptions);
+
+        return Task.CompletedTask;
+    }
+
+    private bool CanRestructure =>
+        _mapping is not null &&
+        _report?.SampleData is { ValueKind: JsonValueKind.Object };
+
+    private string WizardTitle =>
+        _mapping is null
+            ? "Configurar con filas de ejemplo"
+            : _initialRows is not null
+                ? "Reorganizar campos"
+                : "Rehacer con filas nuevas";
+
+    private void StartRestructure()
+    {
+        if (!CanRestructure)
+            return;
+
+        var rows =
+            DataMappingFlattener.Flatten(
+                _mapping!,
+                _report!.SampleData!.Value);
+
+        if (rows.Rows.Count == 0)
+        {
+            Toasts.Warning(
+                "Los datos de ejemplo no tienen nada que este mapping pueda leer. Usa Rehacer con filas nuevas.",
+                "No se puede reorganizar");
+
+            return;
+        }
+
+        _initialRows = rows;
+        _initialMapping = _mapping;
+        _updateReport = true;
+        _wizardKey++;
+        _editing = true;
+    }
+
+    private void StartPaste()
+    {
+        _initialRows = null;
+        _wizardKey++;
+        _editing = true;
+    }
+
+    private void CancelEditing()
+    {
+        _initialRows = null;
+        _initialMapping = null;
+        _editing = false;
+    }
+
+    /// <summary>
+    /// Si el borrador cambia lo que el report espera: campos que aparecen,
+    /// desaparecen o cambian de nivel (las incidencias) o sólo de tipo.
+    /// </summary>
+    private bool DraftChangesReport =>
+        _draftIssues.Count > 0 ||
+        (_draftDataset is not null && _report is not null &&
+         TypesDiffer(_draftDataset.Schema, _report.DataSchema));
+
+    private static bool TypesDiffer(
+        ReportDataSchema draft,
+        ReportDataSchema report)
+    {
+        static Dictionary<string, ReportDataType> Flatten(IEnumerable<ReportDataField> fields)
+        {
+            var result = new Dictionary<string, ReportDataType>(StringComparer.OrdinalIgnoreCase);
+
+            void Walk(IEnumerable<ReportDataField> list)
+            {
+                foreach (var field in list)
+                {
+                    result.TryAdd(field.Path, field.Type);
+                    Walk(field.Children);
+                }
+            }
+
+            Walk(fields);
+            return result;
+        }
+
+        var before = Flatten(report.Fields);
+
+        return Flatten(draft.Fields)
+            .Any(x => before.TryGetValue(x.Key, out var type) && type != x.Value);
+    }
+
+    private void CancelDraft()
+    {
+        // Al volver, el asistente se abre con lo que ya se había movido.
+        if (_initialRows is not null && _draftDataset?.Mapping is { } edited)
+            _initialMapping = edited;
+
+        _draft = null;
+        _draftDataset = null;
+        _editing = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_draft is null || _report is null || _saving)
+            return;
+
+        // Validación local: lo que hace que el mapping no pueda guardarse.
+        var errors = DataMappingRules.Validate(_draft);
+
+        if (errors.Count > 0)
+        {
+            Toasts.Warning(string.Join(" ", errors), "El mapping no es válido");
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            var draft = _draft;
+
+            var saved = await Toasts.RunApiAsync(
+                () => RenderSetApi.SaveMappingAsync(
+                    CurrentTenant.Id,
+                    draft.Id,
+                    draft),
+                success: "Mapping guardado. La API ya acepta filas para este report.",
+                errorTitle: "No se ha podido guardar el mapping");
+
+            if (saved is null)
+                return;
+
+            if (_updateReport && DraftChangesReport && _draftDataset is not null)
+            {
+                // La definición nueva sale del esquema del mapping; la de
+                // antes aporta nombres, etiquetas, orden y anchos.
+                var schema = _draftDataset.Schema;
+
+                _report.Definition =
+                    ReportDefinitionMerger.Merge(
+                        _report.Definition,
+                        ReportDefinitionFactory.Create(
+                            _report.Id,
+                            _report.Name,
+                            schema));
+
+                _report.DataSchema = schema;
+                _report.SampleData = _draftDataset.SampleData;
+
+                await Toasts.RunApiAsync(
+                    () => RenderSetApi.SaveReportAsync(
+                        CurrentTenant.Id,
+                        _report.Id,
+                        _report),
+                    success: "Estructura del report actualizada. Ábrelo en el diseñador para colocar lo que se ha movido.",
+                    errorTitle: "El mapping se ha guardado, pero no la estructura del report");
+            }
+            else if (_useAsSample && _draftDataset is not null)
+            {
+                _report.SampleData = _draftDataset.SampleData;
+
+                await Toasts.RunApiAsync(
+                    () => RenderSetApi.SaveReportAsync(
+                        CurrentTenant.Id,
+                        _report.Id,
+                        _report),
+                    success: "Datos de ejemplo actualizados.",
+                    errorTitle: "No se han podido guardar los datos de ejemplo");
+            }
+
+            _mapping = saved.Mapping;
+            _draft = null;
+            _draftDataset = null;
+            _editing = false;
+            _useAsSample = false;
+            _initialRows = null;
+            _issues =
+                DataMappingRules.CompareWithReport(saved.Mapping, _report.DataSchema);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_mapping is null)
+            return;
+
+        var confirmed =
+            await JS.InvokeAsync<bool>(
+                "confirm",
+                "¿Quitar el mapping? Las peticiones con filas para este report empezarán a fallar.");
+
+        if (!confirmed)
+            return;
+
+        var mappingId = _mapping.Id;
+
+        var deleted = await Toasts.RunApiAsync(
+            () => RenderSetApi.DeleteMappingAsync(CurrentTenant.Id, mappingId),
+            success: "Mapping quitado.",
+            errorTitle: "No se ha podido quitar el mapping");
+
+        if (deleted)
+        {
+            _mapping = null;
+            _issues = [];
+        }
+    }
+
+
+    // ------------------------------------------------------------ ejemplo
+
+    private string DraftDocumentsText =>
+        _draftDocuments == 1
+            ? "1 documento con las filas pegadas"
+            : $"{_draftDocuments} documentos con las filas pegadas";
+
+    private IReadOnlyList<string> RequiredColumns =>
+        _mapping is null
+            ? []
+            : _mapping.Root
+                .AllSourceColumns()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+    private string RootKeyText =>
+        _mapping is null || _mapping.Root.KeyColumns.Count == 0
+            ? "documento"
+            : $"valor de {string.Join(", ", _mapping.Root.KeyColumns)}";
+
+    /// <summary>
+    /// Nombres de colección que espera el report, para que quien configura
+    /// sepa cómo llamar a cada nivel ("albaranes", "jaulas"…).
+    /// </summary>
+    private string ReportLevelsHint
+    {
+        get
+        {
+            if (_report is null)
+                return string.Empty;
+
+            var levels = new List<string>();
+
+            void Walk(IEnumerable<ReportDataField> fields)
+            {
+                foreach (var fld in fields)
+                {
+                    if (fld.Type == ReportDataType.Array)
+                        levels.Add(fld.Path);
+
+                    Walk(fld.Children);
+                }
+            }
+
+            Walk(_report.DataSchema.Fields);
+
+            return levels.Count == 0
+                ? "sin colecciones, todo es cabecera"
+                : string.Join(" · ", levels);
+        }
+    }
+
+    private string ExampleRequest
+    {
+        get
+        {
+            if (_mapping is null)
+                return string.Empty;
+
+            var types = new Dictionary<string, ReportDataType>(StringComparer.OrdinalIgnoreCase);
+
+            void Collect(DataMappingNode node)
+            {
+                foreach (var fld in node.Fields)
+                {
+                    if (!string.IsNullOrWhiteSpace(fld.SourceColumn))
+                        types.TryAdd(fld.SourceColumn, fld.Type);
+                }
+
+                foreach (var key in node.KeyColumns)
+                    types.TryAdd(key, ReportDataType.String);
+
+                foreach (var child in node.Children)
+                    Collect(child);
+            }
+
+            Collect(_mapping.Root);
+
+            var columns = new JsonArray();
+            var row = new JsonArray();
+
+            foreach (var (name, type) in types)
+            {
+                columns.Add(new JsonObject
+                {
+                    ["name"] = name,
+                    ["type"] = type.ToString()
+                });
+
+                row.Add(type switch
+                {
+                    ReportDataType.Number => JsonValue.Create(0),
+                    ReportDataType.Boolean => JsonValue.Create(false),
+                    ReportDataType.Date => JsonValue.Create("2026-01-31"),
+                    _ => JsonValue.Create("…")
+                });
+            }
+
+            var request = new JsonObject
+            {
+                ["reportId"] = _mapping.ReportId ?? ReportId,
+                ["rows"] = new JsonObject
+                {
+                    ["columns"] = columns,
+                    ["rows"] = new JsonArray { row }
+                },
+                ["context"] = new JsonObject { ["culture"] = "es-ES" },
+                ["output"] = new JsonObject { ["format"] = "Pdf" }
+            };
+
+            return request.ToJsonString(PrettyOptions);
+        }
+    }
+
+    private async Task CopyExampleAsync()
+    {
+        await JS.InvokeVoidAsync("renderSet.copyText", ExampleRequest);
+        Toasts.Success("Ejemplo copiado.");
+    }
+
+
+    // ------------------------------------------------------------ pintado
+
+    private static readonly (ReportDataType Type, string Label)[] MappingTypes =
+    [
+        (ReportDataType.String, "Texto"),
+        (ReportDataType.Number, "Número"),
+        (ReportDataType.Date, "Fecha"),
+        (ReportDataType.DateTime, "Fecha y hora"),
+        (ReportDataType.Boolean, "Sí / No")
+    ];
+
+    /// <summary>
+    /// Cambiar el tipo no exige volver a pegar filas: se edita el mapping
+    /// guardado (o el borrador) y se guarda.
+    /// </summary>
+    private void FieldTypeChanged(
+        DataMappingField field,
+        string? value)
+    {
+        if (!Enum.TryParse<ReportDataType>(value, out var type) || field.Type == type)
+            return;
+
+        field.Type = type;
+
+        if (_draft is null)
+            _mappingDirty = true;
+    }
+
+    private async Task SaveMappingChangesAsync()
+    {
+        if (_mapping is null || _saving)
+            return;
+
+        _saving = true;
+
+        try
+        {
+            var mapping = _mapping;
+
+            var saved = await Toasts.RunApiAsync(
+                () => RenderSetApi.SaveMappingAsync(
+                    CurrentTenant.Id,
+                    mapping.Id,
+                    mapping),
+                success: "Mapping actualizado.",
+                errorTitle: "No se ha podido guardar el mapping");
+
+            if (saved is null)
+                return;
+
+            _mapping = saved.Mapping;
+            _issues = saved.Issues;
+            _mappingDirty = false;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DiscardMappingChangesAsync()
+    {
+        await LoadMappingAsync();
+        _mappingDirty = false;
+    }
+
+    private static RenderFragment IssuesList(
+        IReadOnlyList<DataMappingCompatibilityIssue> issues) =>
+        @<div class="rdata-issues">
+            @if (issues.Count == 0)
+            {
+                <p class="rdata-ok">
+                    <i class="fa-solid fa-circle-check"></i>
+                    Genera exactamente los datos que usa el report.
+                </p>
+            }
+            else
+            {
+                <ul>
+                    @foreach (var issue in issues.OrderBy(x => x.IsWarning ? 0 : 1))
+                    {
+                        <li class="@(issue.IsWarning ? "is-warning" : "is-info")">
+                            <i class="@(issue.IsWarning ? "fa-solid fa-triangle-exclamation" : "fa-solid fa-circle-info")"></i>
+                            @issue.Message
+                        </li>
+                    }
+                </ul>
+            }
+        </div>;
+
+    private RenderFragment MappingTree(
+        DataMappingNode root) =>
+        @<div class="rdata-tree">
+            @(Level(root, null, 0))
+        </div>;
+
+    private RenderFragment Level(
+        DataMappingNode node,
+        string? parentPath,
+        int depth) =>
+        @<div class="rdata-level" style="@($"--rdata-depth:{depth}")">
+
+            @{
+                var path = string.IsNullOrEmpty(node.Name)
+                    ? null
+                    : string.IsNullOrEmpty(parentPath) ? node.Name : $"{parentPath}.{node.Name}";
+            }
+
+            <header>
+                <i class="@(depth == 0 ? "fa-solid fa-file-lines" : "fa-solid fa-layer-group")"></i>
+                <strong>@(path ?? "Documento")</strong>
+
+                @if (node.KeyColumns.Count > 0)
+                {
+                    <span class="rdata-chip">@($"agrupa por {string.Join(", ", node.KeyColumns)}")</span>
+                }
+                else if (depth > 0)
+                {
+                    <span class="rdata-chip">una por fila</span>
+                }
+            </header>
+
+            <table>
+                <tbody>
+                    @foreach (var field in node.Fields)
+                    {
+                        <tr>
+                            <td><code>@(field.SourceColumn ?? "(fijo)")</code></td>
+                            <td><i class="fa-solid fa-arrow-right-long"></i></td>
+                            <td>@field.Name</td>
+                            <td class="rdata-type">
+                                @* El tipo decide cómo se lee el valor de la columna al
+                                   construir el JSON. Texto acepta cualquier cosa; un
+                                   número que llega con letras ("prioridades julio")
+                                   se queda como texto en vez de fallar. *@
+                                <select class="rdata-type-select"
+                                        value="@field.Type"
+                                        title="Tipo del dato en el JSON"
+                                        @onchange="e => FieldTypeChanged(field, e.Value?.ToString())">
+                                    @foreach (var (type, label) in MappingTypes)
+                                    {
+                                        <option value="@type">@label</option>
+                                    }
+                                </select>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @foreach (var child in node.Children)
+            {
+                @(Level(child, path, depth + 1))
+            }
+
+        </div>;
+}

@@ -21,5 +21,14 @@ public sealed class DataMapping
 
     public required DataMappingNode Root { get; set; }
 
+    /// <summary>
+    /// Report que usa este mapping cuando la petición trae filas y no dice
+    /// qué mapping aplicar. Como mucho uno por report: asignar otro le quita
+    /// la asignación al anterior.
+    /// </summary>
+    public string? ReportId { get; set; }
+
+    public DateTime? UpdatedAtUtc { get; set; }
+
     public int Version { get; set; } = 1;
 }

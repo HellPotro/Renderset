@@ -1,0 +1,115 @@
+@using Renderset.Core.Tenancy
+@inject TenantSession Session
+@inject NavigationManager Navigation
+
+@* Usuario y tenant en el pie de la barra lateral. Cambiar de tenant y salir
+   son formularios POST normales (tocan la cookie, cosa que un circuito no
+   puede hacer). <details> abre y cierra sin JavaScript, también en las
+   páginas estáticas. *@
+
+<details class="user-menu">
+
+    <summary class="user-menu-toggle">
+
+        <span class="renderset-tenant-avatar">@Initial</span>
+
+        <div>
+            <strong>@(Session.Current.UserDisplayName ?? "Usuario")</strong>
+            <span>@(Session.Current.Name ?? CurrentTenantId)</span>
+        </div>
+
+        <i class="fa-solid fa-chevron-up"></i>
+
+    </summary>
+
+    <div class="user-menu-panel">
+
+        @if (_memberships.Count > 1)
+        {
+            <div class="user-menu-title">Tenant</div>
+
+            @foreach (var membership in _memberships)
+            {
+                var current = string.Equals(membership.TenantId, CurrentTenantId, StringComparison.OrdinalIgnoreCase);
+
+                <form method="post" action="account/tenant" data-enhance="false" @key="membership.TenantId">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="tenantId" value="@membership.TenantId" />
+                    <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+                    <button type="submit"
+                            class="@($"user-menu-item {(current ? "is-current" : null)}")"
+                            disabled="@current">
+                        <i class="fa-solid fa-building"></i>
+                        @membership.TenantName
+                    </button>
+                </form>
+            }
+
+            <div class="user-menu-separator"></div>
+        }
+
+        @if (_role >= TenantRole.Admin)
+        {
+            <a class="user-menu-item" href="settings/members">
+                <i class="fa-solid fa-users"></i>
+                Miembros
+            </a>
+        }
+
+        <a class="user-menu-item" href="account/password" data-enhance-nav="false">
+            <i class="fa-solid fa-lock"></i>
+            Cambiar la contraseña
+        </a>
+
+        <div class="user-menu-separator"></div>
+
+        <form method="post" action="account/logout" data-enhance="false">
+            <AntiforgeryToken />
+
+            <button type="submit" class="user-menu-item">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                Salir
+            </button>
+        </form>
+
+    </div>
+
+</details>
+
+@code {
+
+    private IReadOnlyList<TenantMembership> _memberships = [];
+
+    private TenantRole? _role;
+
+    private string? CurrentTenantId =>
+        Session.Current.User.FindFirst(RendersetClaimTypes.TenantId)?.Value;
+
+    private string Initial
+    {
+        get
+        {
+            var name = Session.Current.UserDisplayName;
+
+            return string.IsNullOrWhiteSpace(name)
+                ? "?"
+                : name.Trim()[..1].ToUpperInvariant();
+        }
+    }
+
+    /// <summary>A la misma página después de cambiar de tenant.</summary>
+    private string ReturnUrl =>
+        "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('#')[0];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.Current.IsAuthenticated)
+            return;
+
+        _memberships = await Session.GetMembershipsAsync();
+        _role = _memberships
+            .FirstOrDefault(x => string.Equals(x.TenantId, CurrentTenantId, StringComparison.OrdinalIgnoreCase))
+            ?.Role;
+    }
+}

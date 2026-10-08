@@ -49,6 +49,15 @@ public sealed class DocumentBundle
 
     public DateTime TokenIssuedAtUtc { get; init; }
 
+    /// <summary>
+    /// Si el cliente puede bajarse los datos de los documentos (CSV de las
+    /// tablas y JSON), igual que en el visor interno. Sólo tiene efecto en
+    /// los documentos que se emitieron con sus datos
+    /// (output.includeDocumentData). Apagado, los datos se quitan del HTML
+    /// que se sirve: no basta con esconder los botones.
+    /// </summary>
+    public bool AllowDataDownload { get; init; }
+
     public DateTime ExpiresAtUtc { get; init; }
 
     public DateTime? RevokedAtUtc { get; init; }

@@ -17,6 +17,16 @@ public static class RenderEndpoints
             "/{tenantId}",
             RenderAsync);
 
+        // El fichero en la misma respuesta: una llamada en vez de render +
+        // descarga. Es lo que usa Renderset.Client en GenerateAsync.
+        render.MapPost(
+            "/{tenantId}/file",
+            RenderFileAsync);
+
+        render.MapPost(
+            "/{tenantId}/validate",
+            ValidateAsync);
+
         var documents =
             app.MapGroup("/api/documents")
                 .WithTags("Documents");
@@ -119,6 +129,119 @@ public static class RenderEndpoints
 
         return Results.Created(url, response);
     }
+
+    /// <summary>
+    /// Emite y devuelve el fichero. El documento queda guardado igual que
+    /// con POST /api/render/{tenantId}; su id va en X-Renderset-Document-Id
+    /// y su URL en Location.
+    /// </summary>
+    private static async Task<IResult> RenderFileAsync(
+        string tenantId,
+        RenderRequest request,
+        HttpContext httpContext,
+        IReportRenderService renderService,
+        IDocumentPdfService pdfService,
+        CancellationToken cancellationToken)
+    {
+        var wantsPdf =
+            request.Output?.Format == RenderFormat.Pdf;
+
+        if (wantsPdf && !pdfService.IsAvailable)
+            return PdfNotConfigured();
+
+        var result =
+            await renderService.RenderAsync(
+                tenantId,
+                request,
+                cancellationToken);
+
+        if (!result.Succeeded)
+            return Results.BadRequest(result.Errors);
+
+        var document = result.Document!;
+
+        httpContext.Response.Headers[DocumentIdHeader] = document.Id;
+        httpContext.Response.Headers.Location =
+            BuildDocumentUrl(httpContext, tenantId, document.Id);
+
+        if (!wantsPdf)
+        {
+            return Results.File(
+                System.Text.Encoding.UTF8.GetBytes(document.Content),
+                "text/html; charset=utf-8",
+                document.FileName);
+        }
+
+        byte[]? pdf;
+
+        try
+        {
+            pdf =
+                await pdfService.GetOrCreateAsync(
+                    tenantId,
+                    document.Id,
+                    cancellationToken);
+        }
+        catch (PdfConversionException ex)
+        {
+            return PdfFailed(ex, document.Id);
+        }
+
+        if (pdf is null)
+            return Results.NotFound();
+
+        return Results.File(
+            pdf,
+            "application/pdf",
+            Path.GetFileNameWithoutExtension(document.FileName) + ".pdf");
+    }
+
+    /// <summary>
+    /// Lo mismo que el render hasta antes de pintar, sin guardar nada. 200
+    /// siempre que la petición se pueda leer: el resultado dice si es válida.
+    /// </summary>
+    private static async Task<IResult> ValidateAsync(
+        string tenantId,
+        RenderRequest request,
+        IReportRenderService renderService,
+        IDocumentPdfService pdfService,
+        CancellationToken cancellationToken)
+    {
+        var validation =
+            await renderService.ValidateAsync(
+                tenantId,
+                request,
+                cancellationToken);
+
+        // El render respondería 503 sin conversor: la validación lo dice.
+        if (request.Output?.Format == RenderFormat.Pdf && !pdfService.IsAvailable)
+        {
+            validation = new RenderValidationResponse
+            {
+                Valid = false,
+                ReportId = validation.ReportId,
+                PresetId = validation.PresetId,
+                PresetVersion = validation.PresetVersion,
+                Errors =
+                [
+                    .. validation.Errors,
+                    new RenderValidationError
+                    {
+                        Code = "pdf.not_configured",
+                        Message = "La API no tiene conversor de PDF configurado (Pdf:GotenbergUrl). Pide output.format = Html o configura el conversor.",
+                        Path = "output.format"
+                    }
+                ]
+            };
+        }
+
+        return Results.Ok(validation);
+    }
+
+    /// <summary>
+    /// Id del documento emitido en las respuestas que devuelven el fichero.
+    /// </summary>
+    public const string DocumentIdHeader = "X-Renderset-Document-Id";
 
     /// <summary>
     /// Listado de documentos emitidos, sin contenido, los más recientes

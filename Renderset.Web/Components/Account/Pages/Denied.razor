@@ -1,0 +1,19 @@
+@page "/account/denied"
+
+<PageTitle>Sin permiso - RenderSet</PageTitle>
+
+<h1>Sin permiso</h1>
+
+<p class="account-lead">
+    Tu usuario no tiene permiso para lo que has intentado hacer en este tenant.
+    Si crees que es un error, pídeselo a un administrador.
+</p>
+
+<div class="account-links">
+    <a href="">Volver al inicio</a>
+
+    <form method="post" action="account/logout">
+        <AntiforgeryToken />
+        <button type="submit" class="link-button">Salir</button>
+    </form>
+</div>

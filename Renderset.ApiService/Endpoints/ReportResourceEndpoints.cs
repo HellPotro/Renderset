@@ -1,3 +1,4 @@
+using Renderset.Core.Sharing;
 using Renderset.Core.Localization;
 using Renderset.Core.Resources;
 using Renderset.Core.Translations;
@@ -62,8 +63,22 @@ public static class ReportResourceEndpoints
         string tenantId,
         string scope,
         IReportResourceRepository repository,
+        IDocumentBundleTextProvider bundleTexts,
         CancellationToken cancellationToken)
     {
+        // Las claves de la página pública no salen de ningún report inferido:
+        // se crean aquí, al abrir su ámbito, para los idiomas que tenga ya el
+        // tenant (incluido uno que se acabe de añadir).
+        if (string.Equals(
+                scope,
+                ReportResourceScope.Sharing,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            await bundleTexts.SeedAsync(
+                tenantId,
+                cancellationToken);
+        }
+
         var resources =
             await repository.GetByScopeAsync(
                 tenantId,

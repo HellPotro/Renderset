@@ -1,13 +1,16 @@
 using Refit;
 using Renderset.Core.Blocks;
 using Renderset.Core.Localization;
+using Renderset.Core.Mapping;
 using Renderset.Core.Paging;
 using Renderset.Core.Persistence;
 using Renderset.Core.Presets;
 using Renderset.Core.Rendering;
 using Renderset.Core.Reports;
 using Renderset.Core.Resources;
+using Renderset.Core.Security;
 using Renderset.Core.Sharing;
+using Renderset.Core.Themes;
 using Renderset.Core.Translations;
 using Renderset.Core.Variables;
 
@@ -112,6 +115,21 @@ public interface IRenderSetApi
         [Body] ReportPresetAssignment assignment,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Alta en bloque (importación de CSV). Todas o ninguna.
+    /// </summary>
+    [Put("/api/assignments/{tenantId}/batch")]
+    Task<IApiResponse> SaveAssignmentsAsync(
+        string tenantId,
+        [Body] IReadOnlyCollection<ReportPresetAssignment> assignments,
+        CancellationToken cancellationToken = default);
+
+    [Delete("/api/assignments/{tenantId}/id/{assignmentId}")]
+    Task<IApiResponse> DeleteAssignmentAsync(
+        string tenantId,
+        long assignmentId,
+        CancellationToken cancellationToken = default);
+
     #endregion
 
     #region Blocks
@@ -174,6 +192,75 @@ public interface IRenderSetApi
         string tenantId,
         string presetId,
         [Body] ReportPreset preset,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 409 si es el preset por defecto y el report tiene otros.
+    /// </summary>
+    [Delete("/api/presets/{tenantId}/{presetId}")]
+    Task<IApiResponse> DeletePresetAsync(
+        string tenantId,
+        string presetId,
+        CancellationToken cancellationToken = default);
+
+    #endregion
+
+    #region Render
+
+    /// <summary>
+    /// Siempre en Html desde la web: el PDF se genera al abrirlo por
+    /// /files/documents/{id}/pdf, que tiene su propio cliente sin el
+    /// timeout corto de la resiliencia estándar.
+    /// </summary>
+    [Post("/api/render/{tenantId}")]
+    Task<IApiResponse<RenderDocumentResponse>> RenderAsync(
+        string tenantId,
+        [Body] RenderRequest request,
+        CancellationToken cancellationToken = default);
+
+    #endregion
+
+    #region Mappings
+
+    [Get("/api/mappings/{tenantId}")]
+    Task<IReadOnlyCollection<DataMapping>> GetMappingsAsync(
+        string tenantId,
+        [Query] string? reportId = null,
+        CancellationToken cancellationToken = default);
+
+    [Put("/api/mappings/{tenantId}/{mappingId}")]
+    Task<IApiResponse<DataMappingSaveResponse>> SaveMappingAsync(
+        string tenantId,
+        string mappingId,
+        [Body] DataMapping mapping,
+        CancellationToken cancellationToken = default);
+
+    [Delete("/api/mappings/{tenantId}/{mappingId}")]
+    Task<IApiResponse> DeleteMappingAsync(
+        string tenantId,
+        string mappingId,
+        CancellationToken cancellationToken = default);
+
+    #endregion
+
+    #region Themes
+
+    [Get("/api/themes/{tenantId}")]
+    Task<IReadOnlyCollection<TenantReportTheme>> GetThemesAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
+    [Put("/api/themes/{tenantId}/{themeId}")]
+    Task<IApiResponse> SaveThemeAsync(
+        string tenantId,
+        string themeId,
+        [Body] TenantReportTheme theme,
+        CancellationToken cancellationToken = default);
+
+    [Delete("/api/themes/{tenantId}/{themeId}")]
+    Task<IApiResponse> DeleteThemeAsync(
+        string tenantId,
+        string themeId,
         CancellationToken cancellationToken = default);
 
     #endregion
@@ -246,6 +333,15 @@ public interface IRenderSetApi
         [Query] string? cursor,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Datos del documento sin el contenido: nombre, report, idioma, fecha.
+    /// </summary>
+    [Get("/api/documents/{tenantId}/{documentId}/metadata")]
+    Task<RenderDocumentResponse> GetDocumentMetadataAsync(
+        string tenantId,
+        string documentId,
+        CancellationToken cancellationToken = default);
+
     #endregion
 
     #region Bundles
@@ -310,6 +406,31 @@ public interface IRenderSetApi
     Task<string> PreviewSharingAsync(
         string tenantId,
         [Body] DocumentSharingPreviewRequest request,
+        CancellationToken cancellationToken = default);
+
+    #endregion
+
+
+    #region API keys
+
+    [Get("/api/keys/{tenantId}")]
+    Task<IReadOnlyList<ApiKeyResponse>> GetApiKeysAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// La respuesta trae la clave en claro: única vez que existe así.
+    /// </summary>
+    [Post("/api/keys/{tenantId}")]
+    Task<IApiResponse<CreatedApiKeyResponse>> CreateApiKeyAsync(
+        string tenantId,
+        [Body] CreateApiKeyRequest request,
+        CancellationToken cancellationToken = default);
+
+    [Post("/api/keys/{tenantId}/{keyId}/revoke")]
+    Task<IApiResponse> RevokeApiKeyAsync(
+        string tenantId,
+        Guid keyId,
         CancellationToken cancellationToken = default);
 
     #endregion

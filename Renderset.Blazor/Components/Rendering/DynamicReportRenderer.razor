@@ -1,5 +1,6 @@
 @using System.Text.Json
 @using Renderset.Core.Definitions
+@using Renderset.Core.Rendering
 @using Renderset.Core.Resolved
 @using Renderset.Core.Themes
 
@@ -7,10 +8,14 @@
                 Name="IncludeTableData"
                 IsFixed="true">
 
-<div class="dynamic-report"
+@* has-page-footer: la hoja empuja el pie al final (pantalla) y al imprimir
+   lo sustituye el pie repetido en cada página (ver ReportPageFooter). *@
+<div class="@ReportClass"
      style="@ThemeStyle">
 
-    <DynamicReportHeader Header="Report.Header" />
+    <DynamicReportHeader Header="Report.Header"
+                         Data="Data"
+                         Document="Document" />
 
     @foreach (var row in Rows)
     {
@@ -39,7 +44,13 @@
         }
     }
 
-    <DynamicReportFooter Footer="Report.Footer" />
+    @if (HasPageFooter)
+    {
+        <div class="dynamic-report-page-spacer" aria-hidden="true"></div>
+    }
+
+    <DynamicReportFooter Footer="Report.Footer"
+                         Data="Data" />
 
 </div>
 
@@ -65,6 +76,13 @@
     /// </summary>
     [Parameter]
     public bool IncludeTableData { get; set; }
+
+    /// <summary>
+    /// Id y enlace del documento que se emite, para el QR de la cabecera.
+    /// El preview del diseñador pasa <see cref="ReportDocumentContext.Preview"/>.
+    /// </summary>
+    [Parameter]
+    public ReportDocumentContext? Document { get; set; }
 
     private IEnumerable<ResolvedReportBodyItem> VisibleBodyItems =>
         Report.Body
@@ -101,21 +119,19 @@
             else if (item.Type == ReportBodyItemType.Block &&
                      item.Block is not null)
             {
-                <DynamicReportBlock Block="item.Block" />
+                <DynamicReportBlock Block="item.Block"
+                                    Data="@Data" />
             }
         </text>;
 
-    private string ThemeStyle => $"""
-        --report-primary:{Theme.PrimaryColor};
-        --report-secondary:{Theme.SecondaryColor};
-        --report-text:{Theme.TextColor};
-        --report-muted:{Theme.MutedTextColor};
-        --report-border:{Theme.BorderColor};
-        --report-section-bg:{Theme.SectionBackgroundColor};
-        --report-section-text:{Theme.SectionTextColor};
-        --report-table-header-bg:{Theme.TableHeaderBackgroundColor};
-        --report-table-header-text:{Theme.TableHeaderTextColor};
-        --report-background:{Theme.BackgroundColor};
-        --report-font:{Theme.FontFamily};
-        """;
+    private string ThemeStyle =>
+        ReportThemeCss.Variables(Theme);
+
+    private bool HasPageFooter =>
+        Report.Footer?.HasContent == true;
+
+    private string ReportClass =>
+        HasPageFooter
+            ? "dynamic-report has-page-footer"
+            : "dynamic-report";
 }

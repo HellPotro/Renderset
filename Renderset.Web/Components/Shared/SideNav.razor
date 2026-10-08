@@ -1,0 +1,110 @@
+@*
+    Menú lateral para elegir entre muchos elementos agrupados (reports,
+    ámbitos del diccionario...), con filtro por título. Nació en el
+    Diccionario y lo usan también Presets: así los dos se manejan igual.
+
+    Sólo pinta y avisa: quién está elegido y qué pasa al elegir lo decide la
+    página (SelectedKey / Selected).
+*@
+
+<nav class="side-nav" aria-label="@AriaLabel">
+
+    <div class="side-nav-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+
+        <input value="@_filter"
+               @oninput="e => _filter = e.Value?.ToString() ?? string.Empty"
+               placeholder="@SearchPlaceholder"
+               aria-label="@SearchPlaceholder" />
+
+        @if (!string.IsNullOrEmpty(_filter))
+        {
+            <button type="button"
+                    class="side-nav-clear"
+                    title="Quitar el filtro"
+                    @onclick="() => _filter = string.Empty">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        }
+    </div>
+
+    @foreach (var group in Visible.GroupBy(x => x.Group))
+    {
+        <div class="side-nav-title">
+            @group.Key
+            <span>@group.Count()</span>
+        </div>
+
+        @foreach (var item in group)
+        {
+            <button type="button"
+                    @key="item.Key"
+                    class="@(IsSelected(item) ? "side-nav-item is-active" : "side-nav-item")"
+                    aria-current="@(IsSelected(item) ? "true" : null)"
+                    title="@item.Label"
+                    @onclick="() => Selected.InvokeAsync(item.Key)">
+
+                <span class="@(item.Accent ? "side-nav-icon is-accent" : "side-nav-icon")">
+                    <i class="fa-solid @item.Icon"></i>
+                </span>
+
+                <span class="side-nav-text">
+                    <strong>@item.Label</strong>
+                    @if (!string.IsNullOrWhiteSpace(item.Hint))
+                    {
+                        <small>@item.Hint</small>
+                    }
+                </span>
+
+            </button>
+        }
+    }
+
+    @if (!Visible.Any())
+    {
+        <p class="side-nav-empty">
+            Nada coincide con «@_filter».
+        </p>
+    }
+
+</nav>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<SideNavItem> Items { get; set; } = [];
+
+    [Parameter]
+    public string? SelectedKey { get; set; }
+
+    [Parameter]
+    public EventCallback<string> Selected { get; set; }
+
+    [Parameter]
+    public string SearchPlaceholder { get; set; } = "Filtrar por título";
+
+    [Parameter]
+    public string AriaLabel { get; set; } = "Elegir";
+
+    private string _filter = string.Empty;
+
+    /// <summary>
+    /// El elegido se queda a la vista aunque no coincida con el filtro:
+    /// si no, parece que la página enseña algo que no está en el menú.
+    /// </summary>
+    private IEnumerable<SideNavItem> Visible =>
+        string.IsNullOrWhiteSpace(_filter)
+            ? Items
+            : Items.Where(x =>
+                IsSelected(x) ||
+                Matches(x.Label) ||
+                Matches(x.Hint));
+
+    private bool Matches(
+        string? text) =>
+        text?.Contains(_filter.Trim(), StringComparison.CurrentCultureIgnoreCase) == true;
+
+    private bool IsSelected(
+        SideNavItem item) =>
+        string.Equals(item.Key, SelectedKey, StringComparison.OrdinalIgnoreCase);
+}

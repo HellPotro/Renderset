@@ -63,6 +63,46 @@
     }
 
 
+/* Enlace al Diccionario: los textos de botones y avisos viven allí. */
+.sharing-dictionary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #e3eaee;
+    border-radius: 8px;
+    background: #f7fafb;
+}
+
+    .sharing-dictionary > i {
+        color: #4f7384;
+    }
+
+    .sharing-dictionary > div {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+    }
+
+    .sharing-dictionary strong {
+        color: #20323a;
+        font-size: 12px;
+    }
+
+    .sharing-dictionary span {
+        color: #74858d;
+        font-size: 11px;
+        line-height: 1.45;
+    }
+
+    .sharing-dictionary .secondary-button {
+        white-space: nowrap;
+        text-decoration: none;
+    }
+
+
 /* ---------- Vista previa ---------- */
 
 .sharing-preview {

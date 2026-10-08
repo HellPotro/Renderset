@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using Renderset.Core.Rendering;
 using Renderset.Core.Rendering.Pdf;
 using Renderset.Core.Sharing;
 using Renderset.Core.Tenancy;
@@ -92,6 +93,7 @@ public static class SharingEndpoints
         IDocumentSharingSettingsRepository sharingSettings,
         IDocumentBundlePageRenderer pages,
         IDocumentPdfService pdfService,
+        IDocumentBundleTextProvider bundleTexts,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
@@ -143,11 +145,15 @@ public static class SharingEndpoints
                 Culture = bundle.Culture,
                 ExpiresAtUtc = bundle.ExpiresAtUtc,
                 Branding = settings.ToBranding(bundle.TenantId),
-                Texts = DocumentBundleTexts.For(bundle.Culture),
+                Texts = await bundleTexts.GetAsync(
+                    bundle.TenantId,
+                    bundle.Culture,
+                    cancellationToken),
 
                 // Con conversor, las descargas son en PDF; sin él, el HTML
                 // de siempre. El ZIP sigue disponible en los dos casos.
                 PdfAvailable = pdfService.IsAvailable,
+                AllowDataDownload = bundle.AllowDataDownload,
                 DownloadAllUrl = $"{basePath}/download",
                 DownloadAllPdfUrl = pdfService.IsAvailable
                     ? $"{basePath}/pdf"
@@ -244,7 +250,7 @@ public static class SharingEndpoints
             cancellationToken);
 
         return Results.Content(
-            bundled.Document.Content,
+            SharedContent(open.Bundle!, bundled.Document.Content),
             "text/html; charset=utf-8");
     }
 
@@ -285,7 +291,7 @@ public static class SharingEndpoints
             cancellationToken);
 
         return Results.File(
-            Encoding.UTF8.GetBytes(bundled.Document.Content),
+            Encoding.UTF8.GetBytes(SharedContent(open.Bundle!, bundled.Document.Content)),
             "text/html; charset=utf-8",
             bundled.Document.FileName);
     }
@@ -455,6 +461,7 @@ public static class SharingEndpoints
 
         var zip =
             await BuildZipAsync(
+                bundle,
                 documents,
                 cancellationToken);
 
@@ -505,6 +512,18 @@ public static class SharingEndpoints
                     .ToBranding(open.Bundle!.TenantId)
                 : TenantBranding.Neutral();
 
+        // Con token incorrecto, sólo los textos incorporados: los del
+        // Diccionario son del tenant y no se sabe de qué tenant era.
+        var texts =
+            known
+                ? await httpContext.RequestServices
+                    .GetRequiredService<IDocumentBundleTextProvider>()
+                    .GetAsync(
+                        open.Bundle!.TenantId,
+                        culture,
+                        cancellationToken)
+                : DocumentBundleTexts.For(culture);
+
         var html =
             await pages.RenderUnavailableAsync(
                 new DocumentBundleUnavailableView
@@ -516,7 +535,7 @@ public static class SharingEndpoints
                     FooterText = settings?.Normalized().FooterText,
                     Culture = culture,
                     Branding = tenantBranding,
-                    Texts = DocumentBundleTexts.For(culture)
+                    Texts = texts
                 },
                 cancellationToken);
 
@@ -529,7 +548,20 @@ public static class SharingEndpoints
                 : StatusCodes.Status410Gone);
     }
 
+    /// <summary>
+    /// El HTML que sale por el enlace. Sin permiso para los datos se quitan
+    /// los bloques de datos del documento: esconder los botones no basta,
+    /// el cliente puede ver el código fuente o guardar la página.
+    /// </summary>
+    private static string SharedContent(
+        DocumentBundle bundle,
+        string content) =>
+        bundle.AllowDataDownload
+            ? content
+            : DocumentEmbeddedData.Strip(content);
+
     private static async Task<byte[]> BuildZipAsync(
+        DocumentBundle bundle,
         IReadOnlyList<BundledDocument> documents,
         CancellationToken cancellationToken)
     {
@@ -557,7 +589,7 @@ public static class SharingEndpoints
                 await using var stream = entry.Open();
 
                 await stream.WriteAsync(
-                    Encoding.UTF8.GetBytes(bundled.Document.Content),
+                    Encoding.UTF8.GetBytes(SharedContent(bundle, bundled.Document.Content)),
                     cancellationToken);
             }
         }

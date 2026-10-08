@@ -1,0 +1,8 @@
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using Renderset.Web.Components.Account.Shared
+
+@* Páginas de la cuenta propia: estáticas como las de entrar (tocan la
+   cookie), pero con sesión obligatoria ([Authorize] del _Imports raíz). *@
+@attribute [ExcludeFromInteractiveRouting]
+@layout Renderset.Web.Components.Account.Shared.AccountLayout

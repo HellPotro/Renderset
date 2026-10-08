@@ -13,6 +13,19 @@ public static class ReportTextKeys
 
     public const string FooterText = "footer.text";
 
+    /// <summary>
+    /// Formato de la numeración del pie: "Página {page} de {pages}". Global:
+    /// se traduce una vez en el diccionario común y vale para todos los
+    /// reports.
+    /// </summary>
+    public const string FooterPageNumber = "footer.pageNumber";
+
+    /// <summary>
+    /// Etiqueta de la fila de totales de las tablas. Global: se traduce una
+    /// vez en el diccionario común y vale para todos los reports.
+    /// </summary>
+    public const string TableTotal = "table.total";
+
     public static string Field(
         string fieldId)
     {
@@ -70,5 +83,26 @@ public static class ReportTextKeys
         string lineId)
     {
         return $"header.line.{lineId}";
+    }
+
+    /// <summary>
+    /// Etiqueta de un campo fijo de un bloque de campos ("CIF", "Teléfono").
+    /// Como las líneas de cabecera, cuelga del id del campo y no del bloque.
+    /// </summary>
+    public static string BlockFieldLabel(
+        string fieldId)
+    {
+        return $"blockfield.{fieldId}.label";
+    }
+
+    /// <summary>
+    /// Valor de un campo fijo. Va al diccionario y no al JSON del bloque: así
+    /// admite {{variables}} y {{data.ruta}} y se puede traducir si hace falta
+    /// ("Horario: L-V 8-15").
+    /// </summary>
+    public static string BlockFieldValue(
+        string fieldId)
+    {
+        return $"blockfield.{fieldId}.value";
     }
 }

@@ -1,0 +1,238 @@
+@using Renderset.Core.Configurations
+@using Renderset.Core.Themes
+
+@*
+    Pestaña Tema del diseñador.
+
+    Un preset puede usar un tema de empresa (referencia viva en
+    Configuration.ThemeId) o tener colores propios ("Personalizado", que es
+    como funcionaban todos los presets antes de existir los temas). En los dos
+    casos el preset guarda una copia del tema en ReportPreset.Theme: es la que
+    pinta el preview y la que se usa si el tema de empresa desaparece.
+*@
+
+<div class="report-theme-picker"
+     role="radiogroup"
+     aria-label="Tema del documento">
+
+    <button type="button"
+            role="radio"
+            aria-checked="@IsCustom"
+            class="report-theme-option @(IsCustom ? "is-active" : null)"
+            @onclick="UseCustomAsync">
+
+        @(Swatches(IsCustom ? Theme : null))
+
+        <span>
+            <strong>Personalizado</strong>
+            <small>Colores propios de este preset</small>
+        </span>
+
+        @if (IsCustom)
+        {
+            <i class="fa-solid fa-check"></i>
+        }
+
+    </button>
+
+    @foreach (var stored in Themes)
+    {
+        var active = IsLinkedTo(stored.Theme.Id);
+
+        <button type="button"
+                role="radio"
+                aria-checked="@active"
+                class="report-theme-option @(active ? "is-active" : null)"
+                @key="stored.Theme.Id"
+                @onclick="() => UseThemeAsync(stored)">
+
+            @(Swatches(stored.Theme))
+
+            <span>
+                <strong>@stored.Theme.Name</strong>
+                <small>@Describe(stored)</small>
+            </span>
+
+            @if (active)
+            {
+                <i class="fa-solid fa-check"></i>
+            }
+
+        </button>
+    }
+
+</div>
+
+@if (LinkedTheme is not null)
+{
+    <div class="report-theme-linked">
+
+        <i class="fa-solid fa-link"></i>
+
+        <span>
+            Usa el tema de empresa <strong>@LinkedTheme.Theme.Name</strong>.
+            Se cambia en <a href="@ThemeUrl(LinkedTheme.Theme.Id)" target="_blank" rel="noopener">Temas</a>
+            y afecta a todos los presets que lo usan.
+            <button type="button" @onclick="CustomizeAsync">Personalizar sólo este preset</button>
+        </span>
+
+    </div>
+
+    <ReportThemeEditor Theme="LinkedTheme.Theme"
+                       Disabled="true" />
+}
+else
+{
+    @if (IsMissingTheme)
+    {
+        <div class="report-theme-linked">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>
+                El tema <code>@Configuration.ThemeId</code> ya no existe. Se
+                usa la copia guardada en el preset; si la cambias, pasa a ser
+                un tema personalizado.
+            </span>
+        </div>
+    }
+    else if (Themes.Count == 0)
+    {
+        <div class="report-theme-linked">
+            <i class="fa-solid fa-palette"></i>
+            <span>
+                Crea temas de empresa en <a href="@ThemesUrl" target="_blank" rel="noopener">Temas</a> para
+                reutilizar los mismos colores en todos los presets.
+            </span>
+        </div>
+    }
+
+    <ReportThemeEditor Theme="Theme"
+                       Changed="CustomChangedAsync" />
+}
+
+@code {
+
+    [Parameter, EditorRequired]
+    public ReportConfiguration Configuration { get; set; } = default!;
+
+    /// <summary>
+    /// Copia del tema que guarda el preset.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public ReportTheme Theme { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyCollection<TenantReportTheme> Themes { get; set; } = [];
+
+    /// <summary>
+    /// Pantalla de temas de la aplicación anfitriona.
+    /// </summary>
+    [Parameter]
+    public string ThemesUrl { get; set; } = "styles";
+
+    /// <summary>
+    /// El tema del preset ha cambiado (otro objeto o el mismo modificado) y,
+    /// a veces, también Configuration.ThemeId.
+    /// </summary>
+    [Parameter]
+    public EventCallback<ReportTheme> Changed { get; set; }
+
+    private bool IsCustom =>
+        string.IsNullOrWhiteSpace(Configuration.ThemeId) ||
+        IsMissingTheme;
+
+    private TenantReportTheme? LinkedTheme =>
+        string.IsNullOrWhiteSpace(Configuration.ThemeId)
+            ? null
+            : Themes.FirstOrDefault(x => IsLinkedTo(x.Theme.Id));
+
+    private bool IsMissingTheme =>
+        !string.IsNullOrWhiteSpace(Configuration.ThemeId) &&
+        LinkedTheme is null;
+
+    private bool IsLinkedTo(string themeId) =>
+        string.Equals(
+            Configuration.ThemeId,
+            themeId,
+            StringComparison.OrdinalIgnoreCase);
+
+    private string ThemeUrl(string themeId) =>
+        $"{ThemesUrl}?theme={Uri.EscapeDataString(themeId)}";
+
+    private static string Describe(
+        TenantReportTheme stored)
+    {
+        var uses =
+            stored.PresetCount switch
+            {
+                0 => "Sin presets",
+                1 => "1 preset",
+                var count => $"{count} presets"
+            };
+
+        return stored.IsDefault
+            ? $"Por defecto · {uses}"
+            : uses;
+    }
+
+    private Task UseThemeAsync(
+        TenantReportTheme stored)
+    {
+        if (IsLinkedTo(stored.Theme.Id))
+            return Task.CompletedTask;
+
+        Configuration.ThemeId = stored.Theme.Id;
+
+        return Changed.InvokeAsync(stored.Theme.Clone());
+    }
+
+    /// <summary>
+    /// Volver a personalizado parte de los colores que se estaban viendo,
+    /// no de los de antes de elegir un tema: es lo que menos sorprende.
+    /// </summary>
+    private Task UseCustomAsync()
+    {
+        if (IsCustom)
+            return Task.CompletedTask;
+
+        return CustomizeAsync();
+    }
+
+    private Task CustomizeAsync()
+    {
+        var copy =
+            (LinkedTheme?.Theme ?? Theme).Clone();
+
+        copy.Id = ReportTheme.DefaultId;
+        copy.Name = "Personalizado";
+
+        Configuration.ThemeId = null;
+
+        return Changed.InvokeAsync(copy);
+    }
+
+    private Task CustomChangedAsync()
+    {
+        // Tocar la copia de un tema borrado la convierte en personalizada.
+        if (IsMissingTheme)
+            Configuration.ThemeId = null;
+
+        return Changed.InvokeAsync(Theme);
+    }
+
+    private static RenderFragment Swatches(
+        ReportTheme? theme) =>
+        @<span class="report-theme-swatches" aria-hidden="true">
+            @if (theme is null)
+            {
+                <span style="background:repeating-linear-gradient(135deg,#e3e9ec 0 4px,#f4f7f8 4px 8px)"></span>
+                <span style="background:repeating-linear-gradient(135deg,#e3e9ec 0 4px,#f4f7f8 4px 8px)"></span>
+                <span style="background:repeating-linear-gradient(135deg,#e3e9ec 0 4px,#f4f7f8 4px 8px)"></span>
+            }
+            else
+            {
+                <span style="@($"background:{theme.PrimaryColor}")"></span>
+                <span style="@($"background:{theme.SectionBackgroundColor}")"></span>
+                <span style="@($"background:{theme.TableHeaderBackgroundColor}")"></span>
+            }
+        </span>;
+}

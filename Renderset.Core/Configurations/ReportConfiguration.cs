@@ -12,6 +12,14 @@ public sealed class ReportConfiguration
 
     public int Version { get; set; }
 
+    /// <summary>
+    /// Tema de empresa (pantalla "Temas") con el que se pinta el documento.
+    /// Nulo = tema personalizado: el que lleva guardado el propio preset.
+    /// Es una referencia viva: cambiar el tema cambia todos los presets que
+    /// lo usan, sin tocarlos.
+    /// </summary>
+    public string? ThemeId { get; set; }
+
     public ReportHeaderConfiguration? Header { get; set; }
 
     public List<ReportSectionConfiguration> Sections { get; set; } = [];

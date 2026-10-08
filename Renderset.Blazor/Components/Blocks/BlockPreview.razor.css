@@ -62,3 +62,17 @@
     text-align: center;
     font-style: italic;
 }
+
+/* Datos del documento ({{data.ruta}}): no son variables sin definir, se
+   rellenan al emitir. */
+.blkprev-note {
+    margin: 0;
+    color: #6e7f87;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+    .blkprev-note i {
+        margin-right: 5px;
+        color: #4f7f9a;
+    }

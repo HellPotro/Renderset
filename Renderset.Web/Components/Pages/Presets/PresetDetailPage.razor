@@ -1,5 +1,7 @@
 ﻿@page "/presets/{ReportId}/{PresetId}"
 
+@using System.Text
+@using Microsoft.AspNetCore.Components.Forms
 @using Renderset.Core.Persistence
 @using Renderset.Core.Presets
 @using Renderset.Core.Reports
@@ -8,6 +10,7 @@
 @inject ICurrentTenant CurrentTenant
 @inject NavigationManager Navigation
 @inject IToastService Toasts
+@inject IJSRuntime JS
 
 <PageTitle>Preset - RenderSet</PageTitle>
 
@@ -52,6 +55,17 @@
 
 
             <div class="page-actions">
+
+                <button type="button"
+                        class="secondary-button is-danger"
+                        title="@(CanDelete ? "Eliminar el preset y sus asignaciones" : "Es el preset por defecto: marca otro como predeterminado antes de eliminarlo")"
+                        disabled="@(!CanDelete || _busy)"
+                        @onclick="DeletePresetAsync">
+
+                    <i class="fa-solid fa-trash"></i>
+                    Eliminar
+
+                </button>
 
                 <button type="button"
                         class="secondary-button"
@@ -128,11 +142,11 @@
                     <header class="card-header assignments-header">
 
                         <div>
-                            <h2>Assignments</h2>
+                            <h2>Cuándo se usa este preset</h2>
 
                             <p>
-                                Seleccionan automáticamente este preset
-                                según el contexto recibido.
+                                Cada asignación dice: si el documento es de este
+                                cliente (o proveedor, almacén...), usa este preset.
                             </p>
                         </div>
 
@@ -154,7 +168,7 @@
 
                                     <span>
                                         Se utilizará cuando no exista
-                                        un assignment más específico.
+                                        una asignación más específica.
                                     </span>
                                 </div>
 
@@ -176,24 +190,244 @@
                         <div class="assignment-divider"></div>
 
 
-                        @if (_assignments.Count == 0)
+                        @* ------------------------------------ nueva / CSV *@
+
+                        <div class="assign-new">
+
+                            <div class="form-group">
+
+                                <label>Según el campo</label>
+
+                                <select value="@_contextTypeChoice"
+                                        @onchange="ContextTypeChoiceChanged">
+
+                                    @if (_dataFields.Count > 0)
+                                    {
+                                        @foreach (var group in _dataFields.GroupBy(x => x.Section))
+                                        {
+                                            <optgroup label="@group.Key">
+                                                @foreach (var field in group)
+                                                {
+                                                    <option value="@field.Path">@field.Label (@field.Path)</option>
+                                                }
+                                            </optgroup>
+                                        }
+                                    }
+
+                                    @if (OtherUsedTypes.Count > 0)
+                                    {
+                                        <optgroup label="Ya usados">
+                                            @foreach (var type in OtherUsedTypes)
+                                            {
+                                                <option value="@type">@type</option>
+                                            }
+                                        </optgroup>
+                                    }
+
+                                    <option value="@ManualChoice">Otro (escribirlo)...</option>
+
+                                </select>
+
+                                @if (_contextTypeChoice == ManualChoice)
+                                {
+                                    <input type="text"
+                                           value="@_manualContextType"
+                                           @oninput="e => _manualContextType = e.Value?.ToString() ?? string.Empty"
+                                           placeholder="customer" />
+                                }
+
+                                <small>
+                                    @if (IsDataField(ContextType))
+                                    {
+                                        <span>
+                                            Es un campo del report: el preset se elige solo con el valor que traiga
+                                            el documento, sin que el ERP mande contexto.
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span>
+                                            Tipo libre: el ERP tiene que mandar context.contextType = "@ContextType"
+                                            y context.contextKey con el valor.
+                                        </span>
+                                    }
+                                </small>
+
+                            </div>
+
+                            <div class="form-group">
+
+                                <label>Valor</label>
+
+                                <input type="text"
+                                       value="@_contextKey"
+                                       @oninput="e => _contextKey = e.Value?.ToString() ?? string.Empty"
+                                       placeholder="@ValuePlaceholder" />
+
+                            </div>
+
+                            <button type="button"
+                                    class="primary-button assignment-add"
+                                    disabled="@(!CanAddAssignment || _busy)"
+                                    @onclick="AddAssignmentAsync">
+
+                                <i class="fa-solid fa-plus"></i>
+                                Añadir
+
+                            </button>
+
+                        </div>
+
+
+                        <div class="assign-csv">
+
+                            <div>
+                                <strong>
+                                    <i class="fa-solid fa-file-csv"></i>
+                                    Muchos valores a la vez
+                                </strong>
+                                <span>
+                                    Descarga la plantilla, rellena una fila por valor en Excel y vuelve
+                                    a subirla. La columna preset puede apuntar a otro preset de este report.
+                                </span>
+                            </div>
+
+                            <div class="assign-csv-actions">
+
+                                <button type="button"
+                                        class="secondary-button"
+                                        disabled="@string.IsNullOrWhiteSpace(ContextType)"
+                                        @onclick="DownloadTemplateAsync">
+                                    <i class="fa-solid fa-download"></i>
+                                    Plantilla CSV
+                                </button>
+
+                                <label class="secondary-button assign-csv-upload">
+                                    <i class="fa-solid fa-upload"></i>
+                                    Importar CSV
+
+                                    <InputFile OnChange="CsvSelectedAsync"
+                                               accept=".csv,.txt,text/csv" />
+                                </label>
+
+                            </div>
+
+                        </div>
+
+
+                        @if (_import is { } import)
+                        {
+                            <div class="assign-import @(import.Errors.Count > 0 ? "has-errors" : null)">
+
+                                <div class="assign-import-head">
+                                    <strong>
+                                        @import.FileName:
+                                        @import.Assignments.Count asignaciones
+                                    </strong>
+
+                                    <button type="button"
+                                            class="assign-import-close"
+                                            title="Descartar"
+                                            @onclick="() => _import = null">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+
+                                @if (import.Errors.Count > 0)
+                                {
+                                    <ul>
+                                        @foreach (var error in import.Errors.Take(8))
+                                        {
+                                            <li>@error</li>
+                                        }
+
+                                        @if (import.Errors.Count > 8)
+                                        {
+                                            <li>Y @(import.Errors.Count - 8) más.</li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <div class="assign-import-summary">
+                                        @foreach (var group in import.Assignments.GroupBy(x => x.PresetId))
+                                        {
+                                            <span>
+                                                @group.Count() →
+                                                <strong>@GetPresetName(group.Key)</strong>
+                                            </span>
+                                        }
+
+                                        @if (import.Replaced > 0)
+                                        {
+                                            <span class="is-warning">
+                                                @import.Replaced ya existían y cambian de preset
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <button type="button"
+                                            class="primary-button"
+                                            disabled="@_busy"
+                                            @onclick="ImportAsync">
+                                        <i class="fa-solid fa-check"></i>
+                                        Importar @import.Assignments.Count
+                                    </button>
+                                }
+
+                            </div>
+                        }
+
+
+                        @* ------------------------------------------ lista *@
+
+                        @if (!SpecificAssignments.Any())
                         {
                             <div class="empty-assignments">
-                                No hay assignments específicos.
+                                No hay asignaciones específicas: todos los documentos de
+                                este report usan el preset por defecto.
                             </div>
                         }
                         else
                         {
+                            <div class="assign-list-head">
+
+                                <strong>Asignaciones del report</strong>
+
+                                <label class="assign-only-mine">
+                                    <input type="checkbox"
+                                           checked="@_onlyThisPreset"
+                                           @onchange="e => _onlyThisPreset = e.Value is bool v && v" />
+                                    Sólo las de este preset
+                                </label>
+
+                                @if (SpecificAssignments.Count() > 8)
+                                {
+                                    <input class="assign-search"
+                                           value="@_filter"
+                                           @oninput="e => _filter = e.Value?.ToString() ?? string.Empty"
+                                           placeholder="Buscar valor" />
+                                }
+
+                            </div>
+
                             <div class="assignment-list">
 
-                                @foreach (var assignment in SpecificAssignments)
+                                @foreach (var assignment in VisibleAssignments)
                                 {
-                                    <div class="assignment-row">
+                                    var isMine = string.Equals(assignment.PresetId, PresetId, StringComparison.OrdinalIgnoreCase);
+
+                                    <div class="assignment-row @(isMine ? "is-mine" : null)" @key="assignment.Id">
 
                                         <div class="assignment-context">
 
-                                            <span class="context-type">
-                                                @assignment.ContextType
+                                            <span class="context-type"
+                                                  title="@(IsDataField(assignment.ContextType) ? "Campo del report: se elige solo con los datos" : "Contexto que manda el ERP")">
+                                                @if (IsDataField(assignment.ContextType))
+                                                {
+                                                    <i class="fa-solid fa-database"></i>
+                                                }
+                                                @ContextTypeLabel(assignment.ContextType)
                                             </span>
 
                                             <strong>
@@ -210,54 +444,19 @@
                                             @GetPresetName(assignment.PresetId)
                                         </div>
 
+                                        <button type="button"
+                                                class="icon-button is-danger"
+                                                title="Quitar asignación"
+                                                disabled="@(_busy || assignment.Id is null)"
+                                                @onclick="() => DeleteAssignmentAsync(assignment)">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+
                                     </div>
                                 }
 
                             </div>
                         }
-
-
-                        <div class="new-assignment">
-
-                            <h3>Nuevo assignment</h3>
-
-                            <div class="assignment-form">
-
-                                <div class="form-group">
-
-                                    <label>Tipo de contexto</label>
-
-                                    <input type="text"
-                                           value="@_contextType"
-                                           @oninput="e => _contextType = e.Value?.ToString() ?? string.Empty"
-                                           placeholder="customer" />
-
-                                </div>
-
-                                <div class="form-group">
-
-                                    <label>Valor</label>
-
-                                    <input type="text"
-                                           value="@_contextKey"
-                                           @oninput="e => _contextKey = e.Value?.ToString() ?? string.Empty"
-                                           placeholder="000762" />
-
-                                </div>
-
-                                <button type="button"
-                                        class="primary-button assignment-add"
-                                        disabled="@(!CanAddAssignment)"
-                                        @onclick="AddAssignmentAsync">
-
-                                    <i class="fa-solid fa-plus"></i>
-                                    Añadir
-
-                                </button>
-
-                            </div>
-
-                        </div>
 
                     </div>
 
@@ -271,7 +470,7 @@
                 <section class="card">
 
                     <header class="card-header">
-                        <h2>Resolución</h2>
+                        <h2>Qué preset se usa</h2>
                     </header>
 
                     <div class="card-body">
@@ -282,8 +481,8 @@
                                 <span>1</span>
 
                                 <div>
-                                    <strong>Contexto específico</strong>
-                                    <small>customer / 000762</small>
+                                    <strong>Contexto de la petición</strong>
+                                    <small>context.contextType / contextKey</small>
                                 </div>
                             </div>
 
@@ -293,7 +492,18 @@
                                 <span>2</span>
 
                                 <div>
-                                    <strong>Preset default</strong>
+                                    <strong>Campo del documento</strong>
+                                    <small>Asignaciones por campo del report</small>
+                                </div>
+                            </div>
+
+                            <div class="resolution-line"></div>
+
+                            <div class="resolution-step">
+                                <span>3</span>
+
+                                <div>
+                                    <strong>Preset por defecto</strong>
                                     <small>Fallback del report</small>
                                 </div>
                             </div>
@@ -314,6 +524,9 @@
 
 @code {
 
+    private const string ManualChoice = "__manual__";
+
+    private const long MaxCsvBytes = 2 * 1024 * 1024;
 
     [Parameter]
     public required string ReportId { get; set; }
@@ -330,17 +543,71 @@
 
     private IReadOnlyCollection<ReportPresetAssignment> _assignments = [];
 
+    /// <summary>
+    /// Campos de valor único del report: son los tipos de contexto que se
+    /// ofrecen, en vez de escribirlos a mano.
+    /// </summary>
+    private IReadOnlyList<ReportDataFieldOption> _dataFields = [];
 
-    private string _contextType = string.Empty;
+    private string _contextTypeChoice = ManualChoice;
+
+    private string _manualContextType = string.Empty;
 
     private string _contextKey = string.Empty;
 
+    private string _filter = string.Empty;
+
+    private bool _onlyThisPreset = true;
+
     private bool _loading = true;
+
+    private bool _busy;
+
+    private ImportPreview? _import;
+
+
+    private sealed record ImportPreview(
+        string FileName,
+        IReadOnlyList<ReportPresetAssignment> Assignments,
+        IReadOnlyList<string> Errors,
+        int Replaced);
+
+
+    private string ContextType =>
+        _contextTypeChoice == ManualChoice
+            ? _manualContextType.Trim()
+            : _contextTypeChoice;
 
 
     private IEnumerable<ReportPresetAssignment> SpecificAssignments =>
         _assignments.Where(x =>
             !string.IsNullOrWhiteSpace(x.ContextType));
+
+
+    private IEnumerable<ReportPresetAssignment> VisibleAssignments =>
+        SpecificAssignments
+            .Where(x =>
+                !_onlyThisPreset ||
+                string.Equals(x.PresetId, PresetId, StringComparison.OrdinalIgnoreCase))
+            .Where(x =>
+                string.IsNullOrWhiteSpace(_filter) ||
+                x.ContextKey?.Contains(_filter, StringComparison.OrdinalIgnoreCase) == true ||
+                x.ContextType?.Contains(_filter, StringComparison.OrdinalIgnoreCase) == true)
+            .OrderBy(x => x.ContextType)
+            .ThenBy(x => x.ContextKey);
+
+
+    /// <summary>
+    /// Tipos que ya se usan en el report y no son campos (los de antes,
+    /// escritos a mano: customer, proveedor...).
+    /// </summary>
+    private IReadOnlyList<string> OtherUsedTypes =>
+        SpecificAssignments
+            .Select(x => x.ContextType!)
+            .Where(x => !IsDataField(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
 
 
     private bool IsDefaultPreset =>
@@ -353,14 +620,49 @@
                 StringComparison.OrdinalIgnoreCase));
 
 
+    /// <summary>
+    /// Mismo criterio que la API: el de por defecto sólo se borra si es el
+    /// único preset del report.
+    /// </summary>
+    private bool CanDelete =>
+        !IsDefaultPreset ||
+        _reportPresets.Count <= 1;
+
+
     private bool CanAddAssignment =>
-        !string.IsNullOrWhiteSpace(_contextType) &&
+        !string.IsNullOrWhiteSpace(ContextType) &&
         !string.IsNullOrWhiteSpace(_contextKey);
+
+
+    private string ValuePlaceholder =>
+        _report?.SampleData is { } sample &&
+        IsDataField(ContextType)
+            ? SampleValue(sample, ContextType) ?? "000762"
+            : "000762";
+
+
+    private bool IsDataField(
+        string? path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        _dataFields.Any(x => string.Equals(x.Path, path, StringComparison.OrdinalIgnoreCase));
+
+
+    private string ContextTypeLabel(
+        string? type)
+    {
+        var field =
+            _dataFields.FirstOrDefault(x => string.Equals(x.Path, type, StringComparison.OrdinalIgnoreCase));
+
+        return field is null
+            ? type ?? string.Empty
+            : field.Label;
+    }
 
 
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
+        _import = null;
 
         try
         {
@@ -390,7 +692,30 @@
                                     StringComparison.OrdinalIgnoreCase))
                             .ToList();
 
+                    _dataFields =
+                        ReportDataFields.SingleValued(_report.Definition);
+
                     await ReloadAssignmentsAsync();
+
+                    // Por defecto, el tipo que ya usa este preset o el
+                    // primer campo del report.
+                    _contextTypeChoice =
+                        _assignments
+                            .Where(x =>
+                                !string.IsNullOrWhiteSpace(x.ContextType) &&
+                                string.Equals(x.PresetId, PresetId, StringComparison.OrdinalIgnoreCase))
+                            .Select(x => x.ContextType!)
+                            .FirstOrDefault()
+                        ?? _dataFields.FirstOrDefault()?.Path
+                        ?? ManualChoice;
+
+                    if (_contextTypeChoice != ManualChoice &&
+                        !IsDataField(_contextTypeChoice) &&
+                        !OtherUsedTypes.Contains(_contextTypeChoice, StringComparer.OrdinalIgnoreCase))
+                    {
+                        _manualContextType = _contextTypeChoice;
+                        _contextTypeChoice = ManualChoice;
+                    }
                 },
                 errorTitle: "No se ha podido cargar el preset");
 
@@ -416,6 +741,11 @@
                 CurrentTenant.Id,
                 ReportId);
     }
+
+
+    private void ContextTypeChoiceChanged(
+        ChangeEventArgs e) =>
+        _contextTypeChoice = e.Value?.ToString() ?? ManualChoice;
 
 
     private void PresetNameChanged(
@@ -444,6 +774,46 @@
     }
 
 
+    private async Task DeletePresetAsync()
+    {
+        if (_preset is null || !CanDelete)
+            return;
+
+        var mine =
+            SpecificAssignments.Count(x =>
+                string.Equals(x.PresetId, PresetId, StringComparison.OrdinalIgnoreCase));
+
+        var confirmed =
+            await JS.InvokeAsync<bool>(
+                "confirm",
+                $"Se eliminará el preset '{_preset.Configuration.Name}'" +
+                (mine > 0 ? $" y sus {mine} asignaciones" : string.Empty) +
+                ". Los documentos ya emitidos no cambian. ¿Continuar?");
+
+        if (!confirmed)
+            return;
+
+        _busy = true;
+
+        try
+        {
+            var deleted = await Toasts.RunApiAsync(
+                () => RenderSetApi.DeletePresetAsync(
+                    CurrentTenant.Id,
+                    PresetId),
+                success: "Preset eliminado.",
+                errorTitle: "No se ha podido eliminar el preset");
+
+            if (deleted)
+                Navigation.NavigateTo($"/presets?report={Uri.EscapeDataString(ReportId)}");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+
     private async Task SetAsDefaultAsync()
     {
         if (_preset is null)
@@ -453,10 +823,8 @@
             new ReportPresetAssignment
             {
                 ReportId = ReportId,
-
                 ContextType = null,
                 ContextKey = null,
-
                 PresetId = _preset.Id
             };
 
@@ -465,7 +833,7 @@
                 CurrentTenant.Id,
                 assignment),
             success: "Preset establecido como default.",
-            errorTitle: "No se ha podido guardar el assignment");
+            errorTitle: "No se ha podido guardar la asignación");
 
         if (saved)
             await ReloadAssignmentsAsync();
@@ -484,33 +852,199 @@
             new ReportPresetAssignment
             {
                 ReportId = ReportId,
-
-                ContextType =
-                    _contextType.Trim(),
-
-                ContextKey =
-                    _contextKey.Trim(),
-
-                PresetId =
-                    _preset.Id
+                ContextType = ContextType,
+                ContextKey = _contextKey.Trim(),
+                PresetId = _preset.Id
             };
 
-        var saved = await Toasts.RunApiAsync(
-            () => RenderSetApi.SaveAssignmentAsync(
-                CurrentTenant.Id,
-                assignment),
-            success: "Assignment creado.",
-            errorTitle: "No se ha podido guardar el assignment");
+        _busy = true;
 
-        if (!saved)
-            return;
+        try
+        {
+            var saved = await Toasts.RunApiAsync(
+                () => RenderSetApi.SaveAssignmentAsync(
+                    CurrentTenant.Id,
+                    assignment),
+                success: "Asignación creada.",
+                errorTitle: "No se ha podido guardar la asignación");
 
-        _contextType = string.Empty;
-        _contextKey = string.Empty;
+            if (!saved)
+                return;
 
-        await ReloadAssignmentsAsync();
+            _contextKey = string.Empty;
+
+            await ReloadAssignmentsAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
+
+    private async Task DeleteAssignmentAsync(
+        ReportPresetAssignment assignment)
+    {
+        if (assignment.Id is not { } id)
+            return;
+
+        _busy = true;
+
+        try
+        {
+            var deleted = await Toasts.RunApiAsync(
+                () => RenderSetApi.DeleteAssignmentAsync(
+                    CurrentTenant.Id,
+                    id),
+                success: $"{ContextTypeLabel(assignment.ContextType)} {assignment.ContextKey} vuelve al preset por defecto.",
+                errorTitle: "No se ha podido quitar la asignación");
+
+            if (deleted)
+                await ReloadAssignmentsAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+
+    // ----------------------------------------------------------------- CSV
+
+    private async Task DownloadTemplateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ContextType))
+            return;
+
+        var existing =
+            SpecificAssignments
+                .Where(x =>
+                    string.Equals(x.PresetId, PresetId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(x.ContextType, ContextType, StringComparison.OrdinalIgnoreCase));
+
+        var csv =
+            ReportPresetAssignmentCsv.Build(
+                ContextType,
+                PresetId,
+                existing);
+
+        // Con BOM: sin él, Excel abre el UTF-8 como Latin-1 y estropea las
+        // tildes de los valores.
+        await JS.InvokeVoidAsync(
+            "renderSet.downloadText",
+            $"asignaciones-{PresetId}.csv",
+            "﻿" + csv,
+            "text/csv;charset=utf-8");
+    }
+
+
+    private async Task CsvSelectedAsync(
+        InputFileChangeEventArgs args)
+    {
+        _import = null;
+
+        string text;
+
+        try
+        {
+            await using var stream =
+                args.File.OpenReadStream(MaxCsvBytes);
+
+            using var reader =
+                new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+
+            text = await reader.ReadToEndAsync();
+        }
+        catch (Exception exception)
+        {
+            // Validación local del fichero (tamaño, lectura): aviso en la
+            // propia pantalla, no es un error de la API.
+            _import = new ImportPreview(
+                args.File.Name,
+                [],
+                [$"No se ha podido leer el fichero: {exception.Message}"],
+                0);
+
+            return;
+        }
+
+        var parsed = ReportPresetAssignmentCsv.Parse(text);
+
+        var errors = parsed.Errors.ToList();
+        var assignments = new List<ReportPresetAssignment>();
+
+        foreach (var row in parsed.Rows)
+        {
+            var presetId = row.PresetId ?? PresetId;
+
+            if (_reportPresets.All(x => !string.Equals(x.Id, presetId, StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add($"Línea {row.Line}: '{presetId}' no es un preset de {_report?.Name ?? ReportId}.");
+                continue;
+            }
+
+            assignments.Add(
+                new ReportPresetAssignment
+                {
+                    ReportId = ReportId,
+                    ContextType = row.ContextType,
+                    ContextKey = row.ContextKey,
+                    PresetId = presetId
+                });
+        }
+
+        if (assignments.Count == 0 && errors.Count == 0)
+            errors.Add("El fichero no trae ninguna fila con valor.");
+
+        var replaced =
+            assignments.Count(x =>
+                SpecificAssignments.Any(a =>
+                    string.Equals(a.ContextType, x.ContextType, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(a.ContextKey, x.ContextKey, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(a.PresetId, x.PresetId, StringComparison.OrdinalIgnoreCase)));
+
+        _import = new ImportPreview(
+            args.File.Name,
+            assignments,
+            errors,
+            replaced);
+    }
+
+
+    private async Task ImportAsync()
+    {
+        if (_import is null || _import.Errors.Count > 0 || _import.Assignments.Count == 0)
+            return;
+
+        _busy = true;
+
+        try
+        {
+            var assignments = _import.Assignments;
+            var count = assignments.Count;
+
+            var saved = await Toasts.RunApiAsync(
+                () => RenderSetApi.SaveAssignmentsAsync(
+                    CurrentTenant.Id,
+                    assignments),
+                success: $"{count} asignaciones importadas.",
+                errorTitle: "No se han podido importar las asignaciones");
+
+            if (!saved)
+                return;
+
+            _import = null;
+
+            await ReloadAssignmentsAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+
+    // --------------------------------------------------------------- utils
 
     private string GetPresetName(
         string presetId)
@@ -523,6 +1057,39 @@
                            StringComparison.OrdinalIgnoreCase))
                    ?.Configuration.Name
                ?? presetId;
+    }
+
+
+    /// <summary>
+    /// Valor del campo en los datos de ejemplo, como pista de qué escribir.
+    /// </summary>
+    private static string? SampleValue(
+        System.Text.Json.JsonElement sample,
+        string path)
+    {
+        var current = sample;
+
+        foreach (var part in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (current.ValueKind != System.Text.Json.JsonValueKind.Object)
+                return null;
+
+            var property =
+                current.EnumerateObject()
+                    .FirstOrDefault(x => string.Equals(x.Name, part, StringComparison.OrdinalIgnoreCase));
+
+            if (property.Value.ValueKind == System.Text.Json.JsonValueKind.Undefined)
+                return null;
+
+            current = property.Value;
+        }
+
+        return current.ValueKind switch
+        {
+            System.Text.Json.JsonValueKind.String => current.GetString(),
+            System.Text.Json.JsonValueKind.Number => current.GetRawText(),
+            _ => null
+        };
     }
 
 

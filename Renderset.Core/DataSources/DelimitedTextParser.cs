@@ -20,35 +20,59 @@ public static class DelimitedTextParser
     public static TabularPayload Parse(
         string text,
         char? delimiter = null,
+        bool firstRowIsHeader = true) =>
+        Parse(text, out _, delimiter, firstRowIsHeader);
+
+    /// <summary>
+    /// Igual, y además dice qué cabeceras repetidas se han renombrado
+    /// ("Direccion_2"), para avisar a quien pega los datos.
+    /// </summary>
+    public static TabularPayload Parse(
+        string text,
+        out IReadOnlyList<string> renamedHeaders,
+        char? delimiter = null,
         bool firstRowIsHeader = true)
     {
         var payload = new TabularPayload();
+        var renamed = new List<string>();
+        renamedHeaders = renamed;
 
         if (string.IsNullOrWhiteSpace(text))
             return payload;
 
-        var lines =
+        var normalized =
             text.Replace("\r\n", "\n")
-                .Replace('\r', '\n')
-                .Split('\n')
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToList();
+                .Replace('\r', '\n');
 
-        if (lines.Count == 0)
+        var firstLine =
+            normalized
+                .Split('\n')
+                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+
+        if (firstLine is null)
             return payload;
 
-        var separator = delimiter ?? DetectDelimiter(lines[0]);
+        var separator = delimiter ?? DetectDelimiter(firstLine);
 
         var grid =
-            lines
-                .Select(line => SplitLine(line, separator))
+            ReadRecords(normalized, separator)
+                .Where(x => x.Any(value => !string.IsNullOrWhiteSpace(value)))
                 .ToList();
+
+        if (grid.Count == 0)
+            return payload;
+
+        // Con cabecera se sabe cuántas columnas tiene una fila: las que
+        // llegan cortas son celdas con saltos de línea que SSMS copia sin
+        // comillas, y se vuelven a unir.
+        if (firstRowIsHeader)
+            grid = [grid[0], .. JoinBrokenRows(grid.Skip(1).ToList(), grid[0].Count)];
 
         var width = grid.Max(x => x.Count);
 
         var headers =
             firstRowIsHeader
-                ? Normalize(grid[0], width)
+                ? UniqueHeaders(Normalize(grid[0], width), renamed)
                 : Enumerable
                     .Range(1, width)
                     .Select(i => $"Column{i}")
@@ -123,50 +147,167 @@ public static class DelimitedTextParser
         IReadOnlyCollection<string> values) =>
         ColumnAnalysis.Analyze(values).Type;
 
-    private static List<string> SplitLine(
-        string line,
+    /// <summary>
+    /// Separa el texto en filas y celdas. Una celda entre comillas puede
+    /// llevar separadores y saltos de línea (CSV de Excel). Las comillas sólo
+    /// cuentan al principio de la celda: un 3" en medio de un texto es un
+    /// carácter más y no se come el resto del texto.
+    /// </summary>
+    private static List<List<string>> ReadRecords(
+        string text,
         char separator)
     {
-        var values = new List<string>();
+        var records = new List<List<string>>();
+        var record = new List<string>();
         var current = new StringBuilder();
 
         var inQuotes = false;
+        var atFieldStart = true;
 
-        for (var i = 0; i < line.Length; i++)
+        for (var i = 0; i < text.Length; i++)
         {
-            var character = line[i];
+            var character = text[i];
 
-            if (character == '"')
+            if (inQuotes)
             {
-                if (inQuotes &&
-                    i + 1 < line.Length &&
-                    line[i + 1] == '"')
+                if (character == '"')
                 {
-                    current.Append('"');
-                    i++;
+                    if (i + 1 < text.Length && text[i + 1] == '"')
+                    {
+                        current.Append('"');
+                        i++;
+                    }
+                    else
+                    {
+                        inQuotes = false;
+                    }
 
                     continue;
                 }
 
-                inQuotes = !inQuotes;
+                current.Append(character);
+                continue;
+            }
+
+            if (character == '"' && atFieldStart)
+            {
+                inQuotes = true;
+                atFieldStart = false;
+                continue;
+            }
+
+            if (character == separator)
+            {
+                record.Add(current.ToString());
+                current.Clear();
+                atFieldStart = true;
 
                 continue;
             }
 
-            if (character == separator && !inQuotes)
+            if (character == '\n')
             {
-                values.Add(current.ToString());
+                record.Add(current.ToString());
                 current.Clear();
+                records.Add(record);
+                record = [];
+                atFieldStart = true;
 
                 continue;
             }
 
             current.Append(character);
+            atFieldStart = false;
         }
 
-        values.Add(current.ToString());
+        record.Add(current.ToString());
+        records.Add(record);
 
-        return values;
+        return records;
+    }
+
+    /// <summary>
+    /// SSMS copia una celda con salto de línea tal cual: la fila llega
+    /// partida en dos líneas, la primera con menos columnas que la cabecera
+    /// y la segunda empezando por el resto de esa celda. Mientras una fila
+    /// tenga menos columnas que la cabecera y la siguiente quepa, se unen:
+    /// la última celda de una con la primera de la otra, con el salto.
+    ///
+    /// Si no encaja exacto (la suma se pasa de la cabecera) no se toca nada:
+    /// mejor una fila corta visible que una fila inventada.
+    /// </summary>
+    private static List<List<string>> JoinBrokenRows(
+        List<List<string>> rows,
+        int width)
+    {
+        var result = new List<List<string>>(rows.Count);
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+
+            while (row.Count < width &&
+                   i + 1 < rows.Count &&
+                   row.Count + rows[i + 1].Count - 1 <= width)
+            {
+                var next = rows[++i];
+
+                row[^1] = row[^1] + "\n" + next[0];
+                row.AddRange(next.Skip(1));
+            }
+
+            result.Add(row);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Una SELECT con dos columnas Direccion (cliente y transportista) da
+    /// dos cabeceras iguales, y el mapping localiza las columnas por nombre.
+    /// La segunda pasa a Direccion_2, la tercera a Direccion_3...
+    /// </summary>
+    private static List<string> UniqueHeaders(
+        List<string> headers,
+        List<string> renamed)
+    {
+        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>(headers.Count);
+
+        foreach (var header in headers)
+        {
+            var name = header.Trim();
+
+            if (name.Length == 0)
+            {
+                result.Add(name);
+                continue;
+            }
+
+            if (!seen.TryGetValue(name, out var count))
+            {
+                seen[name] = 1;
+                result.Add(name);
+
+                continue;
+            }
+
+            var candidate = name;
+
+            do
+            {
+                count++;
+                candidate = $"{name}_{count}";
+            }
+            while (seen.ContainsKey(candidate));
+
+            seen[name] = count;
+            seen[candidate] = 1;
+            result.Add(candidate);
+            renamed.Add(candidate);
+        }
+
+        return result;
     }
 
     private static List<string> Normalize(
@@ -440,6 +581,11 @@ public static class DelimitedTextParser
                 return null;
 
             var trimmed = value.Trim();
+
+            // SSMS copia los nulos como el texto NULL: en el JSON tienen que
+            // llegar como null, igual que cuando las filas vienen por API.
+            if (string.Equals(trimmed, "NULL", StringComparison.Ordinal))
+                return null;
 
             switch (Type)
             {

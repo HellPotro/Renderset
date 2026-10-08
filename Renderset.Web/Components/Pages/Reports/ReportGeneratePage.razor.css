@@ -1,0 +1,246 @@
+/* Generar documentos desde filas pegadas. Lo común viene de pages.css. */
+
+.report-generate-page {
+    max-width: 1320px;
+}
+
+.rgen-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.rgen-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 48px 24px;
+    color: #8a999f;
+    text-align: center;
+}
+
+    .rgen-empty.is-small {
+        padding: 36px 20px;
+        font-size: 12px;
+    }
+
+.rgen-missing {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 20px;
+}
+
+    .rgen-missing > i {
+        color: #4f7384;
+        font-size: 20px;
+    }
+
+    .rgen-missing p {
+        margin: 3px 0 0;
+        color: #74858d;
+        font-size: 12px;
+    }
+
+.rgen-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.rgen-link {
+    color: #4f7384;
+    font-size: 11.5px;
+}
+
+.rgen-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #d8e1e5;
+    border-radius: 8px;
+    background: #fafcfc;
+    color: #20323a;
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 11.5px;
+    line-height: 1.45;
+    white-space: pre;
+    resize: vertical;
+}
+
+    .rgen-input:focus {
+        border-color: #8ba4b3;
+        background: #fff;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(65, 105, 125, .10);
+    }
+
+.rgen-file {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    color: #4f7384;
+    font-size: 11.5px;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+    /* El input real queda encima, invisible: así el texto hace de botón. */
+    .rgen-file ::deep input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+.rgen-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 8px;
+    color: #4d626d;
+    font-size: 12px;
+}
+
+.rgen-muted {
+    color: #93a0a5;
+}
+
+.rgen-errors {
+    margin: 10px 0 0;
+    padding: 10px 12px 10px 28px;
+    border: 1px solid #efd5d5;
+    border-radius: 8px;
+    background: #fdf4f4;
+    color: #9a3d3d;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.rgen-options {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.rgen-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    margin-top: 4px;
+    padding: 10px 12px;
+    border: 1px solid #e3eaee;
+    border-radius: 8px;
+    background: #f7fafb;
+    cursor: pointer;
+}
+
+    .rgen-check input {
+        margin-top: 2px;
+    }
+
+    .rgen-check span {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .rgen-check strong {
+        color: #20323a;
+        font-size: 12px;
+    }
+
+    .rgen-check small {
+        color: #74858d;
+        font-size: 11px;
+        line-height: 1.4;
+    }
+
+.rgen-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 18px;
+    border-top: 1px solid #edf1f3;
+}
+
+.rgen-results {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+    .rgen-results li {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 18px;
+        border-bottom: 1px solid #edf1f3;
+    }
+
+        .rgen-results li > i {
+            color: #2f7a52;
+        }
+
+        .rgen-results li.is-error {
+            grid-template-columns: auto minmax(0, 1fr);
+            background: #fdf7f7;
+        }
+
+            .rgen-results li.is-error > i {
+                color: #9a3d3d;
+            }
+
+.rgen-result-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+    .rgen-result-text strong {
+        overflow: hidden;
+        color: #20323a;
+        font-size: 12.5px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .rgen-result-text small {
+        color: #8a999f;
+        font-size: 11px;
+    }
+
+.rgen-results li.is-error .rgen-result-text small {
+    color: #9a3d3d;
+    white-space: normal;
+}
+
+.rgen-note {
+    margin: 0;
+    padding: 12px 18px;
+    color: #74858d;
+    font-size: 11.5px;
+}
+
+@media (max-width: 1000px) {
+
+    .rgen-layout,
+    .rgen-options {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+
+.rgen-result-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}

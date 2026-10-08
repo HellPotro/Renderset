@@ -25,6 +25,8 @@ public sealed class DocumentBundleEntity
 
     public DateTime TokenIssuedAtUtc { get; set; }
 
+    public bool AllowDataDownload { get; set; }
+
     public DateTime ExpiresAtUtc { get; set; }
 
     public DateTime? RevokedAtUtc { get; set; }

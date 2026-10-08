@@ -249,13 +249,26 @@
 
 /* ---------------------------------------------------------- acciones */
 
+/* Flex con wrap y no rejilla fija: con Datos y Generar ya son cinco
+   botones de texto, y en una tarjeta de 380px caben tres por línea. */
 .report-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 34px 34px;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     margin-top: auto;
 }
+
+    .report-actions .primary-button,
+    .report-actions .secondary-button {
+        flex: 1 1 30%;
+        min-width: 0;
+        white-space: nowrap;
+    }
+
+    .report-actions .icon-button {
+        flex: none;
+    }
 
     .report-actions .primary-button i,
     .report-actions .secondary-button i {
@@ -509,8 +522,9 @@
         grid-template-columns: 1fr;
     }
 
-    .report-actions {
-        grid-template-columns: 1fr 1fr;
+    .report-actions .primary-button,
+    .report-actions .secondary-button {
+        flex-basis: 45%;
     }
 
     .report-toolbar {

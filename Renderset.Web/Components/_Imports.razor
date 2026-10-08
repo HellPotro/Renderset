@@ -1,4 +1,6 @@
 @using System.Net.Http
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using System.Net.Http.Json
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Routing
@@ -16,3 +18,10 @@
 @using Renderset.Web.Components.Layout
 @using Renderset.Web.Components.Shared
 @using Renderset.Web.Toasts
+@using Renderset.Web.Identity
+@using Renderset.Web.Components.Account
+@using Renderset.Web.Components.Account.Shared
+
+@* Todas las páginas exigen sesión. Las de cuenta (Components/Account) lo
+   abren con [AllowAnonymous]. *@
+@attribute [Authorize]

@@ -16,6 +16,11 @@ public sealed class ReportSectionConfiguration
 
     public ReportSectionLayout? Layout { get; set; }
 
+    /// <summary>
+    /// Columnas de la cuadrícula cuando Layout es Grid (1 a 12).
+    /// </summary>
+    public int? Columns { get; set; }
+
     public List<ReportSectionConfiguration> Sections { get; set; } = [];
 
     public List<ReportFieldConfiguration> Fields { get; set; } = [];

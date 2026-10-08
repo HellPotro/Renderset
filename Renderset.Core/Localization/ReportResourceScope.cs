@@ -8,6 +8,12 @@ public static class ReportResourceScope
     /// </summary>
     public const string Global = "*";
 
+    /// <summary>
+    /// Textos de la página pública de documentos compartidos. No pertenecen
+    /// a ningún report; el prefijo "system:" evita chocar con un id de report.
+    /// </summary>
+    public const string Sharing = "system:sharing";
+
     public static string ForReport(
         string reportId)
     {

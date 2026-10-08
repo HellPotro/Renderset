@@ -11,24 +11,50 @@
     <link rel="stylesheet" href="@Assets["css/pages.css"]" />
     <link rel="stylesheet" href="@Assets["css/components.css"]" />
     <link rel="stylesheet" href="@Assets["_content/Renderset.Blazor/css/components.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Renderset.Blazor/css/report-fonts.css"]" />
     <link rel="stylesheet" href="@Assets["_content/Renderset.Blazor/css/report-document.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Renderset.Blazor/css/document-viewer.css"]" />
     <link rel="stylesheet" href="@Assets["css/reporting.css"]" />
+    <link rel="stylesheet" href="@Assets["css/account.css"]" />
     <link rel="stylesheet" href="@Assets["css/report-composer.css"]" />
     <link rel="stylesheet" href="@Assets["Renderset.Web.styles.css"]" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
 
     <ImportMap />
 
-    <link rel="icon" type="image/png" href="favicon.png" />
+    @* Favicon: .ico para los navegadores que lo piden en la raíz, PNG para
+       el resto, el de iOS al guardar en inicio y el manifiesto para Android. *@
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="manifest" href="site.webmanifest" />
+    <meta name="theme-color" content="#173d4f" />
 
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <Routes @rendermode="PageRenderMode" />
 
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["js/reporting.js"]"></script>
+    <script src="@Assets["_content/Renderset.Blazor/js/document-viewer.js"]"></script>
 </body>
 
 </html>
+
+@code {
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    /// <summary>
+    /// Todo interactivo salvo las páginas de cuenta (entrar, contraseñas,
+    /// invitaciones): esas escriben la cookie de sesión y tienen que ser
+    /// estáticas ([ExcludeFromInteractiveRouting]).
+    /// </summary>
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext.AcceptsInteractiveRouting()
+            ? InteractiveServer
+            : null;
+}

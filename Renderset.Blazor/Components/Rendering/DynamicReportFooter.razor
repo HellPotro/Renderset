@@ -1,20 +1,44 @@
-﻿@if (Footer is not null &&
-     Footer.Visible &&
-     HasContent)
+﻿@using System.Text.Json
+@using Renderset.Core.Rendering
+
+@*
+    Pie del documento en pantalla. Va al final de la hoja (el renderer lo
+    empuja con un espaciador) y, al imprimir o pasar a PDF, lo sustituye el
+    pie repetido en cada página que genera ReportPageFooter: por eso la
+    numeración aquí sólo se insinúa ("Página 1 de N").
+*@
+
+@if (Footer is not null &&
+     Footer.HasContent)
 {
     <footer class="report-footer">
 
-        @if (!string.IsNullOrWhiteSpace(Footer.Text))
+        @if (!string.IsNullOrWhiteSpace(Text))
         {
             <div class="report-footer-text">
-                @Footer.Text
+                @Text
             </div>
         }
 
-        @if (Footer.ShowGenerationDate)
+        @if (Footer.ShowGenerationDate || Footer.ShowPageNumber)
         {
-            <div class="report-footer-generation-date">
-                Generado el @DateTime.Now.ToString("dd/MM/yyyy HH:mm")
+            <div class="report-footer-meta">
+
+                @if (Footer.ShowGenerationDate)
+                {
+                    <span class="report-footer-generation-date">
+                        @GenerationDate
+                    </span>
+                }
+
+                @if (Footer.ShowPageNumber)
+                {
+                    <span class="report-footer-page"
+                          title="La numeración real se pone al imprimir o al pasar a PDF">
+                        @PageNumberPreview
+                    </span>
+                }
+
             </div>
         }
 
@@ -26,7 +50,40 @@
     [Parameter]
     public ResolvedReportFooter? Footer { get; set; }
 
-    private bool HasContent =>
-        !string.IsNullOrWhiteSpace(Footer?.Text)
-        || Footer?.ShowGenerationDate == true;
+    /// <summary>
+    /// Datos del documento, para los {{data.ruta}} del texto.
+    /// </summary>
+    [Parameter]
+    public JsonElement Data { get; set; }
+
+    private string? Text =>
+        string.IsNullOrWhiteSpace(Footer?.Text)
+            ? null
+            : ReportDataTemplate.Apply(Footer.Text, Data, MissingData);
+
+    [Parameter]
+    public Func<string, string>? MissingData { get; set; }
+
+    private static string GenerationDate =>
+        GenerationDateText(DateTime.Now);
+
+    private string PageNumberPreview =>
+        PageNumberText(Footer?.PageNumberFormat, "1", "N");
+
+    /// <summary>
+    /// Mismo texto que el pie de cada página del PDF.
+    /// </summary>
+    public static string GenerationDateText(
+        DateTime now) =>
+        $"Generado el {now:dd/MM/yyyy HH:mm}";
+
+    public static string PageNumberText(
+        string? format,
+        string page,
+        string pages) =>
+        (string.IsNullOrWhiteSpace(format)
+            ? ResolvedReportFooter.DefaultPageNumberFormat
+            : format)
+        .Replace("{page}", page, StringComparison.OrdinalIgnoreCase)
+        .Replace("{pages}", pages, StringComparison.OrdinalIgnoreCase);
 }

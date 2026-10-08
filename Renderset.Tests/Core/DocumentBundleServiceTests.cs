@@ -59,6 +59,23 @@ public sealed class DocumentBundleServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_ShouldOnlyShareDataWhenAsked()
+    {
+        var sut = CreateSut();
+
+        await sut.CreateAsync(Tenant, Request("doc-factura"));
+
+        var withData = Request("doc-factura");
+        withData.AllowDataDownload = true;
+
+        await sut.CreateAsync(Tenant, withData);
+
+        _bundles.Select(x => x.AllowDataDownload)
+            .Should()
+            .Equal(false, true);
+    }
+
+    [Fact]
     public async Task CreateAsync_ShouldKeepRequestOrderAndUseFileNameAsDefaultDisplayName()
     {
         var request = Request("doc-packing", "doc-factura");
@@ -714,6 +731,7 @@ public sealed class DocumentBundleServiceTests
                     ? null
                     : revokedAtUtc ?? source.RevokedAtUtc,
                 CreatedAtUtc = source.CreatedAtUtc,
+                AllowDataDownload = source.AllowDataDownload,
                 Items = source.Items
             };
     }

@@ -10,6 +10,10 @@ public sealed class ResolvedReportHeader
 
     public string? Subtitle { get; set; }
 
+    public bool ShowTitle { get; set; } = true;
+
+    public bool ShowSubtitle { get; set; } = true;
+
     public bool ShowLogo { get; set; }
 
     public string? LogoUrl { get; set; }
@@ -19,11 +23,29 @@ public sealed class ResolvedReportHeader
     public ReportHeaderLayout Layout { get; set; } =
         ReportHeaderLayout.LogoLeft;
 
+    public ReportHeaderTitlePlacement TitlePlacement { get; set; } =
+        ReportHeaderTitlePlacement.Inline;
+
     public string? BackgroundColor { get; set; }
 
     public string? TextColor { get; set; }
 
     public bool ShowDivider { get; set; } = true;
+
+    public const int DefaultQrSize = 84;
+    public const int MinQrSize = 56;
+    public const int MaxQrSize = 160;
+
+    public bool ShowQr { get; set; }
+
+    /// <summary>
+    /// Plantilla del QR, sin resolver: los datos y el enlace del documento
+    /// sólo se conocen al pintar.
+    /// </summary>
+    public string QrContent { get; set; } =
+        Rendering.ReportQrContent.DocumentUrlTemplate;
+
+    public int QrSize { get; set; } = DefaultQrSize;
 
     public List<ResolvedReportField> Fields { get; set; } = [];
 

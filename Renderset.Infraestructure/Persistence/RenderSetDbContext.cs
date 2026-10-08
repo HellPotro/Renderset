@@ -20,6 +20,12 @@ public sealed class RenderSetDbContext : DbContext
     public DbSet<ReportPresetEntity> ReportPresets =>
         Set<ReportPresetEntity>();
 
+    public DbSet<DataMappingEntity> DataMappings =>
+        Set<DataMappingEntity>();
+
+    public DbSet<ReportThemeEntity> ReportThemes =>
+        Set<ReportThemeEntity>();
+
     public DbSet<ReportPresetAssignmentEntity> ReportPresetAssignments =>
         Set<ReportPresetAssignmentEntity>();
 
@@ -37,6 +43,9 @@ public sealed class RenderSetDbContext : DbContext
 
     public DbSet<TenantEntity> Tenants =>
         Set<TenantEntity>();
+
+    public DbSet<ApiKeyEntity> ApiKeys =>
+        Set<ApiKeyEntity>();
 
     public DbSet<DocumentBundleEntity> DocumentBundles =>
         Set<DocumentBundleEntity>();

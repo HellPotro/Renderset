@@ -1,0 +1,14 @@
+@inject NavigationManager Navigation
+
+@code {
+
+    protected override void OnInitialized()
+    {
+        var returnUrl = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+
+        // forceLoad: entrar es una página estática que escribe la cookie.
+        Navigation.NavigateTo(
+            $"account/login?returnUrl={Uri.EscapeDataString(returnUrl)}",
+            forceLoad: true);
+    }
+}

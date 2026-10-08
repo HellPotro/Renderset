@@ -1,5 +1,4 @@
 @inherits LayoutComponentBase
-@inject ICurrentTenant CurrentTenant
 
 <div class="renderset-layout">
 
@@ -22,20 +21,7 @@
 
         <div class="renderset-sidebar-footer">
 
-            <div class="renderset-tenant-label">
-                Workspace
-            </div>
-
-            <div class="renderset-tenant">
-                <div class="renderset-tenant-avatar">
-                    @TenantInitial
-                </div>
-
-                <div>
-                    <strong>@(CurrentTenant.Name ?? CurrentTenant.Id)</strong>
-                    <span>@CurrentTenant.Id</span>
-                </div>
-            </div>
+            <UserMenu />
 
         </div>
 
@@ -52,10 +38,3 @@
     </main>
 
 </div>
-
-@code {
-    private string TenantInitial =>
-        !string.IsNullOrWhiteSpace(CurrentTenant.Name)
-            ? CurrentTenant.Name![..1].ToUpperInvariant()
-            : CurrentTenant.Id[..1].ToUpperInvariant();
-}

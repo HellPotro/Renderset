@@ -1,6 +1,8 @@
 @page "/bundles/settings"
+@attribute [Authorize(Policy = TenantPolicies.Admin)]
 
 @using Renderset.Blazor.Components.Editor
+@using Renderset.Core.Localization
 @using Renderset.Core.Sharing
 
 @inject IRenderSetApi RenderSetApi
@@ -161,6 +163,27 @@
                         </small>
                     </div>
 
+                    <div class="sharing-dictionary">
+
+                        <i class="fa-solid fa-language"></i>
+
+                        <div>
+                            <strong>Botones y avisos</strong>
+                            <span>
+                                "Descargar PDF", "Disponible hasta…", enlace
+                                caducado… Son recursos del Diccionario, uno por
+                                cada idioma del tenant
+                                (@(_cultures.Count == 0 ? "ninguno configurado" : string.Join(", ", _cultures.Select(x => x.Culture)))).
+                            </span>
+                        </div>
+
+                        <a class="secondary-button"
+                           href="@SharingDictionaryUrl">
+                            Editar textos
+                        </a>
+
+                    </div>
+
                 </div>
 
                 <header class="editor-card-header is-divider">
@@ -223,9 +246,11 @@
                         <select value="@_previewCulture"
                                 title="Idioma de los botones"
                                 @onchange="PreviewCultureChangedAsync">
-                            @foreach (var culture in PreviewCultures)
+                            @foreach (var culture in _cultures)
                             {
-                                <option value="@culture.Code">@culture.Name</option>
+                                <option value="@culture.Culture">
+                                    @CultureFlag.For(culture.Culture) @culture.DisplayName
+                                </option>
                             }
                         </select>
 
@@ -262,16 +287,14 @@
 
 @code {
 
-    private static readonly (string Code, string Name)[] PreviewCultures =
-    [
-        ("es-ES", "Español"),
-        ("en-GB", "English"),
-        ("fr-FR", "Français"),
-        ("de-DE", "Deutsch"),
-        ("it-IT", "Italiano"),
-        ("pt-PT", "Português"),
-        ("pl-PL", "Polski")
-    ];
+    /// <summary>
+    /// Los idiomas del tenant: son los únicos en los que se pueden editar
+    /// los textos, y los que se ofrecen al crear un bundle.
+    /// </summary>
+    private IReadOnlyCollection<TenantCulture> _cultures = [];
+
+    private static string SharingDictionaryUrl =>
+        $"resources?scope={Uri.EscapeDataString(ReportResourceScope.Sharing)}";
 
     private DocumentSharingSettings _settings = new();
 
@@ -281,7 +304,7 @@
 
     private string _previewHtml = string.Empty;
 
-    private string _previewCulture = "es-ES";
+    private string _previewCulture = string.Empty;
 
     private bool _previewExpired;
 
@@ -349,6 +372,24 @@
             _settings = response.Settings;
             _maxExpirationDays = response.MaxExpirationDays;
             _systemDefaultExpirationDays = response.SystemDefaultExpirationDays;
+
+            var cultures = await Toasts.RunAsync(
+                () => RenderSetApi.GetCulturesAsync(CurrentTenant.Id),
+                errorTitle: "No se han podido cargar los idiomas");
+
+            _cultures =
+                (cultures ?? [])
+                    .OrderByDescending(x => x.IsDefault)
+                    .ThenBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
+
+            // Se conserva el idioma elegido al recargar tras guardar.
+            if (!_cultures.Any(x => string.Equals(x.Culture, _previewCulture, StringComparison.OrdinalIgnoreCase)))
+            {
+                _previewCulture =
+                    _cultures.FirstOrDefault()?.Culture
+                    ?? "es-ES";
+            }
         }
         finally
         {
@@ -420,7 +461,7 @@
     private Task PreviewCultureChangedAsync(
         ChangeEventArgs e)
     {
-        _previewCulture = e.Value?.ToString() ?? "es-ES";
+        _previewCulture = e.Value?.ToString() ?? _previewCulture;
         return RefreshPreviewAsync();
     }
 

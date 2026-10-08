@@ -22,6 +22,8 @@ public sealed class DocumentBundleResponse
 
     public DocumentBundleStatus Status { get; init; }
 
+    public bool AllowDataDownload { get; init; }
+
     public DateTime CreatedAtUtc { get; init; }
 
     public DateTime ExpiresAtUtc { get; init; }
@@ -51,6 +53,7 @@ public sealed class DocumentBundleResponse
             Message = bundle.Message,
             Culture = bundle.Culture,
             Status = bundle.GetStatus(nowUtc),
+            AllowDataDownload = bundle.AllowDataDownload,
             CreatedAtUtc = bundle.CreatedAtUtc,
             ExpiresAtUtc = bundle.ExpiresAtUtc,
             RevokedAtUtc = bundle.RevokedAtUtc,

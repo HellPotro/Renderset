@@ -3,237 +3,215 @@
 @using Renderset.Core.Definitions
 @using Renderset.Core.Resolved
 
-<div class="report-editor-section @DepthClass @KindClass">
+@if (FocusPath.Count > 0)
+{
+    @* Modo "entrar en una subsección": esta sección no se pinta, sólo hace de
+       camino hasta la que se edita, para que la configuración se siga
+       escribiendo dentro de la de su padre. *@
+    var target = Definition.Sections.FirstOrDefault(x =>
+        string.Equals(x.Id, FocusPath[0], StringComparison.OrdinalIgnoreCase));
 
-    <div class="report-editor-section-header">
+    var resolvedTarget =
+        target is null ? null : FindResolvedChild(target.Id);
 
-        <label class="report-editor-toggle-row">
-            <input type="checkbox"
-                   class="report-editor-toggle-input"
-                   checked="@Resolved.Visible"
-                   @onchange="e => SetSectionVisibleAsync(GetBool(e))" />
-
-            <span class="report-editor-toggle"></span>
-
-            <span class="report-editor-section-name">
-                @Resolved.Name
-            </span>
-        </label>
-
-        <div class="report-editor-section-chips">
-
-            @if (IsNested)
-            {
-                <span class="report-editor-section-chip is-nested"
-                      title="Subsección: se pinta dentro de su sección padre">
-                    Subsección
-                </span>
-            }
-
-            <span class="report-editor-section-chip @KindChipClass"
-                  title="@KindDescription">
-                @KindLabel
-            </span>
-
-            @if (!string.IsNullOrWhiteSpace(EffectiveDataPath))
-            {
-                <span class="report-editor-section-chip is-path"
-                      title="Colección de origen">
-                    @(EffectiveDataPath)[]
-                </span>
-            }
-
-        </div>
-
-        <div class="report-editor-section-actions">
-
-            @if (ShowMoveButtons)
-            {
-                <button type="button"
-                        class="report-editor-section-order-button"
-                        title="Mover sección arriba"
-                        disabled="@(!CanMoveUp)"
-                        @onclick="MoveUp">
-                    <i class="fa-solid fa-arrow-up"></i>
-                </button>
-
-                <button type="button"
-                        class="report-editor-section-order-button"
-                        title="Mover sección abajo"
-                        disabled="@(!CanMoveDown)"
-                        @onclick="MoveDown">
-                    <i class="fa-solid fa-arrow-down"></i>
-                </button>
-            }
-
-            <button type="button"
-                    class="report-editor-collapse-button"
-                    @onclick="ToggleCollapsed">
-
-                <span class="report-editor-chevron @(_collapsed ? null : "expanded")"></span>
-
-            </button>
-
-        </div>
-
-    </div>
-
-    @if (Resolved.Visible && !_collapsed)
+    if (target is not null && resolvedTarget is not null)
     {
-        <div class="report-editor-section-content">
+        <ReportSectionEditor @key="target.Id"
+                             Definition="target"
+                             Resolved="resolvedTarget"
+                             Configuration="Configuration"
+                             Depth="@(Depth + 1)"
+                             ScopeReader="ChildScopeReader"
+                             ScopeWriter="ChildScopeWriter"
+                             Texts="Texts"
+                             Changed="Changed"
+                             EditSection="EditSection"
+                             Path="ChildPath(target.Id)"
+                             FocusPath="FocusPath.Skip(1).ToList()"
+                             StartExpanded="true" />
+    }
+}
+else
+{
+    <div class="report-editor-section @DepthClass @KindClass">
 
-            <label class="report-editor-section-option">
+        <div class="report-editor-section-header">
 
+            <label class="report-editor-toggle-row">
                 <input type="checkbox"
-                       checked="@ShowsName"
-                       @onchange="ToggleShowNameAsync" />
+                       class="report-editor-toggle-input"
+                       checked="@Resolved.Visible"
+                       @onchange="e => SetSectionVisibleAsync(GetBool(e))" />
 
-                <span>Mostrar el título de la sección</span>
+                <span class="report-editor-toggle"></span>
 
+                <span class="report-editor-section-name">
+                    @Resolved.Name
+                </span>
             </label>
 
-            @if (Definition.Table is null &&
-                Definition.Fields.Count > 0)
-            {
-                <div class="report-editor-section-layout">
+            <div class="report-editor-section-chips">
 
-                    <label>Layout</label>
+                @if (IsNested)
+                {
+                    <span class="report-editor-section-chip is-nested"
+                          title="Subsección: se pinta dentro de su sección padre">
+                        Subsección
+                    </span>
+                }
 
-                    <select value="@Resolved.Layout"
-                            @onchange="LayoutChangedAsync">
+                <span class="report-editor-section-chip @KindChipClass"
+                      title="@KindDescription">
+                    @KindLabel
+                </span>
 
-                        <option value="@ReportSectionLayout.List">
-                            Lista
-                        </option>
+                @if (!string.IsNullOrWhiteSpace(EffectiveDataPath))
+                {
+                    <span class="report-editor-section-chip is-path"
+                          title="Colección de origen">
+                        @(EffectiveDataPath)[]
+                    </span>
+                }
 
-                        <option value="@ReportSectionLayout.Columns2">
-                            2 columnas
-                        </option>
+            </div>
 
-                        <option value="@ReportSectionLayout.Columns3">
-                            3 columnas
-                        </option>
+            <div class="report-editor-section-actions">
 
-                        <option value="@ReportSectionLayout.Columns4">
-                            4 columnas
-                        </option>
+                @if (ShowMoveButtons)
+                {
+                    <button type="button"
+                            class="report-editor-section-order-button"
+                            title="Mover sección arriba"
+                            disabled="@(!CanMoveUp)"
+                            @onclick="MoveUp">
+                        <i class="fa-solid fa-arrow-up"></i>
+                    </button>
 
-                    </select>
+                    <button type="button"
+                            class="report-editor-section-order-button"
+                            title="Mover sección abajo"
+                            disabled="@(!CanMoveDown)"
+                            @onclick="MoveDown">
+                        <i class="fa-solid fa-arrow-down"></i>
+                    </button>
+                }
 
-                </div>
-            }
+                <button type="button"
+                        class="report-editor-collapse-button"
+                        @onclick="ToggleCollapsed">
 
-            @foreach (var fieldDefinition in OrderedFields)
-            {
-                var resolvedField = Resolved.GetField(fieldDefinition.Id);
+                    <span class="report-editor-chevron @(_collapsed ? null : "expanded")"></span>
 
-                if (resolvedField is null)
-                    continue;
+                </button>
 
-                <div class="report-editor-item @(resolvedField.Visible ? null : "report-editor-item-disabled") @GetDragClass(DragItemType.Field, fieldDefinition.Id)"
-                     draggable="true"
-                     @key="fieldDefinition.Id"
-                     @ondragstart="() => StartDrag(DragItemType.Field, fieldDefinition.Id)"
-                     @ondragover:preventDefault
-                     @ondrop="() => DropFieldAsync(fieldDefinition.Id)"
-                     @ondragend="ClearDrag">
+            </div>
 
-                    <div class="report-editor-item-header">
+        </div>
 
-                        <div class="report-editor-item-main">
+        @if (Resolved.Visible && !_collapsed)
+        {
+            <div class="report-editor-section-content">
 
-                            <span class="report-editor-drag-handle"
-                                  title="Arrastrar para reordenar">
-                                ⋮⋮
-                            </span>
+                <label class="report-editor-section-option">
 
-                            <label class="report-editor-toggle-row"
-                                   @onclick:stopPropagation="true">
+                    <input type="checkbox"
+                           checked="@ShowsName"
+                           @onchange="ToggleShowNameAsync" />
 
-                                <input type="checkbox"
-                                       class="report-editor-toggle-input"
-                                       checked="@resolvedField.Visible"
-                                       @onchange="e => SetFieldVisibleAsync(fieldDefinition, GetBool(e))" />
+                    <span>Mostrar el título de la sección</span>
 
-                                <span class="report-editor-toggle"></span>
+                </label>
 
-                                <span class="report-editor-toggle-label report-editor-item-title"
-                                      @onclick="() => ToggleFieldExpanded(fieldDefinition.Id)">
-                                    @resolvedField.Label
-                                </span>
+                @if (Definition.Table is null &&
+                    Definition.Fields.Count > 0)
+                {
+                    <ReportSectionLayoutPicker Layout="Resolved.Layout"
+                                               Columns="Resolved.Columns"
+                                               Changed="LayoutChangedAsync" />
+                }
 
-                            </label>
+                @foreach (var fieldDefinition in OrderedFields)
+                {
+                    var resolvedField = Resolved.GetField(fieldDefinition.Id);
 
-                        </div>
+                    if (resolvedField is null)
+                        continue;
 
-                        <button type="button"
-                                class="report-editor-item-expand-button"
-                                title="@(IsFieldExpanded(fieldDefinition.Id)
-                                                    ? "Ocultar propiedades"
-                                                    : "Editar propiedades")"
-                                @onclick="() => ToggleFieldExpanded(fieldDefinition.Id)">
+                    <ReportFieldRow @key="fieldDefinition.Id"
+                                    Title="@resolvedField.Label"
+                                    Label="@GetFieldLabel(fieldDefinition)"
+                                    DefaultLabel="@fieldDefinition.Label"
+                                    Visible="resolvedField.Visible"
+                                    Type="resolvedField.Type"
+                                    InferredType="fieldDefinition.Type"
+                                    CssClass="@GetDragClass(DragItemType.Field, fieldDefinition.Id)"
+                                    VisibleChanged="visible => SetFieldVisibleAsync(fieldDefinition, visible)"
+                                    LabelChanged="label => SetFieldLabelAsync(fieldDefinition, label)"
+                                    TypeChanged="type => SetFieldTypeAsync(fieldDefinition, type)"
+                                    DragStart="() => StartDrag(DragItemType.Field, fieldDefinition.Id)"
+                                    Drop="() => DropFieldAsync(fieldDefinition.Id)"
+                                    DragEnd="ClearDrag" />
+                }
 
-                            <span class="report-editor-chevron @(IsFieldExpanded(fieldDefinition.Id) ? "expanded" : null)">
-                            </span>
+                @if (Definition.Table is not null && Resolved.Table is not null)
+                {
+                    var widthPlan = ColumnWidthPlan;
 
-                        </button>
+                    <div class="report-editor-columns-heading">
+
+                        <span class="report-editor-subtitle">Columnas</span>
+
+                        <span class="report-editor-columns-count">
+                            @widthPlan.Segments.Count de @Resolved.Table.Columns.Count visibles
+                        </span>
 
                     </div>
 
-                    @if (resolvedField.Visible &&
-                         IsFieldExpanded(fieldDefinition.Id))
+                    @if (widthPlan.Segments.Count > 0)
                     {
-                        <div class="report-editor-item-properties">
+                        @* Reparto real de la tabla en el documento: las columnas sin
+                           ancho se quedan con lo que dejan libre las demás. *@
+                        <div class="report-editor-columns-bar @(widthPlan.IsOverflowing ? "is-overflowing" : null)"
+                             aria-hidden="true">
+                            @foreach (var segment in widthPlan.Segments)
+                            {
+                                <span class="@(segment.IsAuto ? "is-auto" : null)"
+                                      style="@($"flex-basis:{segment.Share.ToString("0.##", CultureInfo.InvariantCulture)}%;")"
+                                      title="@segment.Title">
+                                    @segment.Label
+                                </span>
+                            }
+                        </div>
 
-                            <div class="report-editor-property">
-
-                                <label>Etiqueta</label>
-
-                                <input type="text"
-                                       value="@GetFieldLabel(fieldDefinition)"
-                                       @onchange="e => SetFieldLabelAsync(
-                                                                  fieldDefinition,
-                                                                  e.Value?.ToString())"
-                                       placeholder="@fieldDefinition.Label" />
-                            </div>
-
+                        <div class="report-editor-columns-summary @(widthPlan.IsOverflowing ? "is-overflowing" : null)">
+                            @widthPlan.Summary
                         </div>
                     }
 
-                </div>
-            }
+                    <div class="report-editor-columns">
 
-            @if (Definition.Table is not null && Resolved.Table is not null)
-            {
-                <div class="report-editor-subtitle">
-                    Columnas
-                </div>
+                        @foreach (var columnDefinition in OrderedColumns)
+                        {
+                            var resolvedColumn = Resolved.Table.GetColumn(columnDefinition.Id);
 
-                @foreach (var columnDefinition in OrderedColumns)
-                {
-                    var resolvedColumn = Resolved.Table.GetColumn(columnDefinition.Id);
+                            if (resolvedColumn is null)
+                                continue;
 
-                    if (resolvedColumn is null)
-                        continue;
-
-                    <div class="report-editor-item @(resolvedColumn.Visible ? null : "report-editor-item-disabled") @GetDragClass(DragItemType.Column, columnDefinition.Id)"
-                         draggable="true"
-                         @key="columnDefinition.Id"
-                         @ondragstart="() => StartDrag(DragItemType.Column, columnDefinition.Id)"
-                         @ondragover:preventDefault
-                         @ondrop="() => DropColumnAsync(columnDefinition.Id)"
-                         @ondragend="ClearDrag">
-
-                        <div class="report-editor-item-header">
-
-                            <div class="report-editor-item-main">
+                            <div class="report-editor-column @(resolvedColumn.Visible ? null : "is-hidden") @GetDragClass(DragItemType.Column, columnDefinition.Id)"
+                                 draggable="true"
+                                 @key="columnDefinition.Id"
+                                 @ondragstart="() => StartDrag(DragItemType.Column, columnDefinition.Id)"
+                                 @ondragover:preventDefault
+                                 @ondrop="() => DropColumnAsync(columnDefinition.Id)"
+                                 @ondragend="ClearDrag">
 
                                 <span class="report-editor-drag-handle"
                                       title="Arrastrar para reordenar">
                                     ⋮⋮
                                 </span>
 
-                                <label class="report-editor-toggle-row">
+                                <label class="report-editor-toggle-row"
+                                       title="@(resolvedColumn.Visible ? "Ocultar columna" : "Mostrar columna")">
 
                                     <input type="checkbox"
                                            class="report-editor-toggle-input"
@@ -242,76 +220,154 @@
 
                                     <span class="report-editor-toggle"></span>
 
-                                    <span class="report-editor-toggle-label">
-                                        @resolvedColumn.Label
-                                    </span>
-
                                 </label>
 
-                            </div>
+                                <div class="report-editor-column-name">
 
-                        </div>
+                                    <input type="text"
+                                           value="@GetColumnLabel(columnDefinition)"
+                                           placeholder="@columnDefinition.Label"
+                                           disabled="@(!resolvedColumn.Visible)"
+                                           aria-label="Título de la columna"
+                                           @onchange="e => SetColumnLabelAsync(columnDefinition, e.Value?.ToString())" />
 
-                        @if (resolvedColumn.Visible)
-                        {
-                            <input class="report-editor-text-input"
-                                   value="@GetColumnLabel(columnDefinition)"
-                                   @onchange="e => SetColumnLabelAsync(columnDefinition, e.Value?.ToString())"
-                                   placeholder="@columnDefinition.Label" />
+                                    <div class="report-editor-column-meta">
 
-                            <div class="report-editor-width">
+                                        <ReportFieldTypeSelect Compact="true"
+                                                               Value="resolvedColumn.Type"
+                                                               Inferred="columnDefinition.Type"
+                                                               Disabled="@(!resolvedColumn.Visible)"
+                                                               Changed="type => SetColumnTypeAsync(columnDefinition, type)" />
 
-                                <label>Ancho %</label>
+                                        <select class="report-editor-chip-select @(resolvedColumn.Total == ReportColumnTotal.None ? null : "is-overridden")"
+                                                title="Total al pie de la tabla"
+                                                value="@resolvedColumn.Total"
+                                                disabled="@(!resolvedColumn.Visible)"
+                                                @onchange="e => SetColumnTotalAsync(columnDefinition, e.Value?.ToString())">
+                                            <option value="@ReportColumnTotal.None">Sin total</option>
+                                            <option value="@ReportColumnTotal.Sum">Σ Suma</option>
+                                            <option value="@ReportColumnTotal.Count">Nº Contar</option>
+                                            <option value="@ReportColumnTotal.Average">Media</option>
+                                            <option value="@ReportColumnTotal.Min">Mínimo</option>
+                                            <option value="@ReportColumnTotal.Max">Máximo</option>
+                                        </select>
 
-                                <input type="number"
-                                       min="5"
-                                       max="80"
-                                       step="1"
-                                       value="@GetWidthValue(resolvedColumn)"
-                                       @onchange="e => SetColumnWidthAsync(columnDefinition, e.Value?.ToString())" />
+                                        <small title="@columnDefinition.DataPath">@columnDefinition.DataPath</small>
+
+                                    </div>
+
+                                </div>
+
+                                @if (IsColumnLabelCustomized(columnDefinition))
+                                {
+                                    <button type="button"
+                                            class="report-editor-column-reset"
+                                            title="@($"Volver al título original: {columnDefinition.Label}")"
+                                            @onclick="() => SetColumnLabelAsync(columnDefinition, null)">
+                                        <i class="fa-solid fa-rotate-left"></i>
+                                    </button>
+                                }
+
+                                @if (resolvedColumn.Visible)
+                                {
+                                    <label class="report-editor-column-width"
+                                           title="Ancho en % de la tabla. Vacío = automático">
+
+                                        <input type="number"
+                                               min="5"
+                                               max="80"
+                                               step="1"
+                                               placeholder="auto"
+                                               value="@GetWidthValue(resolvedColumn)"
+                                               aria-label="Ancho de la columna en %"
+                                               @onchange="e => SetColumnWidthAsync(columnDefinition, e.Value?.ToString())" />
+
+                                        <span>%</span>
+
+                                    </label>
+                                }
+                                else
+                                {
+                                    <span class="report-editor-column-hidden-tag">Oculta</span>
+                                }
 
                             </div>
                         }
 
                     </div>
                 }
-            }
 
-            @if (OrderedChildren.Count > 0)
-            {
-                <div class="report-editor-subtitle">
-                    Subsecciones
-                </div>
+                @if (OrderedChildren.Count > 0)
+                {
+                    <div class="report-editor-subtitle">
+                        Subsecciones
+                    </div>
 
-                <div class="report-editor-subsections">
+                    <div class="report-editor-subsections">
 
-                    @foreach (var childDefinition in OrderedChildren)
-                    {
-                        var resolvedChild = FindResolvedChild(childDefinition.Id);
-
-                        if (resolvedChild is null)
+                        @foreach (var childDefinition in OrderedChildren)
                         {
-                            continue;
+                            var resolvedChild = FindResolvedChild(childDefinition.Id);
+
+                            if (resolvedChild is null)
+                            {
+                                continue;
+                            }
+
+                            if (EditSection.HasDelegate)
+                            {
+                                @* Las subsecciones se editan entrando en ellas, no
+                                   desplegando niveles: con factura → albaranes →
+                                   líneas el árbol entero no cabe en la barra. *@
+                                <div class="report-editor-child-row @(resolvedChild.Visible ? null : "is-hidden")"
+                                     @key="childDefinition.Id">
+
+                                    <span class="report-editor-child-icon">
+                                        <i class="@ChildIcon(childDefinition)"></i>
+                                    </span>
+
+                                    <div class="report-editor-child-text">
+                                        <strong>@resolvedChild.Name</strong>
+                                        <small>@ChildSummary(childDefinition)</small>
+                                    </div>
+
+                                    @if (!resolvedChild.Visible)
+                                    {
+                                        <span class="report-editor-section-chip">Oculta</span>
+                                    }
+
+                                    <button type="button"
+                                            class="report-editor-child-edit"
+                                            title="Editar sólo esta sección"
+                                            @onclick="() => EditSection.InvokeAsync(ChildPath(childDefinition.Id))">
+                                        Editar
+                                        <i class="fa-solid fa-chevron-right"></i>
+                                    </button>
+
+                                </div>
+                            }
+                            else
+                            {
+                                <ReportSectionEditor @key="childDefinition.Id"
+                                                     Definition="childDefinition"
+                                                     Resolved="resolvedChild"
+                                                     Configuration="Configuration"
+                                                     Depth="@(Depth + 1)"
+                                                     ScopeReader="ChildScopeReader"
+                                                     ScopeWriter="ChildScopeWriter"
+                                                     Texts="Texts"
+                                                     Changed="Changed" />
+                            }
                         }
 
-                        <ReportSectionEditor @key="childDefinition.Id"
-                                             Definition="childDefinition"
-                                             Resolved="resolvedChild"
-                                             Configuration="Configuration"
-                                             Depth="@(Depth + 1)"
-                                             ScopeReader="ChildScopeReader"
-                                             ScopeWriter="ChildScopeWriter"
-                                             Texts="Texts"
-                                             Changed="Changed" />
-                    }
+                    </div>
+                }
 
-                </div>
-            }
+            </div>
+        }
 
-        </div>
-    }
-
-</div>
+    </div>
+}
 
 @code {
 
@@ -371,14 +427,70 @@
     [Parameter]
     public Func<List<ReportSectionConfiguration>>? ScopeWriter { get; set; }
 
+    /// <summary>
+    /// Ruta de ids desde la sección del body hasta ésta. Vacía en la raíz:
+    /// se toma como [Definition.Id].
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<string> Path { get; set; } = [];
+
+    /// <summary>
+    /// Subsecciones por debajo de ésta hasta la que se está editando. Si
+    /// trae algo, esta sección no se pinta y sólo lleva hasta allí.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<string> FocusPath { get; set; } = [];
+
+    /// <summary>
+    /// Entrar a editar una subsección (ruta completa de ids). Sin manejador,
+    /// las subsecciones se pintan anidadas como antes.
+    /// </summary>
+    [Parameter]
+    public EventCallback<IReadOnlyList<string>> EditSection { get; set; }
+
+    [Parameter]
+    public bool StartExpanded { get; set; }
+
     private bool _collapsed = true;
     private DragItem? _dragItem;
 
     protected override void OnInitialized()
     {
-        // Una sección con hijos se abre sola: si no, el árbol factura →
-        // albaranes → líneas no se ve hasta que el usuario despliega a mano.
-        _collapsed = Definition.Sections.Count == 0;
+        // Abierta si es la que se acaba de abrir para editar, o si tiene
+        // subsecciones (que ahora son una lista corta de "Editar").
+        _collapsed = !StartExpanded && Definition.Sections.Count == 0;
+    }
+
+    private IReadOnlyList<string> OwnPath =>
+        Path.Count > 0 ? Path : [Definition.Id];
+
+    private IReadOnlyList<string> ChildPath(string childId) =>
+        OwnPath.Append(childId).ToList();
+
+    private static string ChildIcon(ReportSectionDefinition child) =>
+        !string.IsNullOrWhiteSpace(child.DataPath)
+            ? "fa-solid fa-layer-group"
+            : child.Table is not null
+                ? "fa-solid fa-table"
+                : "fa-regular fa-square";
+
+    private static string ChildSummary(ReportSectionDefinition child)
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(child.DataPath))
+            parts.Add("Repetida");
+
+        if (child.Table is not null)
+            parts.Add($"Tabla · {child.Table.Columns.Count} columnas");
+
+        if (child.Fields.Count > 0)
+            parts.Add(child.Fields.Count == 1 ? "1 campo" : $"{child.Fields.Count} campos");
+
+        if (child.Sections.Count > 0)
+            parts.Add(child.Sections.Count == 1 ? "1 subsección" : $"{child.Sections.Count} subsecciones");
+
+        return string.Join(" · ", parts);
     }
 
     private bool IsRepeated =>
@@ -478,22 +590,13 @@
     private readonly HashSet<string> _expandedFields =
         new(StringComparer.OrdinalIgnoreCase);
 
-    private readonly HashSet<string> _expandedColumns =
-        new(StringComparer.OrdinalIgnoreCase);
-
-    private async Task LayoutChangedAsync(ChangeEventArgs e)
+    private async Task LayoutChangedAsync(ReportSectionGridLayout layout)
     {
-        if (!Enum.TryParse<ReportSectionLayout>(
-                e.Value?.ToString(),
-                out var layout))
-        {
-            return;
-        }
-
         var section =
             GetOrCreateSectionConfiguration();
 
-        section.Layout = layout;
+        section.Layout = layout.Layout;
+        section.Columns = layout.StoredColumns;
 
         await Changed.InvokeAsync();
     }
@@ -521,6 +624,38 @@
         bool visible)
     {
         GetOrCreateFieldConfiguration(field.Id).Visible = visible;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetFieldTypeAsync(
+        ReportFieldDefinition field,
+        ReportFieldType? type)
+    {
+        GetOrCreateFieldConfiguration(field.Id).Type = type;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetColumnTypeAsync(
+        ReportColumnDefinition column,
+        ReportFieldType? type)
+    {
+        GetOrCreateColumnConfiguration(column.Id).Type = type;
+        await Changed.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Sin total se guarda nulo: la configuración sólo lleva lo que cambia.
+    /// </summary>
+    private async Task SetColumnTotalAsync(
+        ReportColumnDefinition column,
+        string? value)
+    {
+        if (!Enum.TryParse<ReportColumnTotal>(value, out var total))
+            return;
+
+        GetOrCreateColumnConfiguration(column.Id).Total =
+            total == ReportColumnTotal.None ? null : total;
+
         await Changed.InvokeAsync();
     }
 
@@ -726,6 +861,89 @@
         column.Width?.ToString(CultureInfo.InvariantCulture)
         ?? string.Empty;
 
+    /// <summary>
+    /// Cómo queda repartido el ancho de la tabla con la configuración actual.
+    /// Es lo mismo que hará el navegador: las columnas con ancho fijo se
+    /// quedan su %, y las automáticas se reparten lo que sobre.
+    /// </summary>
+    private ColumnWidthPlanModel ColumnWidthPlan
+    {
+        get
+        {
+            var visible =
+                Resolved.Table?.Columns
+                    .Where(x => x.Visible)
+                    .OrderBy(x => x.Order)
+                    .ToList()
+                ?? [];
+
+            if (visible.Count == 0)
+                return new ColumnWidthPlanModel([], false, string.Empty);
+
+            var fixedTotal =
+                visible.Sum(x => x.Width ?? 0m);
+
+            var autoCount =
+                visible.Count(x => x.Width is null);
+
+            var free =
+                Math.Max(0m, 100m - fixedTotal);
+
+            // Sin hueco, el navegador comprime igualmente las automáticas
+            // hasta su contenido: se pintan con un mínimo para que se vean.
+            var autoWidth =
+                autoCount == 0
+                    ? 0m
+                    : Math.Max(free / autoCount, 4m);
+
+            var total =
+                fixedTotal + autoWidth * autoCount;
+
+            var segments =
+                visible
+                    .Select((column, index) =>
+                    {
+                        var width = column.Width ?? autoWidth;
+
+                        return new ColumnWidthSegment(
+                            (index + 1).ToString(CultureInfo.InvariantCulture),
+                            column.Width is null
+                                ? $"{column.Label}: automático"
+                                : $"{column.Label}: {column.Width.Value.ToString("0.##", CultureInfo.InvariantCulture)} %",
+                            column.Width is null,
+                            total == 0 ? 0 : width * 100m / total);
+                    })
+                    .ToList();
+
+            var overflowing = fixedTotal > 100m;
+
+            var fixedText =
+                fixedTotal.ToString("0.##", CultureInfo.InvariantCulture);
+
+            var summary =
+                overflowing
+                    ? $"Los anchos fijos suman {fixedText} %: el navegador los reducirá en proporción."
+                    : autoCount == 0
+                        ? $"Anchos fijos: {fixedText} % de la tabla."
+                        : fixedTotal == 0
+                            ? "Todas automáticas: se reparten según su contenido."
+                            : $"Fijo {fixedText} % · {autoCount} automática{(autoCount == 1 ? "" : "s")} con el {(100m - fixedTotal).ToString("0.##", CultureInfo.InvariantCulture)} % restante.";
+
+            return new ColumnWidthPlanModel(segments, overflowing, summary);
+        }
+    }
+
+    private sealed record ColumnWidthSegment(
+        string Label,
+        string Title,
+        bool IsAuto,
+        decimal Share);
+
+    private sealed record ColumnWidthPlanModel(
+        List<ColumnWidthSegment> Segments,
+        bool IsOverflowing,
+        string Summary);
+
     private enum DragItemType
     {
         Field,
@@ -872,15 +1090,6 @@
     {
         if (!_expandedFields.Add(fieldId))
             _expandedFields.Remove(fieldId);
-    }
-
-    private bool IsColumnExpanded(string columnId) =>
-        _expandedColumns.Contains(columnId);
-
-    private void ToggleColumnExpanded(string columnId)
-    {
-        if (!_expandedColumns.Add(columnId))
-            _expandedColumns.Remove(columnId);
     }
 
     private static bool GetBool(ChangeEventArgs e) =>

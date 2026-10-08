@@ -17,4 +17,6 @@ public sealed class ResolvedReportColumn
     public decimal? Width { get; init; }
 
     public ReportFieldType Type { get; init; }
+
+    public ReportColumnTotal Total { get; init; }
 }
