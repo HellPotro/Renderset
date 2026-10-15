@@ -2414,12 +2414,31 @@
    su interruptor en la línea del título. Lo apagado se queda en una sola
    línea, y las explicaciones van en el icono de ayuda. */
 
+/* Interruptor y nombre, resumen y plegar en una sola fila. Rejilla y no
+   flex: las secciones de datos mandan los chips a su propia línea (order 3
+   y ancho 100 %), y aquí eso dejaba el nombre sin sitio y el botón de
+   plegar encima del interruptor. */
 .report-editor-section.is-header-footer > .report-editor-section-header {
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    column-gap: 8px;
 }
 
+    .report-editor-section.is-header-footer > .report-editor-section-header .report-editor-toggle-row {
+        min-width: 0;
+    }
+
     .report-editor-section.is-header-footer > .report-editor-section-header .report-editor-section-chips {
-        margin-left: auto;
+        order: 0;
+        flex: none;
+        min-width: 0;
+    }
+
+    .report-editor-section.is-header-footer > .report-editor-section-header .report-editor-section-chip {
+        overflow: hidden;
+        max-width: 160px;
+        text-overflow: ellipsis;
     }
 
 .report-editor-group {

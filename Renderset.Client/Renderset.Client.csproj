@@ -32,8 +32,17 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
+	<PropertyGroup>
+		<SignAssembly>true</SignAssembly>
+		<AssemblyOriginatorKeyFile>Renderset.Client.snk</AssemblyOriginatorKeyFile>
+	</PropertyGroup>
+
   <ItemGroup>
-    <InternalsVisibleTo Include="Renderset.Tests" />
+    <InternalsVisibleTo Include="Renderset.Tests" Key="002400000480000094000000060200000024000052534131000400000100010061e861a07cfce5
+7b05ad3050e2a4a73c60a6845e950603272dbfbd3e66dccd143b008b317e683ac729ed1f4216e7
+d32aefa1e7242ec8dae0dd61b489ecc84ca13ca76b219baf3390e19b78e9f7ba4ea60c776b52b3
+f4b640fbcb7c641bd50d7fc1d82d915ec15e1969c92a6ba95e88657ba8eedbd13a80110b8197cd
+16ca9fbd" />
   </ItemGroup>
 
   <ItemGroup>

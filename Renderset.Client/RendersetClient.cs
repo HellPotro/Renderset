@@ -8,10 +8,7 @@ namespace Renderset.Client
     /// <summary>
     /// Punto de entrada del cliente de RenderSet.
     ///
-    ///     var renderset = RendersetClient.Create(
-    ///         "https://api.renderset.oran.local",
-    ///         "rs_live_…",
-    ///         "oran");
+    ///     var renderset = RendersetClient.Create("rs_live_…", "oran");
     ///
     ///     var pdf = await renderset
     ///         .Report("packing-list")
@@ -20,6 +17,9 @@ namespace Renderset.Client
     ///         .GenerateAsync();
     ///
     ///     pdf.Save(@"C:\salida");
+    ///
+    /// Va contra https://api.renderset.app salvo que se indique otra URL en
+    /// RendersetClientOptions.BaseUrl (desarrollo, pruebas).
     ///
     /// Un cliente por aplicación: es seguro usarlo desde varios hilos.
     /// </summary>
@@ -61,13 +61,27 @@ namespace Renderset.Client
         public DocumentsClient Documents { get; }
 
         /// <summary>
-        /// Crea un cliente con su propio HttpClient. Cómodo para una
-        /// aplicación de escritorio; en un servicio, usa la sobrecarga que
-        /// recibe un HttpClient para no agotar sockets.
+        /// Crea un cliente con su propio HttpClient contra RenderSet
+        /// (https://api.renderset.app, u options.BaseUrl si se indica).
+        /// Cómodo para una aplicación de escritorio; en un servicio, usa la
+        /// sobrecarga que recibe un HttpClient para no agotar sockets.
         /// </summary>
-        /// <param name="baseUrl">URL de la API, p. ej. https://api.renderset.oran.local</param>
-        /// <param name="apiKey">Clave del tenant (rs_live_…). Se crea en RenderSet → API.</param>
+        /// <param name="apiKey">Clave del tenant (rs_live_…). Se crea en RenderSet → API keys.</param>
         /// <param name="tenantId">Tenant de la clave.</param>
+        public static RendersetClient Create(
+            string apiKey,
+            string tenantId,
+            RendersetClientOptions options = null)
+        {
+            var settings = options ?? new RendersetClientOptions();
+
+            return CreateOwned(settings.BaseUrl, apiKey, tenantId, settings);
+        }
+
+        /// <summary>
+        /// Como Create(apiKey, tenantId), con la URL de la API explícita.
+        /// </summary>
+        [Obsolete("Usa Create(apiKey, tenantId). La URL va por defecto; para otra, RendersetClientOptions.BaseUrl.")]
         public static RendersetClient Create(
             string baseUrl,
             string apiKey,
@@ -77,27 +91,7 @@ namespace Renderset.Client
             if (string.IsNullOrWhiteSpace(baseUrl))
                 throw new ArgumentException("baseUrl es obligatorio.", nameof(baseUrl));
 
-            if (string.IsNullOrWhiteSpace(apiKey))
-                throw new ArgumentException("apiKey es obligatorio.", nameof(apiKey));
-
-            if (string.IsNullOrWhiteSpace(tenantId))
-                throw new ArgumentException("tenantId es obligatorio.", nameof(tenantId));
-
-            EnableModernTls();
-
-            var settings = options ?? new RendersetClientOptions();
-
-            var http = new HttpClient
-            {
-                BaseAddress = new Uri(
-                    baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/"),
-
-                Timeout = settings.Timeout
-            };
-
-            http.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
-
-            return new RendersetClient(http, true, tenantId, settings);
+            return CreateOwned(baseUrl, apiKey, tenantId, options ?? new RendersetClientOptions());
         }
 
         /// <summary>
@@ -157,6 +151,65 @@ namespace Renderset.Client
                 _http.Dispose();
         }
 
+        private static RendersetClient CreateOwned(
+            string baseUrl,
+            string apiKey,
+            string tenantId,
+            RendersetClientOptions settings)
+        {
+            if (string.IsNullOrWhiteSpace(apiKey))
+                throw new ArgumentException("apiKey es obligatorio.", nameof(apiKey));
+
+            if (string.IsNullOrWhiteSpace(tenantId))
+                throw new ArgumentException("tenantId es obligatorio.", nameof(tenantId));
+
+            EnableModernTls();
+
+            var http = new HttpClient
+            {
+                BaseAddress = NormalizeBaseUrl(baseUrl),
+                Timeout = settings.Timeout
+            };
+
+            http.DefaultRequestHeaders.Add("X-Api-Key", apiKey.Trim());
+
+            return new RendersetClient(http, true, tenantId.Trim(), settings);
+        }
+
+        /// <summary>
+        /// Acepta "https://api.renderset.app", con barra final o con "/api"
+        /// (como en un .http) y devuelve siempre la raíz con barra final, que
+        /// es lo que esperan las rutas relativas ("api/render/{tenant}").
+        /// </summary>
+        internal static Uri NormalizeBaseUrl(
+            string baseUrl)
+        {
+            var url = string.IsNullOrWhiteSpace(baseUrl)
+                ? RendersetClientOptions.DefaultBaseUrl
+                : baseUrl.Trim();
+
+            Uri uri;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out uri)
+                || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+            {
+                throw new ArgumentException("La URL de RenderSet no es válida: " + url, nameof(baseUrl));
+            }
+
+            var path = uri.AbsolutePath.TrimEnd('/');
+
+            if (path.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+                path = path.Substring(0, path.Length - "/api".Length);
+
+            var builder = new UriBuilder(uri)
+            {
+                Path = path + "/",
+                Query = string.Empty,
+                Fragment = string.Empty
+            };
+
+            return builder.Uri;
+        }
+
         /// <summary>
         /// .NET Framework 4.5 y 4.6 no negocian TLS 1.2 por defecto. Sin
         /// esto, el cliente ve "Se ha cerrado la conexión subyacente", que no
@@ -181,6 +234,17 @@ namespace Renderset.Client
 
     public sealed class RendersetClientOptions
     {
+        /// <summary>
+        /// URL de producción de RenderSet.
+        /// </summary>
+        public const string DefaultBaseUrl = "https://api.renderset.app/";
+
+        /// <summary>
+        /// URL de la API. Sólo hace falta cambiarla para desarrollo o pruebas
+        /// (p. ej. https://localhost:7123). Vale con o sin "/api" al final.
+        /// </summary>
+        public string BaseUrl { get; set; } = DefaultBaseUrl;
+
         /// <summary>
         /// Tiempo máximo de cada llamada. Un PDF de muchas páginas puede
         /// tardar; cinco minutos por defecto.
